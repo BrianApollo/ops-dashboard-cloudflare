@@ -2,7 +2,7 @@
  * App Providers - Root provider component for the application.
  * Wraps all children with necessary context providers.
  */
-
+gFIHCN WRYB2	3HRPQHEF[HQ3NTH
 import { ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../core/data/query-client';
