@@ -20,7 +20,7 @@ export function RequireAuth() {
     }
 
     // Block access to /ops routes for Video Editor role
-    if (user.role === 'Video Editor' && location.pathname.startsWith('/ops')) {
+    if (user.role === 'video editor' && location.pathname.startsWith('/ops')) {
         return <ForbiddenPage />;
     }
 
@@ -31,7 +31,7 @@ export function RedirectIfAuthenticated() {
     const { user } = useAuth();
 
     if (user) {
-        if (user.role === 'Video Editor') {
+        if (user.role === 'video editor') {
             return <Navigate to="/videos" replace />;
         }
         return <Navigate to="/ops" replace />;
@@ -47,7 +47,7 @@ export function RootRedirect() {
         return null; // Let RequireAuth handle the loading spinner if wrapped, or show nothing
     }
 
-    if (user?.role === 'Video Editor') {
+    if (user?.role === 'video editor') {
         return <Navigate to="/videos" replace />;
     }
 

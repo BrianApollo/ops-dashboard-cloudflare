@@ -23,7 +23,6 @@ const EDITOR_ROLES = ['Video Editor', 'video editor'];
  * Editors cannot read or write these tables.
  */
 const ADMIN_ONLY_TABLES = new Set([
-  'Users',
   // Infrastructure table IDs
   'tble3Qky3A2j8LpSj', // Profiles (contains FB passwords, tokens, 2FA)
   'tbl1xnWkoju7WG8lb',  // Business Managers
@@ -36,6 +35,7 @@ const ADMIN_ONLY_TABLES = new Set([
  * Tables that editors can read but not write.
  */
 const EDITOR_READ_ONLY_TABLES = new Set([
+  'Users',
   'Products',
   'Video Scripts',
   'Ad Presets',
