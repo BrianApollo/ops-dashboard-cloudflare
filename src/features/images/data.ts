@@ -12,6 +12,9 @@
 
 import type { Image, ImageStatus, ImageType } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
+import { provider } from '../../data/provider';
+
+const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -101,22 +104,12 @@ function normalizeImageType(rawType: string | undefined): ImageType | undefined 
 let productsCache: Map<string, { id: string; name: string }> | null = null;
 
 async function fetchProducts(): Promise<Map<string, { id: string; name: string }>> {
-  if (productsCache) {
-    return productsCache;
-  }
-
-  const response = await airtableFetch(PRODUCTS_TABLE);
-  const data: AirtableResponse = await response.json();
-
+  if (productsCache) return productsCache;
+  const products = await provider.products.getAll();
   const map = new Map<string, { id: string; name: string }>();
-
-  for (const record of data.records) {
-    const name = typeof record.fields[FIELD_PRODUCT_NAME] === 'string'
-      ? record.fields[FIELD_PRODUCT_NAME]
-      : 'Unknown';
-    map.set(record.id, { id: record.id, name });
+  for (const p of products) {
+    map.set(p.id, { id: p.id, name: p.name });
   }
-
   productsCache = map;
   return map;
 }
@@ -304,9 +297,11 @@ function mapTempAirtableToImage(
 }
 
 /**
- * List all images from Airtable (Images + Temp Images).
+ * List all images (Images + Temp Images).
  */
 export async function listImages(): Promise<Image[]> {
+  if (DATA_PROVIDER === 'd1') return provider.images.getAll();
+
   const productsMap = await fetchProducts();
 
   // Helper to fetch all records from a table
@@ -346,6 +341,8 @@ export async function listImages(): Promise<Image[]> {
  * List images by product ID (Images + Temp Images).
  */
 export async function listImagesByProduct(productId: string): Promise<Image[]> {
+  if (DATA_PROVIDER === 'd1') return provider.images.getByProduct(productId);
+
   const productsMap = await fetchProducts();
 
   const filterFormula = encodeURIComponent(

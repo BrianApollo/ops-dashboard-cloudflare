@@ -6,7 +6,7 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listProfiles, listBMs, listAdAccounts, listPages, listPixels } from './data';
+import { listProfiles, listBMs, listAdAccounts, listPages, listPixels, invalidateD1InfraCache } from './data';
 import type { InfraData } from './types';
 
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -67,6 +67,7 @@ export function useInfrastructureController() {
   };
 
   const refetchAll = async () => {
+    invalidateD1InfraCache();
     await queryClient.invalidateQueries({ queryKey: ['infrastructure'] });
   };
 

@@ -23,6 +23,9 @@ import { useTheme } from '@mui/material/styles';
 // Icons
 import InventoryIcon from '@mui/icons-material/Inventory';
 import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputComponent';
+import TuneIcon from '@mui/icons-material/Tune';
+import GavelIcon from '@mui/icons-material/Gavel';
+import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 
 // =============================================================================
@@ -57,6 +60,8 @@ export function OpsLayout() {
   // Dynamic navigation items based on role
   const mainNavItems = [
     ...(user?.role !== 'Video Editor' ? [{ to: '/ops', label: 'Products', icon: InventoryIcon }] : []),
+    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/manage', label: 'Manage', icon: TuneIcon }] : []),
+    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/rules', label: 'Rules', icon: GavelIcon }] : []),
   ];
 
   // Check if a nav item is active

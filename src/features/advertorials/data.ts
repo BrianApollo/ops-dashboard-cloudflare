@@ -1,5 +1,8 @@
 import { airtableFetch } from '../../core/data/airtable-client';
 import type { Advertorial } from './types';
+import { provider } from '../../data/provider';
+
+const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -70,18 +73,11 @@ let productsCache: Map<string, { id: string; name: string }> | null = null;
 
 async function fetchProducts(): Promise<Map<string, { id: string; name: string }>> {
     if (productsCache) return productsCache;
-
-    const response = await airtableFetch(PRODUCTS_TABLE);
-    const data: AirtableResponse = await response.json();
+    const products = await provider.products.getAll();
     const map = new Map<string, { id: string; name: string }>();
-
-    for (const record of data.records) {
-        const name = typeof record.fields[FIELD_PRODUCT_NAME] === 'string'
-            ? record.fields[FIELD_PRODUCT_NAME]
-            : 'Unknown';
-        map.set(record.id, { id: record.id, name });
+    for (const p of products) {
+        map.set(p.id, { id: p.id, name: p.name });
     }
-
     productsCache = map;
     return map;
 }
@@ -91,6 +87,8 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 // =============================================================================
 
 export async function listAdvertorials(): Promise<Advertorial[]> {
+    if (DATA_PROVIDER === 'd1') return provider.advertorials.getAll();
+
     const productsMap = await fetchProducts();
     const allRecords: AirtableRecord[] = [];
     let offset: string | undefined;

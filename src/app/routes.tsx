@@ -4,6 +4,8 @@ import { ProductsPage } from "../domains/ops/products/ProductsPage";
 import { CampaignLaunchPage } from "../domains/ops/campaigns/launch/CampaignLaunchPage";
 import { CampaignViewPage } from "../domains/ops/campaigns/post-launch/CampaignViewPage";
 import { InfrastructurePage } from "../domains/ops/infrastructure/InfrastructurePage";
+import { ManagePage } from "../domains/manage/ManagePage";
+import { RulesPage } from "../domains/ops/rules/RulesPage";
 import { EditorPortalPage } from "../pages/videos/EditorPortalPage";
 import LoginPage from "../domains/auth/LoginPage";
 import { RequireAuth, RedirectIfAuthenticated, RootRedirect } from "../core/auth/AuthGuard";
@@ -24,6 +26,8 @@ export function AppRoutes() {
           <Route path="/ops/products/:id" element={<ProductsPage />} />
           <Route path="/ops/products/:id/campaigns/:campaignId" element={<CampaignViewPage />} />
           <Route path="/ops/products/:id/campaigns/:campaignId/launch" element={<CampaignLaunchPage />} />
+          <Route path="/ops/manage" element={<ManagePage />} />
+          <Route path="/ops/rules" element={<RulesPage />} />
           <Route path="/ops/infrastructure" element={<InfrastructurePage />} />
           <Route path="/videos" element={<EditorPortalPage />} />
         </Route>

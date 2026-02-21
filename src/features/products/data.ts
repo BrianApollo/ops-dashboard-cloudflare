@@ -13,6 +13,7 @@
 import type { Product, ProductAsset, ProductStatus } from './types';
 import { uploadProductAsset, deleteProductAssetFromDrive, createProductFolder, type UploadProgress } from './drive';
 import { airtableFetch } from '../../core/data/airtable-client';
+import { provider } from '../../data/provider';
 
 const GOOGLE_DRIVE_PRODUCTS_ROOT_ID = import.meta.env.VITE_GOOGLE_DRIVE_PRODUCTS_ROOT_ID;
 
@@ -37,11 +38,6 @@ interface AirtableRecord {
   id: string;
   fields: Record<string, unknown>;
   createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
 }
 
 // =============================================================================
@@ -151,39 +147,17 @@ function mapAirtableToProduct(record: AirtableRecord): Product | null {
 // =============================================================================
 
 /**
- * List all products from Airtable.
+ * List all products. Delegates to the data provider (Airtable or D1).
  */
 export async function listProducts(): Promise<Product[]> {
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset ? `${PRODUCTS_TABLE}?offset=${offset}` : PRODUCTS_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
-
-  return allRecords
-    .map(mapAirtableToProduct)
-    .filter((p): p is Product => p !== null);
+  return provider.products.getAll();
 }
 
 /**
- * Get a single product by ID.
+ * Get a single product by ID. Delegates to the data provider (Airtable or D1).
  */
 export async function getProduct(id: string): Promise<Product | null> {
-  try {
-    const response = await airtableFetch(`${PRODUCTS_TABLE}/${id}`);
-    const record: AirtableRecord = await response.json();
-    return mapAirtableToProduct(record);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('404')) {
-      return null;
-    }
-    throw error;
-  }
+  return provider.products.getById(id);
 }
 
 /**

@@ -688,6 +688,17 @@ export function useInfraActions(
     }
   }, [refetchAll, toast]);
 
+  const linkAdsPowerProfile = useCallback(async (profileId: string, adsPowerUserId: string) => {
+    try {
+      await updateInfraRecord('profiles', profileId, { [FIELDS.profiles.adsPowerProfileId]: adsPowerUserId });
+      await refetchAll();
+      toast.success('AdsPower profile linked');
+    } catch (err) {
+      toast.error('Failed to link AdsPower profile: ' + (err instanceof Error ? err.message : String(err)));
+      throw err;
+    }
+  }, [refetchAll, toast]);
+
   return {
     validateProfileToken,
     validateBMToken,
@@ -704,5 +715,6 @@ export function useInfraActions(
     syncDialog,
     toggleItemHidden,
     updateProfileSetup,
+    linkAdsPowerProfile,
   };
 }

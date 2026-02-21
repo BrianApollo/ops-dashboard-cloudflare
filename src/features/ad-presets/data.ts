@@ -16,6 +16,9 @@
 
 import type { AdPreset } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
+import { provider } from '../../data/provider';
+
+const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -76,22 +79,12 @@ interface AirtableResponse {
 let productsCache: Map<string, { id: string; name: string }> | null = null;
 
 async function fetchProducts(): Promise<Map<string, { id: string; name: string }>> {
-  if (productsCache) {
-    return productsCache;
-  }
-
-  const response = await airtableFetch(PRODUCTS_TABLE);
-  const data: AirtableResponse = await response.json();
-
+  if (productsCache) return productsCache;
+  const products = await provider.products.getAll();
   const map = new Map<string, { id: string; name: string }>();
-
-  for (const record of data.records) {
-    const name = typeof record.fields[FIELD_PRODUCT_NAME] === 'string'
-      ? record.fields[FIELD_PRODUCT_NAME]
-      : 'Unknown';
-    map.set(record.id, { id: record.id, name });
+  for (const p of products) {
+    map.set(p.id, { id: p.id, name: p.name });
   }
-
   productsCache = map;
   return map;
 }
@@ -176,9 +169,11 @@ function mapAirtableToAdPreset(
 // =============================================================================
 
 /**
- * List all ad presets from Airtable.
+ * List all ad presets.
  */
 export async function listAdPresets(): Promise<AdPreset[]> {
+  if (DATA_PROVIDER === 'd1') return provider.adPresets.getAll();
+
   const productsMap = await fetchProducts();
 
   const allRecords: AirtableRecord[] = [];
@@ -199,9 +194,10 @@ export async function listAdPresets(): Promise<AdPreset[]> {
 
 /**
  * List ad presets by product ID.
- * Ad Presets are filtered strictly by Product.
  */
 export async function listAdPresetsByProduct(productId: string): Promise<AdPreset[]> {
+  if (DATA_PROVIDER === 'd1') return provider.adPresets.getByProduct(productId);
+
   const productsMap = await fetchProducts();
 
   const filterFormula = encodeURIComponent(
@@ -230,6 +226,8 @@ export async function listAdPresetsByProduct(productId: string): Promise<AdPrese
  * Get a single ad preset by ID.
  */
 export async function getAdPreset(id: string): Promise<AdPreset | null> {
+  if (DATA_PROVIDER === 'd1') return provider.adPresets.getById(id);
+
   const productsMap = await fetchProducts();
 
   try {

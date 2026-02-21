@@ -98,6 +98,31 @@ export async function listProfiles(): Promise<Profile[]> {
 }
 
 /**
+ * Get the master profile record ID from the "Master Profile" table.
+ * Returns the Airtable record ID of the default profile, or null if not set.
+ */
+export async function getMasterProfileId(): Promise<string | null> {
+    const response = await airtableFetch('Master Profile?maxRecords=1');
+    const data: AirtableResponse = await response.json();
+
+    if (data.records.length === 0) return null;
+
+    const profileRecord = data.records[0].fields['Profile Record'];
+
+    // Linked records are stored as arrays of record IDs
+    if (Array.isArray(profileRecord) && profileRecord.length > 0) {
+        return profileRecord[0] as string;
+    }
+
+    // Could also be a single string
+    if (typeof profileRecord === 'string') {
+        return profileRecord;
+    }
+
+    return null;
+}
+
+/**
  * Get only Active profiles.
  */
 export async function getActiveProfiles(): Promise<Profile[]> {

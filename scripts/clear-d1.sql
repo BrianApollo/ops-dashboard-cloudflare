@@ -1,0 +1,24 @@
+-- Clear all data for fresh migration (junction tables first, then leaves, then roots)
+DELETE FROM campaign_images;
+DELETE FROM campaign_videos;
+DELETE FROM pixel_owner_bms;
+DELETE FROM bm_pixels;
+DELETE FROM bm_ad_accounts;
+DELETE FROM profile_pages;
+DELETE FROM profile_bms;
+DELETE FROM advertorials;
+DELETE FROM temp_images;
+DELETE FROM images;
+DELETE FROM campaigns;
+DELETE FROM videos;
+DELETE FROM video_scripts;
+DELETE FROM ad_presets;
+DELETE FROM scaling_rules;
+DELETE FROM pixels;
+DELETE FROM pages;
+DELETE FROM ad_accounts;
+DELETE FROM business_managers;
+DELETE FROM product_assets;
+DELETE FROM profiles;
+DELETE FROM products;
+DELETE FROM users;

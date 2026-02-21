@@ -79,8 +79,8 @@ export function StatusCard({
                   theme.palette.primary.main,
                   theme.palette.mode === "dark" ? 0.12 : 0.06,
                 ),
-            transform: "translateY(-2px)",
-            boxShadow: active ? 4 : 2,
+            borderColor: active ? 'primary.dark' : 'primary.main',
+            boxShadow: active ? 3 : 1,
           },
         }),
       }}

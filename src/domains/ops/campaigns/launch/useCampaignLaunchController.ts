@@ -242,7 +242,7 @@ export function useCampaignLaunchController(
   const baseVideos = useMemo(() => {
     if (!productId) return [];
     return videosController.list.allRecords
-      .filter((v) => v.product.id === productId && ['available', 'review'].includes(v.status) && v.format !== 'YouTube')
+      .filter((v) => v.product.id === productId && ['available', 'review'].includes(v.status) && v.format !== 'youtube')
       .map((v) => ({
         id: v.id,
         name: v.name,

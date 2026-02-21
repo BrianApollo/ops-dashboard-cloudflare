@@ -77,6 +77,7 @@ export function InfrastructurePage() {
         onPasteToken={actions.openSetTokenDialog}
         onToggleItemHidden={actions.toggleItemHidden}
         onUpdateProfile={actions.updateProfileSetup}
+        onLinkAdsPower={actions.linkAdsPowerProfile}
       />
 
       {/* Dialogs */}

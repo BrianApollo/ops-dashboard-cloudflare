@@ -47,6 +47,7 @@ interface TreeCanvasProps {
   onPasteToken: (id: string) => void;
   onToggleItemHidden: (type: EntityType, id: string) => void;
   onUpdateProfile: (id: string, updates: Partial<InfraProfile>) => Promise<void>;
+  onLinkAdsPower: (profileId: string, adsPowerUserId: string) => Promise<void>;
 }
 
 export function TreeCanvas({
@@ -73,6 +74,7 @@ export function TreeCanvas({
   onPasteToken,
   onToggleItemHidden,
   onUpdateProfile,
+  onLinkAdsPower,
 }: TreeCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -278,6 +280,7 @@ export function TreeCanvas({
               onPasteToken={onPasteToken}
               onToggleHidden={onToggleItemHidden}
               onUpdateProfile={onUpdateProfile}
+              onLinkAdsPower={onLinkAdsPower}
             />
           )}
         </Box>

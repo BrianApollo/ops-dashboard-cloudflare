@@ -161,7 +161,7 @@ export function useAddAdsFlow({
         (v) =>
           v.product.id === productId &&
           ['available', 'review'].includes(v.status) &&
-          v.format !== 'YouTube',
+          v.format !== 'youtube',
       )
       .map((v) => ({ id: v.id, name: v.name, creativeLink: v.creativeLink }))
       .sort((a, b) => a.name.localeCompare(b.name));

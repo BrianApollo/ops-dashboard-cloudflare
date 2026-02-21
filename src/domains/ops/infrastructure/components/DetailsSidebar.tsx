@@ -24,6 +24,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { SidebarSection } from './SidebarSection';
 import { SetupInfoDialog } from './SetupInfoDialog';
+import { AdsPowerSection } from './AdsPowerSection';
 import { getStatusBadgeClass } from '../useTreeState';
 import type {
   SelectedNode, InfraData, ConnectedByType, EntityType,
@@ -42,6 +43,7 @@ interface DetailsSidebarProps {
   onPasteToken: (id: string) => void;
   onToggleHidden: (type: EntityType, id: string) => void;
   onUpdateProfile: (id: string, updates: Partial<InfraProfile>) => Promise<void>;
+  onLinkAdsPower: (profileId: string, adsPowerUserId: string) => Promise<void>;
 }
 
 function copyToClipboard(text: string) {
@@ -64,6 +66,7 @@ export function DetailsSidebar({
   onPasteToken,
   onToggleHidden,
   onUpdateProfile,
+  onLinkAdsPower,
 }: DetailsSidebarProps) {
   const { type, id } = selectedNode;
 
@@ -80,7 +83,7 @@ export function DetailsSidebar({
         borderColor: 'divider',
       }}
     >
-      {type === 'profiles' && <ProfileSidebar record={record as InfraProfile} connectedByType={connectedByType} onValidate={onValidateProfileToken} onRefresh={onRefreshProfileToken} onSync={onSyncProfileData} onToggleHidden={onToggleHidden} onUpdateProfile={onUpdateProfile} />}
+      {type === 'profiles' && <ProfileSidebar record={record as InfraProfile} connectedByType={connectedByType} onValidate={onValidateProfileToken} onRefresh={onRefreshProfileToken} onSync={onSyncProfileData} onToggleHidden={onToggleHidden} onUpdateProfile={onUpdateProfile} onLinkAdsPower={onLinkAdsPower} />}
       {type === 'bms' && <BMSidebar record={record as InfraBM} connectedByType={connectedByType} onValidate={onValidateBMToken} onGenerate={onGenerateToken} onPaste={onPasteToken} onToggleHidden={onToggleHidden} />}
       {type === 'adaccounts' && <AdAccountSidebar record={record as InfraAdAccount} connectedByType={connectedByType} onToggleHidden={onToggleHidden} />}
       {type === 'pages' && <PageSidebar record={record as InfraPage} connectedByType={connectedByType} onToggleHidden={onToggleHidden} />}
@@ -212,11 +215,12 @@ function ConnectedSections({ connectedByType, excludeType }: { connectedByType: 
 // PROFILE SIDEBAR
 // =============================================================================
 
-function ProfileSidebar({ record, connectedByType, onValidate, onRefresh, onSync, onToggleHidden, onUpdateProfile }: {
+function ProfileSidebar({ record, connectedByType, onValidate, onRefresh, onSync, onToggleHidden, onUpdateProfile, onLinkAdsPower }: {
   record: InfraProfile; connectedByType: ConnectedByType;
   onValidate: (id: string) => void; onRefresh: (id: string) => void; onSync: (id: string) => void;
   onToggleHidden: (type: EntityType, id: string) => void;
   onUpdateProfile: (id: string, updates: Partial<InfraProfile>) => Promise<void>;
+  onLinkAdsPower: (profileId: string, adsPowerUserId: string) => Promise<void>;
 }) {
   const theme = useTheme();
   const [setupOpen, setSetupOpen] = useState(false);
@@ -361,6 +365,13 @@ function ProfileSidebar({ record, connectedByType, onValidate, onRefresh, onSync
         profile={record}
         onClose={() => setSetupEditOpen(false)}
         onSave={handleUpdateProfile}
+      />
+
+      {/* AdsPower */}
+      <AdsPowerSection
+        profileId={record.id}
+        currentAdsPowerId={record.adsPowerProfileId}
+        onSave={(userId) => onLinkAdsPower(record.id, userId)}
       />
 
       <ConnectedSections connectedByType={connectedByType} excludeType="profiles" />
