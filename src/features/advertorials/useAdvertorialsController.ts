@@ -6,16 +6,19 @@ import type { Advertorial, AdvertorialFilters } from './types';
 
 interface UseAdvertorialsControllerProps {
     initialFilters?: AdvertorialFilters;
+    /** Whether to enable data fetching. Defaults to true. */
+    enabled?: boolean;
 }
 
-export function useAdvertorialsController({ initialFilters }: UseAdvertorialsControllerProps = {}) {
+export function useAdvertorialsController({ initialFilters, enabled = true }: UseAdvertorialsControllerProps = {}) {
     const {
         data: allAdvertorials = [],
         isLoading,
         refetch
     } = useQuery({
         queryKey: ['advertorials'],
-        queryFn: listAdvertorials,
+        queryFn: ({ signal }) => listAdvertorials(signal),
+        enabled,
     });
 
     // Filter logic handled by list controller or pre-filtered here

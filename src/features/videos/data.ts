@@ -13,6 +13,7 @@
 import type { VideoAsset, VideoStatus, VideoFormat } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
 import { provider } from '../../data/provider';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // Table names
 const VIDEOS_TABLE = 'Videos';
@@ -54,16 +55,6 @@ const VIDEO_SCRIPTS_TABLE = 'Video Scripts';
 // AIRTABLE HELPERS
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-  createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 
 // =============================================================================
@@ -362,7 +353,7 @@ async function fetchScripts(): Promise<Map<string, { id: string; name: string }>
 /**
  * List all videos.
  */
-export async function listVideos(): Promise<VideoAsset[]> {
+export async function listVideos(signal?: AbortSignal): Promise<VideoAsset[]> {
   const [editorsMap, productsMap, scriptsMap] = await Promise.all([
     fetchEditors(),
     fetchProducts(),
@@ -372,11 +363,11 @@ export async function listVideos(): Promise<VideoAsset[]> {
   let offset: string | undefined;
   do {
     const url = offset ? `${VIDEOS_TABLE}?offset=${offset}` : VIDEOS_TABLE;
-    const res = await airtableFetch(url);
+    const res = await airtableFetch(url, { signal });
     const data: AirtableResponse = await res.json();
     allRecords.push(...data.records);
     offset = data.offset;
-  } while (offset);
+  } while (offset && !signal?.aborted);
   return allRecords
     .map(r => mapAirtableToVideoAsset(r, editorsMap, productsMap, scriptsMap))
     .filter((v): v is VideoAsset => v !== null);

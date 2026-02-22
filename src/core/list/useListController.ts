@@ -12,7 +12,7 @@ interface SortConfig {
 // Split config into two modes
 interface QueryModeConfig<T extends BaseRecord> {
   queryKey: string[];
-  queryFn: () => T[] | Promise<T[]>;
+  queryFn: (signal?: AbortSignal) => T[] | Promise<T[]>;
   records?: never;
 }
 
@@ -32,6 +32,8 @@ interface BaseConfig<T extends BaseRecord, F = Record<string, unknown>> {
   filterFn?: (records: T[], filters: F) => T[];
   searchFn?: (records: T[], searchTerm: string) => T[];
   compareFn?: (a: T, b: T, sort: SortConfig) => number;
+  /** Whether to enable data fetching (query mode only). Defaults to true. */
+  enabled?: boolean;
 }
 
 type UseListControllerConfig<T extends BaseRecord, F = Record<string, unknown>> =
@@ -81,6 +83,7 @@ export function useListController<T extends BaseRecord, F = Record<string, unkno
     filterFn,
     searchFn,
     compareFn,
+    enabled: configEnabled = true,
   } = config;
 
   // Determine mode: query or direct
@@ -93,8 +96,8 @@ export function useListController<T extends BaseRecord, F = Record<string, unkno
     isLoading: queryLoading,
   } = useQuery({
     queryKey: isQueryMode ? config.queryKey : ['__disabled__'],
-    queryFn: isQueryMode ? config.queryFn : () => [],
-    enabled: isQueryMode,
+    queryFn: isQueryMode ? ({ signal }) => config.queryFn(signal) : () => [],
+    enabled: isQueryMode && configEnabled,
   });
 
   // Direct mode: use records prop directly

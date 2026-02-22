@@ -14,6 +14,7 @@ import type {
   InfraPage,
   InfraPixel,
 } from './types';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
 
@@ -21,15 +22,6 @@ const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
 // HELPERS
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 
 function getLinkedIds(value: unknown): string[] {

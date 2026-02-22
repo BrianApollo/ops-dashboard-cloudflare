@@ -93,12 +93,14 @@ interface UseAdPresetsControllerOptions {
    * Initial filters.
    */
   initialFilters?: Partial<AdPresetFilters>;
+  /** Whether to enable data fetching. Defaults to true. */
+  enabled?: boolean;
 }
 
 export function useAdPresetsController(
   options: UseAdPresetsControllerOptions = {}
 ): UseAdPresetsControllerResult {
-  const { initialFilters } = options;
+  const { initialFilters, enabled = true } = options;
 
   // ---------------------------------------------------------------------------
   // STATE
@@ -121,8 +123,9 @@ export function useAdPresetsController(
 
   const adPresetsQuery = useQuery({
     queryKey: ['ad-presets'],
-    queryFn: listAdPresets,
+    queryFn: ({ signal }) => listAdPresets(signal),
     staleTime: 30 * 1000, // 30 seconds
+    enabled,
   });
 
   const adPresets = adPresetsQuery.data ?? [];

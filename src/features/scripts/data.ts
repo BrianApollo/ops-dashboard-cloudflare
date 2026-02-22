@@ -13,6 +13,7 @@
 import type { Script, ScriptStatus } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
 import { provider } from '../../data/provider';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -41,16 +42,6 @@ const FIELD_BASE_SCRIPT_NUMBER = 'Base Script Number';
 // AIRTABLE TYPES
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-  createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 // =============================================================================
 // REFERENCE DATA CACHE
@@ -192,17 +183,17 @@ function mapAirtableToScript(
 /**
  * List all scripts.
  */
-export async function listScripts(): Promise<Script[]> {
+export async function listScripts(signal?: AbortSignal): Promise<Script[]> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
   const allRecords: AirtableRecord[] = [];
   let offset: string | undefined;
   do {
     const url = offset ? `${SCRIPTS_TABLE}?offset=${offset}` : SCRIPTS_TABLE;
-    const res = await airtableFetch(url);
+    const res = await airtableFetch(url, { signal });
     const data: AirtableResponse = await res.json();
     allRecords.push(...data.records);
     offset = data.offset;
-  } while (offset);
+  } while (offset && !signal?.aborted);
   return allRecords
     .map(r => mapAirtableToScript(r, productsMap, usersMap))
     .filter((s): s is Script => s !== null);

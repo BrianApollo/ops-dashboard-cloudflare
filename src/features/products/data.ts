@@ -13,7 +13,6 @@
 import type { Product, ProductAsset, ProductStatus } from './types';
 import { uploadProductAsset, deleteProductAssetFromDrive, createProductFolder, type UploadProgress } from './drive';
 import { airtableFetch } from '../../core/data/airtable-client';
-import { provider } from '../../data/provider';
 
 const GOOGLE_DRIVE_PRODUCTS_ROOT_ID = import.meta.env.VITE_GOOGLE_DRIVE_PRODUCTS_ROOT_ID;
 
@@ -147,17 +146,33 @@ function mapAirtableToProduct(record: AirtableRecord): Product | null {
 // =============================================================================
 
 /**
- * List all products. Delegates to the data provider (Airtable or D1).
+ * List all products directly from Airtable with full field mapping (images, logos).
  */
-export async function listProducts(): Promise<Product[]> {
-  return provider.products.getAll();
+export async function listProducts(signal?: AbortSignal): Promise<Product[]> {
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const url = offset ? `${PRODUCTS_TABLE}?offset=${offset}` : PRODUCTS_TABLE;
+    const res = await airtableFetch(url, { signal });
+    const data: { records: AirtableRecord[]; offset?: string } = await res.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset && !signal?.aborted);
+  return allRecords.map(mapAirtableToProduct).filter((p): p is Product => p !== null);
 }
 
 /**
- * Get a single product by ID. Delegates to the data provider (Airtable or D1).
+ * Get a single product by ID with full field mapping.
  */
 export async function getProduct(id: string): Promise<Product | null> {
-  return provider.products.getById(id);
+  try {
+    const res = await airtableFetch(`${PRODUCTS_TABLE}/${id}`);
+    const record: AirtableRecord = await res.json();
+    return mapAirtableToProduct(record);
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('404')) return null;
+    throw e;
+  }
 }
 
 /**

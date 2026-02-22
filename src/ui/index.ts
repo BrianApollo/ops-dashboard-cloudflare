@@ -4,7 +4,7 @@
  * Centralized styling system for the application.
  */
 
-// Colors
+// Colors (includes pill style helpers)
 export {
   STATUS_COLORS,
   STATUS_LABELS,
@@ -17,10 +17,6 @@ export {
   type StatusColorSet,
   type ProductColorSet,
   type EditorColorSet,
-} from './colors';
-
-// Pills
-export {
   basePillStyle,
   baseChipSx,
   getStatusPillStyle,
@@ -30,7 +26,7 @@ export {
   getEditorPillStyle,
   getEditorChipSx,
   type PillStyle,
-} from './pills';
+} from './colors';
 
 // Components
 export { StatusPill } from './StatusPill';

@@ -1,8 +1,7 @@
 import { airtableFetch } from '../../core/data/airtable-client';
 import type { Advertorial } from './types';
 import { provider } from '../../data/provider';
-
-const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -22,17 +21,6 @@ const FIELD_PRODUCT_NAME = 'Product Name';
 // =============================================================================
 // TYPES
 // =============================================================================
-
-interface AirtableRecord {
-    id: string;
-    fields: Record<string, unknown>;
-    createdTime: string;
-}
-
-interface AirtableResponse {
-    records: AirtableRecord[];
-    offset?: string;
-}
 
 // =============================================================================
 // MAPPER
@@ -86,20 +74,18 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 // READ OPERATIONS
 // =============================================================================
 
-export async function listAdvertorials(): Promise<Advertorial[]> {
-    if (DATA_PROVIDER === 'd1') return provider.advertorials.getAll();
-
+export async function listAdvertorials(signal?: AbortSignal): Promise<Advertorial[]> {
     const productsMap = await fetchProducts();
     const allRecords: AirtableRecord[] = [];
     let offset: string | undefined;
 
     do {
         const url = offset ? `${ADVERTORIALS_TABLE}?offset=${offset}` : ADVERTORIALS_TABLE;
-        const response = await airtableFetch(url);
+        const response = await airtableFetch(url, { signal });
         const data: AirtableResponse = await response.json();
         allRecords.push(...data.records);
         offset = data.offset;
-    } while (offset);
+    } while (offset && !signal?.aborted);
 
     return allRecords
         .map((record) => mapAirtableToAdvertorial(record, productsMap))

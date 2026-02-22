@@ -1,0 +1,6 @@
+name = "ops-scheduled-executor"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[triggers]
+crons = ["0 17 * * *"]   # 17:00 UTC = midnight GMT+7

@@ -13,8 +13,7 @@
 import type { Image, ImageStatus, ImageType } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
 import { provider } from '../../data/provider';
-
-const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -46,16 +45,6 @@ const FIELD_PRODUCT_NAME = 'Product Name';
 // AIRTABLE TYPES
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-  createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 // =============================================================================
 // STATUS NORMALIZATION
@@ -299,9 +288,7 @@ function mapTempAirtableToImage(
 /**
  * List all images (Images + Temp Images).
  */
-export async function listImages(): Promise<Image[]> {
-  if (DATA_PROVIDER === 'd1') return provider.images.getAll();
-
+export async function listImages(signal?: AbortSignal): Promise<Image[]> {
   const productsMap = await fetchProducts();
 
   // Helper to fetch all records from a table
@@ -310,11 +297,11 @@ export async function listImages(): Promise<Image[]> {
     let offset: string | undefined;
     do {
       const url = offset ? `${tableName}?offset=${offset}` : tableName;
-      const response = await airtableFetch(url);
+      const response = await airtableFetch(url, { signal });
       const data: AirtableResponse = await response.json();
       records.push(...data.records);
       offset = data.offset;
-    } while (offset);
+    } while (offset && !signal?.aborted);
     return records;
   };
 
@@ -341,8 +328,6 @@ export async function listImages(): Promise<Image[]> {
  * List images by product ID (Images + Temp Images).
  */
 export async function listImagesByProduct(productId: string): Promise<Image[]> {
-  if (DATA_PROVIDER === 'd1') return provider.images.getByProduct(productId);
-
   const productsMap = await fetchProducts();
 
   const filterFormula = encodeURIComponent(

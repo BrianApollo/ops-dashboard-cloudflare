@@ -17,8 +17,7 @@ import { listVideos } from '../videos/data';
 import { listImages } from '../images/data';
 import { airtableFetch } from '../../core/data/airtable-client';
 import { provider } from '../../data/provider';
-
-const DATA_PROVIDER = import.meta.env.VITE_DATA_PROVIDER ?? 'airtable';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -77,16 +76,6 @@ const FIELD_PRODUCT_NAME = 'Product Name';
 // AIRTABLE TYPES
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-  createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 // =============================================================================
 // STATUS NORMALIZATION
@@ -347,21 +336,23 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 /**
  * List all campaigns.
  */
-export async function listCampaigns(): Promise<Campaign[]> {
-  if (DATA_PROVIDER === 'd1') return provider.campaigns.getAll();
+export async function listCampaigns(signal?: AbortSignal): Promise<Campaign[]> {
+  // Fetch products and campaigns in parallel — campaigns doesn't need products until mapping
+  const productsPromise = fetchProducts();
+  const campaignsPromise = (async () => {
+    const allRecords: AirtableRecord[] = [];
+    let offset: string | undefined;
+    do {
+      const url = offset ? `${CAMPAIGNS_TABLE}?offset=${offset}` : CAMPAIGNS_TABLE;
+      const response = await airtableFetch(url, { signal });
+      const data: AirtableResponse = await response.json();
+      allRecords.push(...data.records);
+      offset = data.offset;
+    } while (offset && !signal?.aborted);
+    return allRecords;
+  })();
 
-  const productsMap = await fetchProducts();
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset ? `${CAMPAIGNS_TABLE}?offset=${offset}` : CAMPAIGNS_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const [productsMap, allRecords] = await Promise.all([productsPromise, campaignsPromise]);
 
   return allRecords
     .map((record) => mapAirtableToCampaign(record, productsMap))
@@ -372,8 +363,6 @@ export async function listCampaigns(): Promise<Campaign[]> {
  * List campaigns filtered by product ID.
  */
 export async function listCampaignsByProduct(productId: string): Promise<Campaign[]> {
-  if (DATA_PROVIDER === 'd1') return provider.campaigns.getByProduct(productId);
-
   const productsMap = await fetchProducts();
 
   // Use Airtable formula to filter server-side
@@ -403,8 +392,6 @@ export async function listCampaignsByProduct(productId: string): Promise<Campaig
  * Get a single campaign by ID.
  */
 export async function getCampaign(id: string): Promise<Campaign | null> {
-  if (DATA_PROVIDER === 'd1') return provider.campaigns.getById(id);
-
   const productsMap = await fetchProducts();
 
   try {

@@ -7,6 +7,7 @@
 
 import type { Profile, ProfileStatus } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // Table name
 const PROFILES_TABLE = 'Profiles';
@@ -23,17 +24,6 @@ const FIELD_PERMANENT_TOKEN = 'Permanent Token';
 // =============================================================================
 // AIRTABLE HELPERS
 // =============================================================================
-
-interface AirtableRecord {
-    id: string;
-    fields: Record<string, unknown>;
-    createdTime: string;
-}
-
-interface AirtableResponse {
-    records: AirtableRecord[];
-    offset?: string;
-}
 
 
 // =============================================================================

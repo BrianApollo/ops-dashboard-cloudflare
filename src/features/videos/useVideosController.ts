@@ -34,7 +34,7 @@ import { matchesAllTokens } from '../../utils/tokenizedSearch';
 
 const videosListConfig = {
   queryKey: ['videos'],
-  queryFn: listVideos,
+  queryFn: (signal?: AbortSignal) => listVideos(signal),
   initialFilters: {
     status: [] as VideoStatus[],
     format: [] as VideoFormat[],
@@ -161,8 +161,14 @@ export interface UseVideosControllerResult {
   getMaxScrollstopperNumber: (scriptId: string, editorId: string) => number;
 }
 
-export function useVideosController(): UseVideosControllerResult {
-  const list = useListController<VideoAsset, VideoFilters>(videosListConfig);
+interface UseVideosControllerOptions {
+  /** Whether to enable data fetching. Defaults to true. */
+  enabled?: boolean;
+}
+
+export function useVideosController(options: UseVideosControllerOptions = {}): UseVideosControllerResult {
+  const { enabled = true } = options;
+  const list = useListController<VideoAsset, VideoFilters>({ ...videosListConfig, enabled });
   const toast = useToast();
   // Use real auth user
   const { user: authUser } = useAuth();
@@ -219,6 +225,7 @@ export function useVideosController(): UseVideosControllerResult {
     queryKey: ['users'],
     queryFn: listUsers,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
   });
 
   // Filter to only Video Editors for the dropdown

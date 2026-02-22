@@ -5,7 +5,7 @@
 
 import Chip from '@mui/material/Chip';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { getStatusChipSx, baseChipSx } from './pills';
+import { getStatusChipSx, baseChipSx } from './colors';
 import { STATUS_COLORS, NEUTRAL_PILL, type StatusKey } from './colors';
 
 interface StatusPillProps {
