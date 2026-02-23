@@ -4,6 +4,7 @@
  */
 
 import type { Env, ScheduleRecord, ProfileRecord, MasterProfileRecord } from './types';
+import type { ScalingRuleRecord } from './rule-types';
 
 const AIRTABLE_BASE_URL = 'https://api.airtable.com/v0';
 
@@ -114,5 +115,46 @@ export async function updateScheduleRecord(
   await airtableRequest(env, 'Schedule', `/${recordId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
+  });
+}
+
+// =============================================================================
+// SCALING RULES TABLE
+// =============================================================================
+
+/**
+ * Fetch all scaling rules from Airtable.
+ */
+export async function fetchScalingRules(env: Env): Promise<ScalingRuleRecord[]> {
+  const allRecords: ScalingRuleRecord[] = [];
+  let offset: string | undefined;
+
+  do {
+    const fetchUrl = offset ? `?offset=${offset}` : '';
+    const data = (await airtableRequest(env, 'Scaling Rules', fetchUrl)) as {
+      records: ScalingRuleRecord[];
+      offset?: string;
+    };
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  return allRecords;
+}
+
+// =============================================================================
+// RULE EXECUTION LOG TABLE
+// =============================================================================
+
+/**
+ * Create a rule execution log entry in Airtable.
+ */
+export async function createRuleExecutionLog(
+  env: Env,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  await airtableRequest(env, 'Rule Execution Log', '', {
+    method: 'POST',
+    body: JSON.stringify({ records: [{ fields }], typecast: true }),
   });
 }
