@@ -7,6 +7,7 @@
 export * from './types';
 export * from './api';
 export * from './parseUtms';
+export { RedTrackDataPanel } from '../../components/RedTrackDataPanel';
 export { useRedtrackCampaign } from './useRedtrackController';
 export type { UseRedtrackCampaignResult } from './useRedtrackController';
 export { useRedtrackCampaignList } from './useRedtrackCampaignList';

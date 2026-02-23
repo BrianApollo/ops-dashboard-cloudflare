@@ -160,7 +160,7 @@ export function useProductsController(
 
   const productsQuery = useQuery({
     queryKey: ['products'],
-    queryFn: listProducts,
+    queryFn: ({ signal }) => listProducts(signal),
     staleTime: 30 * 1000, // 30 seconds
   });
 

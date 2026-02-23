@@ -39,11 +39,6 @@ interface AirtableRecord {
   createdTime: string;
 }
 
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
-
 // =============================================================================
 // STATUS NORMALIZATION
 // =============================================================================
@@ -151,38 +146,32 @@ function mapAirtableToProduct(record: AirtableRecord): Product | null {
 // =============================================================================
 
 /**
- * List all products from Airtable.
+ * List all products directly from Airtable with full field mapping (images, logos).
  */
-export async function listProducts(): Promise<Product[]> {
+export async function listProducts(signal?: AbortSignal): Promise<Product[]> {
   const allRecords: AirtableRecord[] = [];
   let offset: string | undefined;
-
   do {
     const url = offset ? `${PRODUCTS_TABLE}?offset=${offset}` : PRODUCTS_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
+    const res = await airtableFetch(url, { signal });
+    const data: { records: AirtableRecord[]; offset?: string } = await res.json();
     allRecords.push(...data.records);
     offset = data.offset;
-  } while (offset);
-
-  return allRecords
-    .map(mapAirtableToProduct)
-    .filter((p): p is Product => p !== null);
+  } while (offset && !signal?.aborted);
+  return allRecords.map(mapAirtableToProduct).filter((p): p is Product => p !== null);
 }
 
 /**
- * Get a single product by ID.
+ * Get a single product by ID with full field mapping.
  */
 export async function getProduct(id: string): Promise<Product | null> {
   try {
-    const response = await airtableFetch(`${PRODUCTS_TABLE}/${id}`);
-    const record: AirtableRecord = await response.json();
+    const res = await airtableFetch(`${PRODUCTS_TABLE}/${id}`);
+    const record: AirtableRecord = await res.json();
     return mapAirtableToProduct(record);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('404')) {
-      return null;
-    }
-    throw error;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('404')) return null;
+    throw e;
   }
 }
 

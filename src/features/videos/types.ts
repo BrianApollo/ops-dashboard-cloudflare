@@ -4,7 +4,7 @@
  */
 
 export type VideoStatus = 'todo' | 'review' | 'available' | 'used';
-export type VideoFormat = 'square' | 'vertical' | 'YouTube';
+export type VideoFormat = 'square' | 'vertical' | 'youtube';
 export type TextVersion = 'text' | 'no-text';
 
 export interface VideoAsset {

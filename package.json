@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "wrangler pages deploy dist --project-name ops-dashboard --branch main",
-    "pages:dev": "wrangler pages dev dist --compatibility-date=2025-01-01"
+    "pages:dev": "wrangler pages dev dist --port 8788 --compatibility-date=2025-01-01"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -19,6 +19,7 @@
     "@mui/material": "^7.3.6",
     "@mui/system": "^7.3.6",
     "@tanstack/react-query": "^5.90.12",
+    "drizzle-orm": "^0.45.1",
     "path-to-regexp": "^8.3.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -30,13 +31,15 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "drizzle-kit": "^0.31.9",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "playwright": "^1.58.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "wrangler": "^3.114.7"
+    "wrangler": "^4.67.0"
   }
 }

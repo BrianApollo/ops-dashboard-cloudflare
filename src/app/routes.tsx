@@ -1,11 +1,14 @@
 import { Routes, Route } from "react-router-dom";
-import { OpsLayout } from "../domains/ops/layout/OpsLayout";
-import { ProductsPage } from "../domains/ops/products/ProductsPage";
-import { CampaignLaunchPage } from "../domains/ops/campaigns/launch/CampaignLaunchPage";
-import { CampaignViewPage } from "../domains/ops/campaigns/post-launch/CampaignViewPage";
-import { InfrastructurePage } from "../domains/ops/infrastructure/InfrastructurePage";
+import { OpsLayout } from "../components/layout/OpsLayout";
+import { ProductsPage } from "../pages/products/ProductsPage";
+import { CampaignLaunchPage } from "../pages/campaigns/CampaignLaunchPage";
+import { CampaignViewPage } from "../pages/campaigns/CampaignViewPage";
+import { InfrastructurePage } from "../pages/infrastructure/InfrastructurePage";
+import { ManagePage } from "../pages/manage/ManagePage";
+import { RulesPage } from "../pages/rules/RulesPage";
+import { SchedulesPage } from "../pages/schedules/SchedulesPage";
 import { EditorPortalPage } from "../pages/videos/EditorPortalPage";
-import LoginPage from "../domains/auth/LoginPage";
+import LoginPage from "../pages/auth/LoginPage";
 import { RequireAuth, RedirectIfAuthenticated, RootRedirect } from "../core/auth/AuthGuard";
 
 export function AppRoutes() {
@@ -24,6 +27,9 @@ export function AppRoutes() {
           <Route path="/ops/products/:id" element={<ProductsPage />} />
           <Route path="/ops/products/:id/campaigns/:campaignId" element={<CampaignViewPage />} />
           <Route path="/ops/products/:id/campaigns/:campaignId/launch" element={<CampaignLaunchPage />} />
+          <Route path="/ops/manage" element={<ManagePage />} />
+          <Route path="/ops/schedules" element={<SchedulesPage />} />
+          <Route path="/ops/rules" element={<RulesPage />} />
           <Route path="/ops/infrastructure" element={<InfrastructurePage />} />
           <Route path="/videos" element={<EditorPortalPage />} />
         </Route>

@@ -155,12 +155,14 @@ interface UseScriptsControllerOptions {
    * Initial filters.
    */
   initialFilters?: Partial<ScriptFilters>;
+  /** Whether to enable data fetching. Defaults to true. */
+  enabled?: boolean;
 }
 
 export function useScriptsController(
   options: UseScriptsControllerOptions = {}
 ): UseScriptsControllerResult {
-  const { initialFilters } = options;
+  const { initialFilters, enabled = true } = options;
 
   // ---------------------------------------------------------------------------
   // STATE
@@ -185,8 +187,9 @@ export function useScriptsController(
 
   const scriptsQuery = useQuery({
     queryKey: ['scripts'],
-    queryFn: listScripts,
+    queryFn: ({ signal }) => listScripts(signal),
     staleTime: 30 * 1000, // 30 seconds
+    enabled,
   });
 
   const scripts = scriptsQuery.data ?? [];
@@ -196,6 +199,7 @@ export function useScriptsController(
     queryKey: ['users'],
     queryFn: listUsers,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
   });
 
   const users = usersQuery.data ?? [];

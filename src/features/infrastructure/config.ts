@@ -48,6 +48,7 @@ export const FIELDS = {
     profileYearCreated: 'Profile Year Created',
     lastSync: 'Last Sync',
     hidden: 'Hidden',
+    adsPowerProfileId: 'Linked AdsProfile',
   },
 
   bms: {

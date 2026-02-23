@@ -1,11 +1,11 @@
 // Components
-export { VideoDetailPanel } from './VideoDetailPanel';
-export { ScriptProductionGrid, buildGridCards, SLOT_DEFINITIONS } from './ScriptProductionGrid';
-export type { GridCard, SlotState, SlotKey } from './ScriptProductionGrid';
+export { VideoDetailPanel } from '../../components/videos/VideoDetailPanel';
+export { ScriptProductionGrid, buildGridCards, SLOT_DEFINITIONS } from '../../components/videos/ScriptProductionGrid';
+export type { GridCard, SlotState, SlotKey } from '../../components/videos/ScriptProductionGrid';
 
 // Reusable UI components
-export { VideoNameCell, VideoTable, defaultVideoColumns, getColumnsWithoutProduct, getColumnsWithoutEditor } from './components';
-export type { VideoTableColumn, VideoTableProps } from './components';
+export { VideoNameCell, VideoTable, defaultVideoColumns, getColumnsWithoutProduct, getColumnsWithoutEditor } from '../../components/videos';
+export type { VideoTableColumn, VideoTableProps } from '../../components/videos';
 
 // Controller
 export { useVideosController } from './useVideosController';

@@ -1,3 +1,8 @@
 name = "ops-dashboard"
 pages_build_output_dir = "dist"
 compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ops-dashboard-db"
+database_id = "212507bb-6f00-4244-99c2-ff6b609b24bd"

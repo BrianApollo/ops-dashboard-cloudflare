@@ -12,14 +12,14 @@
 
 import type { Script, ScriptStatus } from './types';
 import { airtableFetch } from '../../core/data/airtable-client';
+import { provider } from '../../data/provider';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
 // TABLE & FIELD NAMES
 // =============================================================================
 
 const SCRIPTS_TABLE = 'Video Scripts';
-const PRODUCTS_TABLE = 'Products';
-const USERS_TABLE = 'Users';
 
 // Scripts table fields
 const FIELD_NAME = 'Name';
@@ -37,26 +37,11 @@ const FIELD_BODY = 'Body';
 const FIELD_HOOK_NUMBER = 'Hook Number';
 const FIELD_BASE_SCRIPT_NUMBER = 'Base Script Number';
 
-// Products table fields
-const FIELD_PRODUCT_NAME = 'Product Name';
-
-// Users table fields
-const FIELD_USER_NAME = 'Name';
 
 // =============================================================================
 // AIRTABLE TYPES
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-  createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 // =============================================================================
 // REFERENCE DATA CACHE
@@ -66,52 +51,23 @@ let productsCache: Map<string, { id: string; name: string }> | null = null;
 let usersCache: Map<string, { id: string; name: string; role: string }> | null = null;
 
 async function fetchProducts(): Promise<Map<string, { id: string; name: string }>> {
-  if (productsCache) {
-    return productsCache;
-  }
-
-  const response = await airtableFetch(PRODUCTS_TABLE);
-  const data: AirtableResponse = await response.json();
-
+  if (productsCache) return productsCache;
+  const products = await provider.products.getAll();
   const map = new Map<string, { id: string; name: string }>();
-
-  for (const record of data.records) {
-    const name = typeof record.fields[FIELD_PRODUCT_NAME] === 'string'
-      ? record.fields[FIELD_PRODUCT_NAME]
-      : 'Unknown';
-    map.set(record.id, { id: record.id, name });
+  for (const p of products) {
+    map.set(p.id, { id: p.id, name: p.name });
   }
-
   productsCache = map;
   return map;
 }
 
 async function fetchUsers(): Promise<Map<string, { id: string; name: string; role: string }>> {
-  if (usersCache) {
-    return usersCache;
-  }
-
-  const response = await airtableFetch(USERS_TABLE);
-  const data: AirtableResponse = await response.json();
-
+  if (usersCache) return usersCache;
+  const users = await provider.users.getAll();
   const map = new Map<string, { id: string; name: string; role: string }>();
-
-  for (const record of data.records) {
-    const name = typeof record.fields[FIELD_USER_NAME] === 'string'
-      ? record.fields[FIELD_USER_NAME]
-      : 'Unknown';
-
-    const rawRole = record.fields['Role'];
-    let role = '';
-    if (Array.isArray(rawRole)) {
-      role = rawRole[0] || '';
-    } else if (typeof rawRole === 'string') {
-      role = rawRole;
-    }
-
-    map.set(record.id, { id: record.id, name, role: role.trim() });
+  for (const u of users) {
+    map.set(u.id, { id: u.id, name: u.name, role: u.role });
   }
-
   usersCache = map;
   return map;
 }
@@ -225,24 +181,21 @@ function mapAirtableToScript(
 // =============================================================================
 
 /**
- * List all scripts from Airtable.
+ * List all scripts.
  */
-export async function listScripts(): Promise<Script[]> {
+export async function listScripts(signal?: AbortSignal): Promise<Script[]> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
-
   const allRecords: AirtableRecord[] = [];
   let offset: string | undefined;
-
   do {
     const url = offset ? `${SCRIPTS_TABLE}?offset=${offset}` : SCRIPTS_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
+    const res = await airtableFetch(url, { signal });
+    const data: AirtableResponse = await res.json();
     allRecords.push(...data.records);
     offset = data.offset;
-  } while (offset);
-
+  } while (offset && !signal?.aborted);
   return allRecords
-    .map((record) => mapAirtableToScript(record, productsMap, usersMap))
+    .map(r => mapAirtableToScript(r, productsMap, usersMap))
     .filter((s): s is Script => s !== null);
 }
 
@@ -251,26 +204,11 @@ export async function listScripts(): Promise<Script[]> {
  */
 export async function listScriptsByProduct(productId: string): Promise<Script[]> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
-
-  const filterFormula = encodeURIComponent(
-    `FIND("${productId}", ARRAYJOIN({${FIELD_PRODUCT}}))`
-  );
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset
-      ? `${SCRIPTS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-      : `${SCRIPTS_TABLE}?filterByFormula=${filterFormula}`;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
-
-  return allRecords
-    .map((record) => mapAirtableToScript(record, productsMap, usersMap))
+  const filter = encodeURIComponent(`FIND("${productId}", ARRAYJOIN({Product}))`);
+  const res = await airtableFetch(`${SCRIPTS_TABLE}?filterByFormula=${filter}`);
+  const data: AirtableResponse = await res.json();
+  return data.records
+    .map(r => mapAirtableToScript(r, productsMap, usersMap))
     .filter((s): s is Script => s !== null);
 }
 
@@ -279,16 +217,13 @@ export async function listScriptsByProduct(productId: string): Promise<Script[]>
  */
 export async function getScript(id: string): Promise<Script | null> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
-
   try {
-    const response = await airtableFetch(`${SCRIPTS_TABLE}/${id}`);
-    const record: AirtableRecord = await response.json();
+    const res = await airtableFetch(`${SCRIPTS_TABLE}/${id}`);
+    const record: AirtableRecord = await res.json();
     return mapAirtableToScript(record, productsMap, usersMap);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('404')) {
-      return null;
-    }
-    throw error;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('404')) return null;
+    throw e;
   }
 }
 

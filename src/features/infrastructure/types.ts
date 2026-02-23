@@ -39,6 +39,7 @@ export interface InfraProfile {
   profileLocation: string;
   profileYearCreated: string;
   uid: string;
+  adsPowerProfileId: string;
 }
 
 export interface InfraBM {

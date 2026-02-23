@@ -14,7 +14,7 @@ import {
   tableDataCellSx,
   tableRowClickableSx,
   tableRowSelectedSx,
-} from '../../domains/ops/products/composition/styles';
+} from '../../components/products/composition/styles';
 
 type BaseRecord = { id: string };
 

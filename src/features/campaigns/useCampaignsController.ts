@@ -134,7 +134,7 @@ export function useCampaignsController(
   // Fetch all campaigns - filtering is done client-side for reliability
   const campaignsQuery = useQuery({
     queryKey: ['campaigns'],
-    queryFn: listCampaigns,
+    queryFn: ({ signal }) => listCampaigns(signal),
     staleTime: 30 * 1000, // 30 seconds
   });
 

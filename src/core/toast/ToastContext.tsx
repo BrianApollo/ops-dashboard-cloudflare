@@ -1,11 +1,17 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
-import AlertTitle from '@mui/material/AlertTitle';
-import Slide from '@mui/material/Slide';
-import type { SlideProps } from '@mui/material/Slide';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+} from "react";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
+import AlertTitle from "@mui/material/AlertTitle";
+import Slide from "@mui/material/Slide";
+import type { SlideProps } from "@mui/material/Slide";
 
-type ToastSeverity = 'success' | 'error' | 'warning' | 'info';
+type ToastSeverity = "success" | "error" | "warning" | "info";
 
 interface ToastOptions {
   title?: string;
@@ -46,36 +52,51 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }, []);
 
-  const toast = useCallback((options: ToastOptions): string => {
-    const id = generateId();
-    const newToast: Toast = {
-      id,
-      message: options.message,
-      title: options.title,
-      severity: options.severity ?? 'info',
-      duration: options.duration ?? DEFAULT_DURATION,
-      action: options.action,
-    };
+  const toast = useCallback(
+    (options: ToastOptions): string => {
+      const id = generateId();
+      const newToast: Toast = {
+        id,
+        message: options.message,
+        title: options.title,
+        severity: options.severity ?? "info",
+        duration: options.duration ?? DEFAULT_DURATION,
+        action: options.action,
+      };
 
-    setToasts((prev) => [...prev, newToast]);
-    return id;
-  }, [generateId]);
+      setToasts((prev) => [...prev, newToast]);
+      return id;
+    },
+    [generateId],
+  );
 
-  const success = useCallback((message: string, title?: string): string => {
-    return toast({ message, title, severity: 'success' });
-  }, [toast]);
+  const success = useCallback(
+    (message: string, title?: string): string => {
+      return toast({ message, title, severity: "success" });
+    },
+    [toast],
+  );
 
-  const error = useCallback((message: string, title?: string): string => {
-    return toast({ message, title, severity: 'error', duration: 8000 });
-  }, [toast]);
+  const error = useCallback(
+    (message: string, title?: string): string => {
+      return toast({ message, title, severity: "error", duration: 8000 });
+    },
+    [toast],
+  );
 
-  const warning = useCallback((message: string, title?: string): string => {
-    return toast({ message, title, severity: 'warning' });
-  }, [toast]);
+  const warning = useCallback(
+    (message: string, title?: string): string => {
+      return toast({ message, title, severity: "warning" });
+    },
+    [toast],
+  );
 
-  const info = useCallback((message: string, title?: string): string => {
-    return toast({ message, title, severity: 'info' });
-  }, [toast]);
+  const info = useCallback(
+    (message: string, title?: string): string => {
+      return toast({ message, title, severity: "info" });
+    },
+    [toast],
+  );
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -85,12 +106,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts([]);
   }, []);
 
-  const handleClose = useCallback((id: string) => (_event?: React.SyntheticEvent | Event, reason?: string) => {
-    if (reason === 'clickaway') {
-      return;
-    }
-    dismiss(id);
-  }, [dismiss]);
+  const handleClose = useCallback(
+    (id: string) =>
+      (_event?: React.SyntheticEvent | Event, reason?: string) => {
+        if (reason === "clickaway") {
+          return;
+        }
+        dismiss(id);
+      },
+    [dismiss],
+  );
 
   const contextValue: ToastContextValue = {
     toast,
@@ -111,7 +136,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           open
           autoHideDuration={t.duration}
           onClose={handleClose(t.id)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           TransitionComponent={SlideTransition}
           sx={{
             bottom: { xs: 24 + index * 72, sm: 24 + index * 72 },
@@ -120,19 +145,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <Alert
             severity={t.severity}
             onClose={handleClose(t.id)}
-            variant="filled"
+            variant="outlined"
             action={t.action}
             sx={{
-              width: '100%',
+              width: "100%",
               minWidth: 300,
               maxWidth: 450,
               boxShadow: 3,
-              '& .MuiAlert-message': {
+              bgcolor: "background.paper",
+              borderLeft: 4,
+              borderLeftStyle: "solid",
+              borderLeftColor: `${t.severity}.main`,
+              "& .MuiAlert-message": {
                 flex: 1,
               },
             }}
           >
-            {t.title && <AlertTitle sx={{ fontWeight: 600 }}>{t.title}</AlertTitle>}
+            {t.title && (
+              <AlertTitle sx={{ fontWeight: 600 }}>{t.title}</AlertTitle>
+            )}
             {t.message}
           </Alert>
         </Snackbar>
@@ -144,7 +175,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function useToast(): ToastContextValue {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
+    throw new Error("useToast must be used within a ToastProvider");
   }
   return context;
 }

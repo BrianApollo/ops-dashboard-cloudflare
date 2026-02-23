@@ -127,12 +127,14 @@ interface UseImagesControllerOptions {
    * Initial filters.
    */
   initialFilters?: Partial<ImageFilters>;
+  /** Whether to enable data fetching. Defaults to true. */
+  enabled?: boolean;
 }
 
 export function useImagesController(
   options: UseImagesControllerOptions = {}
 ): UseImagesControllerResult {
-  const { initialFilters } = options;
+  const { initialFilters, enabled = true } = options;
 
   // ---------------------------------------------------------------------------
   // STATE
@@ -156,8 +158,9 @@ export function useImagesController(
 
   const imagesQuery = useQuery({
     queryKey: ['images'],
-    queryFn: listImages,
+    queryFn: ({ signal }) => listImages(signal),
     staleTime: 30 * 1000, // 30 seconds
+    enabled,
   });
 
   const images = imagesQuery.data ?? [];

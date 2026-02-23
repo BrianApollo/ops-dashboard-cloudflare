@@ -16,6 +16,8 @@ import type { LaunchSnapshot } from './launch/types';
 import { listVideos } from '../videos/data';
 import { listImages } from '../images/data';
 import { airtableFetch } from '../../core/data/airtable-client';
+import { provider } from '../../data/provider';
+import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -74,16 +76,6 @@ const FIELD_PRODUCT_NAME = 'Product Name';
 // AIRTABLE TYPES
 // =============================================================================
 
-interface AirtableRecord {
-  id: string;
-  fields: Record<string, unknown>;
-  createdTime: string;
-}
-
-interface AirtableResponse {
-  records: AirtableRecord[];
-  offset?: string;
-}
 
 // =============================================================================
 // STATUS NORMALIZATION
@@ -327,22 +319,12 @@ function mapAirtableToCampaign(
 let productsCache: Map<string, { id: string; name: string }> | null = null;
 
 async function fetchProducts(): Promise<Map<string, { id: string; name: string }>> {
-  if (productsCache) {
-    return productsCache;
-  }
-
-  const response = await airtableFetch(PRODUCTS_TABLE);
-  const data: AirtableResponse = await response.json();
-
+  if (productsCache) return productsCache;
+  const products = await provider.products.getAll();
   const map = new Map<string, { id: string; name: string }>();
-
-  for (const record of data.records) {
-    const name = typeof record.fields[FIELD_PRODUCT_NAME] === 'string'
-      ? record.fields[FIELD_PRODUCT_NAME]
-      : 'Unknown';
-    map.set(record.id, { id: record.id, name });
+  for (const p of products) {
+    map.set(p.id, { id: p.id, name: p.name });
   }
-
   productsCache = map;
   return map;
 }
@@ -352,21 +334,25 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 // =============================================================================
 
 /**
- * List all campaigns from Airtable.
+ * List all campaigns.
  */
-export async function listCampaigns(): Promise<Campaign[]> {
-  const productsMap = await fetchProducts();
+export async function listCampaigns(signal?: AbortSignal): Promise<Campaign[]> {
+  // Fetch products and campaigns in parallel — campaigns doesn't need products until mapping
+  const productsPromise = fetchProducts();
+  const campaignsPromise = (async () => {
+    const allRecords: AirtableRecord[] = [];
+    let offset: string | undefined;
+    do {
+      const url = offset ? `${CAMPAIGNS_TABLE}?offset=${offset}` : CAMPAIGNS_TABLE;
+      const response = await airtableFetch(url, { signal });
+      const data: AirtableResponse = await response.json();
+      allRecords.push(...data.records);
+      offset = data.offset;
+    } while (offset && !signal?.aborted);
+    return allRecords;
+  })();
 
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset ? `${CAMPAIGNS_TABLE}?offset=${offset}` : CAMPAIGNS_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const [productsMap, allRecords] = await Promise.all([productsPromise, campaignsPromise]);
 
   return allRecords
     .map((record) => mapAirtableToCampaign(record, productsMap))
@@ -375,7 +361,6 @@ export async function listCampaigns(): Promise<Campaign[]> {
 
 /**
  * List campaigns filtered by product ID.
- * More efficient than fetching all and filtering client-side.
  */
 export async function listCampaignsByProduct(productId: string): Promise<Campaign[]> {
   const productsMap = await fetchProducts();
@@ -718,4 +703,45 @@ export async function addImageIdsToCampaign(
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
+}
+
+// =============================================================================
+// LIGHTWEIGHT LOOKUPS
+// =============================================================================
+
+/**
+ * Fetch Launched campaigns and return a name → redtrackCampaignId map.
+ * Used by the Manage page to match Facebook campaigns to Airtable campaigns.
+ */
+export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, string>> {
+  const filterFormula = encodeURIComponent(`{${FIELD_CAMPAIGN_STATUS}} = 'Launched'`);
+  const fieldsParam = 'fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_NAME)
+    + '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_REDTRACK_ID);
+
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+
+  do {
+    const base = `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&${fieldsParam}`;
+    const url = offset ? `${base}&offset=${offset}` : base;
+    const response = await airtableFetch(url);
+    const data: AirtableResponse = await response.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  const map = new Map<string, string>();
+  for (const record of allRecords) {
+    const name = typeof record.fields[FIELD_CAMPAIGN_NAME] === 'string'
+      ? record.fields[FIELD_CAMPAIGN_NAME]
+      : '';
+    const rtId = typeof record.fields[FIELD_CAMPAIGN_REDTRACK_ID] === 'string'
+      ? record.fields[FIELD_CAMPAIGN_REDTRACK_ID]
+      : '';
+    if (name && rtId) {
+      map.set(name, rtId);
+    }
+  }
+
+  return map;
 }
