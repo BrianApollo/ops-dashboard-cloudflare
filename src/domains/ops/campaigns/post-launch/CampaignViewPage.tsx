@@ -64,7 +64,7 @@ import {
   getFbVideoThumbnail,
   updateCampaignStatus,
 } from '../../../../features/campaigns';
-import { useProfilesController } from '../../../../features/profiles';
+import { useProfilesController, getMasterProfileId } from '../../../../features/profiles';
 import { fetchRedtrackReport, type RedTrackReportRow } from '../../../../features/redtrack';
 import type { Campaign, FbAdSet, FbAd, FbCreative } from '../../../../features/campaigns';
 import type { CampaignViewTab } from '../../products/composition/types';
@@ -149,8 +149,14 @@ export function CampaignViewPage() {
   // Get profiles for access token
   const { profiles, isLoading: profilesLoading } = useProfilesController();
 
-  // Determine active profile
-  const activeProfileId = overrideProfileId ?? campaign?.launchProfileId;
+  // Fetch master profile ID (default profile for viewing campaigns)
+  const masterProfileQuery = useQuery({
+    queryKey: ['master-profile'],
+    queryFn: getMasterProfileId,
+  });
+
+  // Determine active profile: user override > master profile > launch profile
+  const activeProfileId = overrideProfileId ?? masterProfileQuery.data ?? campaign?.launchProfileId;
   const activeProfile = profiles.find((p) => p.id === activeProfileId);
   const accessToken = activeProfile?.permanentToken;
 
@@ -158,7 +164,7 @@ export function CampaignViewPage() {
   const fbData = useFacebookCampaign(campaign?.fbCampaignId, accessToken);
 
   // Loading state
-  if (campaignQuery.isLoading || profilesLoading) {
+  if (campaignQuery.isLoading || profilesLoading || masterProfileQuery.isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
         <CircularProgress />
