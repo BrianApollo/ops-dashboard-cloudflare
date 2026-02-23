@@ -2,5 +2,13 @@ name = "ops-scheduled-executor"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "ops-dashboard-db"
+database_id = "212507bb-6f00-4244-99c2-ff6b609b24bd"
+
 [triggers]
-crons = ["0 17 * * *"]   # 17:00 UTC = midnight GMT+7
+crons = [
+  "0 17 * * *",    # 17:00 UTC = midnight GMT+7 (scheduled actions + midnight rules)
+  "0 * * * *",     # Every hour — evaluate rules with custom schedules
+]
