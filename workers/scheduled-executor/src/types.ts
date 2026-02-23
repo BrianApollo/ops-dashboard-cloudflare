@@ -7,6 +7,7 @@ export interface Env {
   AIRTABLE_BASE_ID: string;
   FB_APP_ID: string;
   FB_APP_SECRET: string;
+  DB: D1Database;
 }
 
 // =============================================================================
