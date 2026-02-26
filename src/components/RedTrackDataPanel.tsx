@@ -24,9 +24,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 
 import { fetchRedtrackReport } from '../features/redtrack/api';
-import type { RedTrackReportRow } from '../features/redtrack/types';
 
-const REDTRACK_API_KEY = import.meta.env.VITE_REDTRACK_API_KEY as string | undefined;
+// API key is injected server-side by the proxy — this is just a sentinel value
+const REDTRACK_API_KEY = 'proxy-managed' as string | undefined;
 
 interface RedTrackDataPanelProps {
   redtrackCampaignId?: string;
