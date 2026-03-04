@@ -753,11 +753,13 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
 const LAUNCH_SETUP_TABLE = 'Campaign Launch Setup';
 const FIELD_SETUP_PRODUCT = 'Product';
 const FIELD_SETUP_AMOUNT = 'Amount';
+const FIELD_SETUP_AD_ACCOUNT = 'Ad Account';
 const FIELD_SETUP_PIXEL = 'Pixel';
 const FIELD_SETUP_PAGE = 'Page';
 
 export interface CampaignLaunchSetup {
   id: string;
+  adAccount: string | undefined;
   amount: string | undefined;
   pixel: string | undefined;
   page: string | undefined;
@@ -795,6 +797,9 @@ export async function fetchLaunchSetup(productId: string): Promise<CampaignLaunc
 
   return {
     id: record.id,
+    adAccount: typeof fields[FIELD_SETUP_AD_ACCOUNT] === 'string'
+      ? fields[FIELD_SETUP_AD_ACCOUNT]
+      : undefined,
     amount: typeof fields[FIELD_SETUP_AMOUNT] === 'number'
       ? String(fields[FIELD_SETUP_AMOUNT])
       : typeof fields[FIELD_SETUP_AMOUNT] === 'string'
