@@ -359,12 +359,12 @@ export function ProductsPage() {
   // Image upload handler
   const handleImageFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0 || !selectedProduct?.driveFolderId) return;
+    if (!files || files.length === 0 || !selectedProduct) return;
     try {
       await imagesController.uploadImages(
         selectedProduct.id,
         selectedProduct.name,
-        selectedProduct.driveFolderId,
+        selectedProduct.driveFolderId ?? '',
         Array.from(files)
       );
     } catch (error) {
