@@ -38,9 +38,10 @@ export {
   addImageIdsToCampaign,
   createCampaign,
   updateCampaignStatus,
+  fetchLaunchSetup,
 } from './data';
 
-export type { SaveCampaignDraftParams } from './data';
+export type { SaveCampaignDraftParams, CampaignLaunchSetup } from './data';
 
 // =============================================================================
 // READINESS LOGIC

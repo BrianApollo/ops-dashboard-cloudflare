@@ -24,9 +24,10 @@ import { checkAdReview } from '../../features/manage/api';
 import type { AdReviewResult, FbManageCampaign } from '../../features/manage/types';
 import { ScheduleActionDialog } from '../../components/schedules/ScheduleActionDialog';
 import type { ScheduleDialogPrefill } from '../../components/schedules/ScheduleActionDialog';
-import { createScheduledAction } from '../../features/schedules/data';
+import { createScheduledAction, fetchPendingActions } from '../../features/schedules/data';
 import { formStateToFields } from '../../features/schedules/types';
 import type { ScheduleFormState } from '../../features/schedules/types';
+import { useToast } from '../../core/toast/ToastContext';
 
 export function ManagePage() {
   const {
@@ -50,6 +51,8 @@ export function ManagePage() {
     editCampaignBudget,
   } = useManageData();
 
+  const { success, error: showError } = useToast();
+
   // ── Schedule dialog state ──
   const [scheduleTarget, setScheduleTarget] = useState<FbManageCampaign | null>(null);
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -62,7 +65,37 @@ export function ManagePage() {
     setScheduleSaving(true);
     try {
       const fields = formStateToFields(form);
+      const fbCampaignId = fields['Campaign Id'] as string;
+      const newActionType = fields['Type'] as string;
+      const scheduledAtStr = fields['Scheduled At'] as string;
+
+      if (!fbCampaignId || !newActionType || !scheduledAtStr) {
+        throw new Error('Missing required fields for schedule.');
+      }
+
+      const newDateStr = scheduledAtStr.split('T')[0];
+
+      // Fetch pending actions to check for duplicates
+      const pendingActions = await fetchPendingActions();
+
+      const isDuplicate = pendingActions.some(action => {
+        // Validate against same campaign ID, same action type, and same scheduled date
+        const isSameCampaign = action.campaignId === fbCampaignId;
+        const isSameActionType = action.type === newActionType;
+        const actionDateStr = action.scheduledAt.split('T')[0];
+        const isSameDate = actionDateStr === newDateStr;
+
+        return isSameCampaign && isSameActionType && isSameDate;
+      });
+
+      if (isDuplicate) {
+        showError(`A ${newActionType} schedule for this campaign on ${newDateStr} already exists.`);
+        setScheduleTarget(null);
+        return;
+      }
+
       await createScheduledAction(fields);
+      success('Schedule created successfully.');
       setScheduleTarget(null);
     } catch (err) {
       throw err;
@@ -73,12 +106,12 @@ export function ManagePage() {
 
   const schedulePrefill: ScheduleDialogPrefill | undefined = scheduleTarget
     ? {
-        campaignId: scheduleTarget.id,
-        campaignName: scheduleTarget.name,
-        currentBudgetDollars: scheduleTarget.daily_budget
-          ? (parseInt(scheduleTarget.daily_budget, 10) / 100).toFixed(0)
-          : undefined,
-      }
+      campaignId: scheduleTarget.id,
+      campaignName: scheduleTarget.name,
+      currentBudgetDollars: scheduleTarget.daily_budget
+        ? (parseInt(scheduleTarget.daily_budget, 10) / 100).toFixed(0)
+        : undefined,
+    }
     : undefined;
 
   // ── Ad review check state ──

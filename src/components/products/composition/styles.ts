@@ -300,6 +300,7 @@ export const imageGridSx: SxProps<Theme> = {
  * Similar to squareThumbnailSx but includes flex centering.
  */
 export const thumbnailContainerSx: SxProps<Theme> = {
+  position: 'relative',
   width: '100%',
   aspectRatio: '1',
   bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.800' : 'grey.100',
