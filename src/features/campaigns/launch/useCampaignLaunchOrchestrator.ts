@@ -406,18 +406,20 @@ export function useCampaignLaunchOrchestrator(
   // ---------------------------------------------------------------------------
   // LAUNCH SETUP DEFAULTS (per-product defaults from Airtable)
   // ---------------------------------------------------------------------------
-  const handleSetupDefaults = useCallback((defaults: { budget?: string; pixelId?: string; pageId?: string }) => {
+  const handleSetupDefaults = useCallback((defaults: { budget?: string; adAccountId?: string; pixelId?: string; pageId?: string }) => {
     const updates: Partial<CampaignDraft> = {};
     if (defaults.budget && !draft.budget) updates.budget = defaults.budget;
+    if (defaults.adAccountId && !draft.adAccountId) updates.adAccountId = defaults.adAccountId;
     if (defaults.pixelId && !draft.pixelId) updates.pixelId = defaults.pixelId;
     if (defaults.pageId && !draft.pageId) updates.pageId = defaults.pageId;
     if (Object.keys(updates).length > 0) {
       setDraft((prev) => ({ ...prev, ...updates }));
     }
-  }, [draft.budget, draft.pixelId, draft.pageId, setDraft]);
+  }, [draft.budget, draft.adAccountId, draft.pixelId, draft.pageId, setDraft]);
 
   useLaunchSetupDefaults({
     productId,
+    adAccounts,
     pixels,
     pages,
     onApply: handleSetupDefaults,

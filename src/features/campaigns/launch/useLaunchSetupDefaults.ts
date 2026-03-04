@@ -2,10 +2,15 @@
  * useLaunchSetupDefaults
  *
  * Fetches "Campaign Launch Setup" defaults for the current product
- * and auto-applies Amount, Pixel, and Page to the draft when they
- * match available Facebook infrastructure options.
+ * and auto-applies Ad Account, Amount, Pixel, and Page to the draft
+ * when they match available Facebook infrastructure options.
  *
- * Only applies once per launch page session (guards via ref).
+ * Two-phase apply:
+ *   Phase 1 — Budget + Ad Account (once ad accounts list is ready)
+ *   Phase 2 — Pixel + Page (once pixel/page lists are ready,
+ *             which depends on the ad account being set first)
+ *
+ * Each phase fires at most once per session (guarded by refs).
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -21,9 +26,10 @@ interface InfraOption {
 
 export interface UseLaunchSetupDefaultsOptions {
   productId: string | undefined;
+  adAccounts: InfraOption[];
   pixels: InfraOption[];
   pages: InfraOption[];
-  onApply: (defaults: { budget?: string; pixelId?: string; pageId?: string }) => void;
+  onApply: (defaults: { budget?: string; adAccountId?: string; pixelId?: string; pageId?: string }) => void;
 }
 
 export interface UseLaunchSetupDefaultsReturn {
@@ -33,13 +39,15 @@ export interface UseLaunchSetupDefaultsReturn {
 
 export function useLaunchSetupDefaults({
   productId,
+  adAccounts,
   pixels,
   pages,
   onApply,
 }: UseLaunchSetupDefaultsOptions): UseLaunchSetupDefaultsReturn {
   const [setup, setSetup] = useState<CampaignLaunchSetup | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const appliedRef = useRef(false);
+  const appliedAccountRef = useRef(false);
+  const appliedInfraRef = useRef(false);
 
   // Fetch setup when productId is available
   useEffect(() => {
@@ -62,11 +70,11 @@ export function useLaunchSetupDefaults({
     return () => { cancelled = true; };
   }, [productId]);
 
-  // Apply defaults once setup is loaded AND infra options are available
+  // Phase 1: Apply budget + ad account once setup AND ad accounts list are available
   useEffect(() => {
-    if (!setup || appliedRef.current) return;
+    if (!setup || appliedAccountRef.current) return;
 
-    const defaults: { budget?: string; pixelId?: string; pageId?: string } = {};
+    const defaults: { budget?: string; adAccountId?: string } = {};
     let hasDefaults = false;
 
     // Apply amount (always available, no matching needed)
@@ -74,6 +82,34 @@ export function useLaunchSetupDefaults({
       defaults.budget = setup.amount;
       hasDefaults = true;
     }
+
+    // Match ad account by name against available options
+    if (setup.adAccount && adAccounts.length > 0) {
+      const match = adAccounts.find(
+        (a) => a.name === setup.adAccount || a.id === setup.adAccount || a.externalId === setup.adAccount
+      );
+      if (match) {
+        defaults.adAccountId = match.id;
+        hasDefaults = true;
+      }
+    }
+
+    // Wait for ad accounts list if setup has an ad account value
+    const waitingForAdAccounts = setup.adAccount && adAccounts.length === 0;
+    if (waitingForAdAccounts) return;
+
+    appliedAccountRef.current = true;
+    if (hasDefaults) {
+      onApply(defaults);
+    }
+  }, [setup, adAccounts, onApply]);
+
+  // Phase 2: Apply pixel + page once setup AND pixel/page lists are available
+  useEffect(() => {
+    if (!setup || appliedInfraRef.current) return;
+
+    const defaults: { pixelId?: string; pageId?: string } = {};
+    let hasDefaults = false;
 
     // Match pixel by name against available options
     if (setup.pixel && pixels.length > 0) {
@@ -97,14 +133,13 @@ export function useLaunchSetupDefaults({
       }
     }
 
-    // Only apply once we have something to apply, and pixel/page lists have loaded
-    // (if setup has pixel/page values, wait for those lists to be available)
+    // Wait for pixel/page lists if setup has values for them
     const waitingForPixels = setup.pixel && pixels.length === 0;
     const waitingForPages = setup.page && pages.length === 0;
     if (waitingForPixels || waitingForPages) return;
 
+    appliedInfraRef.current = true;
     if (hasDefaults) {
-      appliedRef.current = true;
       onApply(defaults);
     }
   }, [setup, pixels, pages, onApply]);
