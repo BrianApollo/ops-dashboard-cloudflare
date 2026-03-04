@@ -73,11 +73,7 @@ function formatBudget(cents?: string): string {
   return `$${dollars.toFixed(2)}`;
 }
 
-function getRoas(campaign: FbManageCampaign): number | null {
-  const roasData = campaign.insights?.data?.[0]?.purchase_roas;
-  if (!roasData?.length) return null;
-  return parseFloat(roasData[0].value);
-}
+
 
 function getSpend(campaign: FbManageCampaign): string {
   const spend = campaign.insights?.data?.[0]?.spend;
@@ -99,7 +95,7 @@ function getBudgetNum(campaign: FbManageCampaign): number {
 // SORTING
 // =============================================================================
 
-type SortKey = 'name' | 'adAccount' | 'budget' | 'spend' | 'roas' | 'status';
+type SortKey = 'name' | 'adAccount' | 'budget' | 'spend' | 'status';
 type SortDir = 'asc' | 'desc';
 
 function getSortValue(campaign: FbManageCampaign, key: SortKey): string | number {
@@ -108,7 +104,6 @@ function getSortValue(campaign: FbManageCampaign, key: SortKey): string | number
     case 'adAccount': return (campaign.adAccountName ?? '').toLowerCase();
     case 'budget': return getBudgetNum(campaign);
     case 'spend': return getSpendNum(campaign);
-    case 'roas': return getRoas(campaign) ?? -1;
     case 'status': return campaign.status;
   }
 }
@@ -159,8 +154,8 @@ function StatusToggle({
         '&:hover': isUpdating
           ? {}
           : {
-              bgcolor: isActive ? '#a7f3d0' : '#fecaca',
-            },
+            bgcolor: isActive ? '#a7f3d0' : '#fecaca',
+          },
       }}
     />
   );
@@ -615,11 +610,6 @@ export function CampaignTable({
                   Spend
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={{ ...headerSx, textAlign: 'right' }}>
-                <TableSortLabel active={sortKey === 'roas'} direction={sortKey === 'roas' ? sortDir : 'asc'} onClick={() => handleSort('roas')}>
-                  ROAS
-                </TableSortLabel>
-              </TableCell>
               <TableCell sx={headerSx}>
                 <TableSortLabel active={sortKey === 'status'} direction={sortKey === 'status' ? sortDir : 'asc'} onClick={() => handleSort('status')}>
                   Status
@@ -632,7 +622,7 @@ export function CampaignTable({
           <TableBody>
             {isLoading && campaigns.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 6 }}>
+                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 6 }}>
                   <CircularProgress size={28} />
                   <Typography
                     variant="body2"
@@ -645,7 +635,7 @@ export function CampaignTable({
               </TableRow>
             ) : campaigns.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 6 }}>
+                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 6 }}>
                   <Typography variant="body2" color="text.secondary">
                     No campaigns found
                   </Typography>
@@ -653,7 +643,6 @@ export function CampaignTable({
               </TableRow>
             ) : (
               sortedCampaigns.map((campaign) => {
-                const roas = getRoas(campaign);
                 const redtrackId = redtrackMap.get(campaign.name);
                 const isExpanded = expandedIds.has(campaign.id);
 
@@ -741,25 +730,6 @@ export function CampaignTable({
                         {getSpend(campaign)}
                       </TableCell>
 
-                      {/* ROAS */}
-                      <TableCell
-                        sx={{
-                          ...cellSx,
-                          textAlign: 'right',
-                          fontFamily: 'monospace',
-                          fontSize: '0.8125rem',
-                          fontWeight: 600,
-                          color:
-                            roas === null
-                              ? 'text.secondary'
-                              : roas >= 1
-                                ? '#059669'
-                                : '#dc2626',
-                        }}
-                      >
-                        {roas !== null ? roas.toFixed(2) : '—'}
-                      </TableCell>
-
                       {/* Status Toggle */}
                       <TableCell sx={cellSx}>
                         <StatusToggle
@@ -803,7 +773,7 @@ export function CampaignTable({
                     {redtrackId && (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={8}
                           sx={{ p: 0, borderBottom: isExpanded ? '1px solid' : 'none', borderColor: 'divider' }}
                         >
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>

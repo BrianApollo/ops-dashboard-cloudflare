@@ -31,6 +31,7 @@ import { useLaunchDraftState } from './useLaunchDraftState';
 import { useLaunchAutoSaveEffect } from './useLaunchAutoSaveEffect';
 import { useLaunchRedtrack, type UseLaunchRedtrackReturn } from './useLaunchRedtrack';
 import { useLaunchFacebookInfra } from './useLaunchFacebookInfra';
+import { useLaunchSetupDefaults } from './useLaunchSetupDefaults';
 import { useLaunchMediaState } from './useLaunchMediaState';
 import { useLaunchValidation } from './useLaunchValidation';
 import { useLaunchOrchestrator } from './useLaunchOrchestrator';
@@ -400,6 +401,26 @@ export function useCampaignLaunchOrchestrator(
   } = useLaunchFacebookInfra({
     permanentToken: selectedProfile?.permanentToken ?? null,
     adAccountId: draft.adAccountId,
+  });
+
+  // ---------------------------------------------------------------------------
+  // LAUNCH SETUP DEFAULTS (per-product defaults from Airtable)
+  // ---------------------------------------------------------------------------
+  const handleSetupDefaults = useCallback((defaults: { budget?: string; pixelId?: string; pageId?: string }) => {
+    const updates: Partial<CampaignDraft> = {};
+    if (defaults.budget && !draft.budget) updates.budget = defaults.budget;
+    if (defaults.pixelId && !draft.pixelId) updates.pixelId = defaults.pixelId;
+    if (defaults.pageId && !draft.pageId) updates.pageId = defaults.pageId;
+    if (Object.keys(updates).length > 0) {
+      setDraft((prev) => ({ ...prev, ...updates }));
+    }
+  }, [draft.budget, draft.pixelId, draft.pageId, setDraft]);
+
+  useLaunchSetupDefaults({
+    productId,
+    pixels,
+    pages,
+    onApply: handleSetupDefaults,
   });
 
   // ---------------------------------------------------------------------------

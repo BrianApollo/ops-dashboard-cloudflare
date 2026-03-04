@@ -23,6 +23,7 @@ import { ScheduleActionDialog } from '../../components/schedules/ScheduleActionD
 import { fetchPendingActions, fetchActionLog, cancelScheduledAction, createScheduledAction } from '../../features/schedules/data';
 import { formStateToFields } from '../../features/schedules/types';
 import type { ScheduledAction, ScheduleFormState } from '../../features/schedules/types';
+import { useToast } from '../../core/toast/ToastContext';
 
 // =============================================================================
 // TYPES
@@ -45,6 +46,8 @@ export function SchedulesPage() {
   const [activeTab, setActiveTab] = useState<TabValue>('tonight');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const { success, error: showError } = useToast();
 
   // Fetch data
   const loadData = useCallback(async () => {
@@ -77,7 +80,33 @@ export function SchedulesPage() {
     setSaving(true);
     try {
       const fields = formStateToFields(form);
+      const fbCampaignId = fields['Campaign Id'] as string;
+      const newActionType = fields['Type'] as string;
+      const scheduledAtStr = fields['Scheduled At'] as string;
+
+      if (!fbCampaignId || !newActionType || !scheduledAtStr) {
+        throw new Error('Missing required fields for schedule.');
+      }
+
+      const newDateStr = scheduledAtStr.split('T')[0];
+
+      const isDuplicate = pending.some(action => {
+        const isSameCampaign = action.campaignId === fbCampaignId;
+        const isSameActionType = action.type === newActionType;
+        const actionDateStr = action.scheduledAt.split('T')[0];
+        const isSameDate = actionDateStr === newDateStr;
+
+        return isSameCampaign && isSameActionType && isSameDate;
+      });
+
+      if (isDuplicate) {
+        showError(`A ${newActionType} schedule for this campaign on ${newDateStr} already exists.`);
+        setDialogOpen(false);
+        return;
+      }
+
       await createScheduledAction(fields);
+      success('Schedule created successfully.');
       setDialogOpen(false);
       await loadData();
     } catch (err) {

@@ -29,7 +29,7 @@ import { EmptyState } from '../../core/state';
 import { textMd, textSm } from '../../theme/typography';
 import type { SelectableVideo, SelectableImage, CreativeTab, VideoUploadStatus } from '../../features/campaigns/launch/types';
 
-const QUICK_SELECT_OPTIONS = [15, 20, 25, 30, 50];
+const QUICK_SELECT_OPTIONS = [10, 15, 20, 25, 30, 50];
 
 interface PrelaunchUploaderProps {
   checkLibrary: () => Promise<void>;

@@ -42,6 +42,7 @@ const EDITOR_READ_ONLY_TABLES = new Set([
   'Campaigns',
   'Advertorials',
   'Images',
+  'Campaign Launch Setup',
 ]);
 
 // =============================================================================

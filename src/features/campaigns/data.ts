@@ -745,3 +745,66 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
 
   return map;
 }
+
+// =============================================================================
+// CAMPAIGN LAUNCH SETUP (per-product defaults)
+// =============================================================================
+
+const LAUNCH_SETUP_TABLE = 'Campaign Launch Setup';
+const FIELD_SETUP_PRODUCT = 'Product';
+const FIELD_SETUP_AMOUNT = 'Amount';
+const FIELD_SETUP_PIXEL = 'Pixel';
+const FIELD_SETUP_PAGE = 'Page';
+
+export interface CampaignLaunchSetup {
+  id: string;
+  amount: string | undefined;
+  pixel: string | undefined;
+  page: string | undefined;
+}
+
+/**
+ * Fetch the first Campaign Launch Setup record for a given product ID.
+ * Returns defaults (Amount, Pixel, Page) to pre-fill the launch form.
+ */
+export async function fetchLaunchSetup(productId: string): Promise<CampaignLaunchSetup | null> {
+  // Fetch all records (table should be small) and filter client-side by record ID,
+  // because Airtable's ARRAYJOIN on linked records returns display names, not record IDs.
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+
+  do {
+    const url = offset
+      ? `${LAUNCH_SETUP_TABLE}?offset=${offset}`
+      : LAUNCH_SETUP_TABLE;
+    const response = await airtableFetch(url);
+    const data: AirtableResponse = await response.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  // Find first record whose Product linked field contains our productId
+  const record = allRecords.find((r) => {
+    const productIds = r.fields[FIELD_SETUP_PRODUCT];
+    return Array.isArray(productIds) && productIds.includes(productId);
+  });
+
+  if (!record) return null;
+
+  const fields = record.fields;
+
+  return {
+    id: record.id,
+    amount: typeof fields[FIELD_SETUP_AMOUNT] === 'number'
+      ? String(fields[FIELD_SETUP_AMOUNT])
+      : typeof fields[FIELD_SETUP_AMOUNT] === 'string'
+        ? fields[FIELD_SETUP_AMOUNT]
+        : undefined,
+    pixel: typeof fields[FIELD_SETUP_PIXEL] === 'string'
+      ? fields[FIELD_SETUP_PIXEL]
+      : undefined,
+    page: typeof fields[FIELD_SETUP_PAGE] === 'string'
+      ? fields[FIELD_SETUP_PAGE]
+      : undefined,
+  };
+}
