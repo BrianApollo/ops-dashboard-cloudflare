@@ -678,52 +678,159 @@ export function createController(
   // ---------------------------------------------------------------------------
   // RETRY SINGLE ITEM
   // ---------------------------------------------------------------------------
-  function retryItem(name: string): void {
-    const item = state.media.find(m => m.name === name);
-    if (!item) return;
 
-    if (item.state === 'failed') {
-      // RESET for a fresh attempt
-      item.retryCount = 0; // Manual retry acts like a fresh start
-      item.error = null;
+  /**
+   * Processes a single item through whatever stages it needs
+   * (upload → poll → ad creation) without touching other items.
+   */
+  async function retrySingleItem(item: FbLaunchMediaState): Promise<void> {
+    state.isStopped = false;
 
-      // Reset state based on type and what's missing
-      if (item.type === 'video' && !item.fbVideoId) {
-        item.state = 'queued';
-      } else if (item.type === 'video' && !item.thumbnailUrl) {
-        // Has ID but missing thumbnail -> needs processing poll
-        item.state = 'processing';
-      } else {
-        // Image or Video with ID+Thumb -> needs ad creation
-        item.state = 'ready';
+    // Step 1: Upload if needed (video without fbVideoId)
+    if (item.state === 'queued' && item.type === 'video') {
+      state.phase = 'uploading';
+      emitProgress();
+
+      const url = item.usedFallback ? (item.fallbackUrl || item.url) : item.url;
+      await processVideoUploadQueue(
+        [{ id: item.name, name: item.name, url }],
+        {
+          accessToken: input.accessToken,
+          adAccountId: input.adAccountId,
+          batchSize: 1,
+          shouldStop: () => state.isStopped,
+          onBatchStart: () => {
+            item.state = 'uploading';
+            emitProgress();
+          },
+          onItemComplete: (result) => {
+            if (result.success && result.fbVideoId) {
+              item.fbVideoId = result.fbVideoId;
+              item.state = 'processing';
+            } else {
+              item.state = 'failed';
+              item.error = result.error || 'Upload failed';
+            }
+            emitProgress();
+          },
+        }
+      );
+
+      // onItemComplete sets fbVideoId on success, leaves null on failure
+      if (!item.fbVideoId) return;
+    }
+
+    // Step 2: Poll if needed (video in processing)
+    if (item.state === 'processing' && item.type === 'video' && item.fbVideoId) {
+      state.phase = 'polling';
+      emitProgress();
+
+      const maxPollAttempts = 15;
+      for (let i = 0; i < maxPollAttempts && !state.isStopped; i++) {
+        await delay(options.tickIntervalMs);
+
+        try {
+          const { data, rate } = await fb.pollLibrary(
+            input.accessToken, input.adAccountId, [item.fbVideoId!]
+          );
+          state.rate = rate;
+
+          const libEntry = data.data?.find(v => v.id === item.fbVideoId);
+          if (libEntry?.status?.video_status === 'ready' && libEntry.picture) {
+            item.thumbnailUrl = libEntry.picture;
+            item.state = 'ready';
+            emitProgress();
+            break;
+          }
+        } catch (err) {
+          console.error('Poll error during retry:', (err as Error).message);
+        }
+        emitProgress();
       }
 
-      // If launch stopped or completed, we might need to restart/resume?
-      // For now, we assume the tick loop is still running or will be restarted.
-      // If "complete" but we retry -> switch to "processing" phase conceptually?
-      if (state.phase === 'complete' || state.phase === 'error') {
-        // If we were "done", but now we have work, we are "running" again conceptually.
-        // The tick loop might have exited. We might need a way to 'wake up' the runner if it stopped.
-        // For this specific architecture, relying on external 'start()' call or existing loop.
-        // Ideally the user clicks "Retry" and if the loop is dead, they might need to click "Launch" again?
-        // OR we just update state and if the loop is running it picks it up.
-        // If loop exited, we can't easily restart it without `start()`.
-        // BUT, `retryFailed` is typically called when "error" or "stopped", so `start()` is likely next.
-        // If we are "running", the loop picks it up.
+      if (item.state !== 'ready') {
+        item.state = 'failed';
+        item.error = 'Video processing timed out';
+        emitProgress();
+        return;
       }
+    }
+
+    // Step 3: Create ad
+    if (item.state === 'ready') {
+      state.phase = 'creating_ads';
+      item.state = 'creating_ad';
+      emitProgress();
+
+      try {
+        const { data, rate } = await fb.createAdsBatch(
+          input.accessToken,
+          input.adAccountId,
+          state.adsetId!,
+          input.pageId,
+          [item],
+          input.adCreative
+        );
+        state.rate = rate;
+
+        if (Array.isArray(data) && data[0]) {
+          if (data[0].code === 200) {
+            const body = safeParseBatchBody(data[0].body);
+            if (body?.id) {
+              item.adId = body.id;
+              item.state = 'done';
+            } else {
+              item.state = 'failed';
+              item.error = 'No ad ID in response';
+            }
+          } else {
+            item.state = 'failed';
+            item.error = `Ad creation failed: HTTP ${data[0].code}`;
+          }
+        } else {
+          item.state = 'failed';
+          item.error = 'Invalid batch response';
+        }
+      } catch (err) {
+        item.state = 'failed';
+        item.error = (err as Error).message;
+      }
+    }
+
+    // Update completion state
+    const stats = getStats(state.media);
+    if (stats.done + stats.failed === stats.total) {
+      state.phase = 'complete';
     }
     emitProgress();
+  }
 
-    // If the runner has stopped (e.g. error or complete), restart it to process the retry
-    if (!state.isRunning) {
-      // Don't reset start time if we are just resuming/retrying
-      // But start() resets it. Let's capture it or just let start() do its thing.
-      // If we want to avoid resetting elapsed time, we might need a flag or modify start.
-      // For now, simplicity: just restart. The user cares about the upload working.
-      start().catch(err => {
-        console.error('Retry restart failed:', err);
-      });
+  function retryItem(name: string): void {
+    const item = state.media.find(m => m.name === name);
+    if (!item || item.state !== 'failed') return;
+
+    // Reset for a fresh attempt
+    item.retryCount = 0;
+    item.error = null;
+
+    // Reset state based on type and what's missing
+    if (item.type === 'video' && !item.fbVideoId) {
+      item.state = 'queued';
+    } else if (item.type === 'video' && !item.thumbnailUrl) {
+      item.state = 'processing';
+    } else {
+      item.state = 'ready';
     }
+
+    emitProgress();
+
+    // Run targeted retry for just this item — no full pipeline restart
+    retrySingleItem(item).catch(err => {
+      console.error('Retry failed:', err);
+      item.state = 'failed';
+      item.error = (err as Error).message;
+      emitProgress();
+    });
   }
 
   // ---------------------------------------------------------------------------
