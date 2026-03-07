@@ -571,6 +571,8 @@ export function ProductsPage() {
             isCreatingHooks={scriptsController.isCreatingHooks}
             getHooksForScript={scriptsController.getHooksForScript}
             extractScriptNumber={scriptsController.extractScriptNumber}
+            onDeleteScript={scriptsController.deleteScriptById}
+            isDeletingScript={scriptsController.isDeletingScript}
             onRequestScrollstoppers={videosController.requestScrollstoppers}
             selectedProductId={productIdParam ?? null}
             selectedProductName={selectedProduct?.name ?? null}

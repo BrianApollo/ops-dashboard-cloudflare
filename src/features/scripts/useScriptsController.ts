@@ -23,6 +23,7 @@ import {
   updateScriptContent,
   createHookScript,
   updateScriptHookFields,
+  deleteScript,
 } from './data';
 import { STATUS_LABELS as GLOBAL_STATUS_LABELS } from '../../constants';
 import { sortByNameDesc } from '../../utils';
@@ -144,6 +145,10 @@ export interface UseScriptsControllerResult {
     hooks: string[];
     body: string;
   }) => Promise<Script[]>;
+
+  // Delete
+  deleteScriptById: (scriptId: string) => Promise<void>;
+  isDeletingScript: boolean;
 }
 
 // =============================================================================
@@ -180,6 +185,7 @@ export function useScriptsController(
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdatingContent, setIsUpdatingContent] = useState(false);
   const [isCreatingHooks, setIsCreatingHooks] = useState(false);
+  const [isDeletingScript, setIsDeletingScript] = useState(false);
 
   // ---------------------------------------------------------------------------
   // QUERY
@@ -557,6 +563,20 @@ export function useScriptsController(
   }, [getNextScriptNumber, handleCreateHookVariants]);
 
   // ---------------------------------------------------------------------------
+  // DELETE HANDLER
+  // ---------------------------------------------------------------------------
+
+  const handleDeleteScript = useCallback(async (scriptId: string): Promise<void> => {
+    setIsDeletingScript(true);
+    try {
+      await deleteScript(scriptId);
+      await scriptsQuery.refetch();
+    } finally {
+      setIsDeletingScript(false);
+    }
+  }, [scriptsQuery]);
+
+  // ---------------------------------------------------------------------------
   // RETURN
   // ---------------------------------------------------------------------------
 
@@ -618,5 +638,9 @@ export function useScriptsController(
     createHookVariants: handleCreateHookVariants,
     isCreatingHooks,
     createScriptWithHooks: handleCreateScriptWithHooks,
+
+    // Delete
+    deleteScriptById: handleDeleteScript,
+    isDeletingScript,
   };
 }

@@ -364,6 +364,15 @@ export async function createHookScript(
 }
 
 /**
+ * Delete a script by ID.
+ */
+export async function deleteScript(scriptId: string): Promise<void> {
+  await airtableFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
  * Update an existing script with hook fields.
  * Used when converting a simple script to a hook-based script.
  * Returns the updated script.
