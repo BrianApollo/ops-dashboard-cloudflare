@@ -22,6 +22,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import DialogContentText from '@mui/material/DialogContentText';
 import Divider from '@mui/material/Divider';
 import TableContainer from '@mui/material/TableContainer';
 import Table from '@mui/material/Table';
@@ -41,7 +42,9 @@ import PeopleIcon from '@mui/icons-material/People';
 import PersonIcon from '@mui/icons-material/Person';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useListController, FilterPills, ListPagination } from '../../core/list';
+import { AppDialog } from '../../core/dialog';
 import {
   DetailPanel,
   DetailPanelBody,
@@ -94,6 +97,9 @@ interface ScriptsTabProps {
   isCreatingHooks?: boolean;
   getHooksForScript?: (baseScriptNumber: number, productId: string) => Script[];
   extractScriptNumber?: (scriptName: string) => number | null;
+  // Delete operations
+  onDeleteScript?: (scriptId: string) => Promise<void>;
+  isDeletingScript?: boolean;
   // Scrollstopper operations
   onRequestScrollstoppers?: (params: {
     scriptId: string;
@@ -126,6 +132,8 @@ export function ScriptsTab({
   isCreatingHooks = false,
   getHooksForScript,
   extractScriptNumber,
+  onDeleteScript,
+  isDeletingScript = false,
   onRequestScrollstoppers,
   initialScriptIdToOpen,
   onScriptOpened,
@@ -139,6 +147,7 @@ export function ScriptsTab({
   const [detailScriptId, setDetailScriptId] = useState<string | null>(null);
   const [addHooksDialogOpen, setAddHooksDialogOpen] = useState(false);
   const [scrollstopperDialogOpen, setScrollstopperDialogOpen] = useState(false);
+  const [deleteConfirmScriptId, setDeleteConfirmScriptId] = useState<string | null>(null);
 
   // Assign menu state
   const [assignMenuAnchor, setAssignMenuAnchor] = useState<{ element: HTMLElement; scriptId: string } | null>(null);
@@ -257,6 +266,21 @@ export function ScriptsTab({
     if (!hasVideos) return;
     setExpandedScript(expandedScript === scriptId ? null : scriptId);
   }, [expandedScript]);
+
+  // Delete handlers
+  const deleteConfirmScript = deleteConfirmScriptId
+    ? scripts.find((s) => s.id === deleteConfirmScriptId) ?? null
+    : null;
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteConfirmScriptId || !onDeleteScript) return;
+    await onDeleteScript(deleteConfirmScriptId);
+    setDeleteConfirmScriptId(null);
+    // Close detail panel if the deleted script was open
+    if (detailScriptId === deleteConfirmScriptId) {
+      setDetailScriptId(null);
+    }
+  }, [deleteConfirmScriptId, onDeleteScript, detailScriptId]);
 
   if (list.allRecords.length === 0) {
     return <EmptyState variant="filter" />;
@@ -413,23 +437,38 @@ export function ScriptsTab({
                           />
                         </TableCell>
                         <TableCell sx={tableDataCellSx}>
-                          {!hasVideos && (
-                            <Button
-                              size="small"
-                              variant="contained"
-                              disabled={assigningScriptIds.has(script.id)}
-                              onClick={(e) => handleOpenAssignMenu(e, script.id)}
-                              endIcon={
-                                assigningScriptIds.has(script.id) ? (
-                                  <CircularProgress size={16} color="inherit" />
-                                ) : (
-                                  <KeyboardArrowDownIcon />
-                                )
-                              }
-                            >
-                              {assigningScriptIds.has(script.id) ? 'Assigning...' : 'Assign'}
-                            </Button>
-                          )}
+                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                            {!hasVideos && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                disabled={assigningScriptIds.has(script.id)}
+                                onClick={(e) => handleOpenAssignMenu(e, script.id)}
+                                endIcon={
+                                  assigningScriptIds.has(script.id) ? (
+                                    <CircularProgress size={16} color="inherit" />
+                                  ) : (
+                                    <KeyboardArrowDownIcon />
+                                  )
+                                }
+                              >
+                                {assigningScriptIds.has(script.id) ? 'Assigning...' : 'Assign'}
+                              </Button>
+                            )}
+                            {onDeleteScript && (
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmScriptId(script.id);
+                                }}
+                                disabled={isDeletingScript}
+                                sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </Box>
                         </TableCell>
                       </TableRow>
 
@@ -910,6 +949,34 @@ export function ScriptsTab({
           </Paper>
         </Slide>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AppDialog
+        open={!!deleteConfirmScriptId}
+        onClose={() => !isDeletingScript && setDeleteConfirmScriptId(null)}
+        title="Delete Script"
+        size="xs"
+        actions={
+          <>
+            <Button onClick={() => setDeleteConfirmScriptId(null)} variant="outlined" color="inherit" disabled={isDeletingScript}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteConfirm}
+              variant="contained"
+              color="error"
+              disabled={isDeletingScript}
+              startIcon={isDeletingScript ? <CircularProgress size={16} color="inherit" /> : null}
+            >
+              {isDeletingScript ? 'Deleting...' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <DialogContentText sx={{ color: 'text.secondary' }}>
+          Are you sure you want to delete &quot;{deleteConfirmScript?.name ?? ''}&quot;? This action cannot be undone.
+        </DialogContentText>
+      </AppDialog>
 
       {/* Bulk Assign Editor Menu */}
       <Menu
