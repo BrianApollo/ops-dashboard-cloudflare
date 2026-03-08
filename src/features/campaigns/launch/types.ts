@@ -24,6 +24,31 @@ export interface ImageToUpload {
   image_drive_link?: string;
 }
 
+export interface SelectableVideo {
+  id: string;
+  name: string;
+  status: string;
+  format: string;
+  creativeLink?: string;
+  productId: string;
+  inLibrary: boolean;
+  fbVideoId?: string;
+  fbThumbnailUrl?: string;
+  uploadStatus?: string;
+  uploadError?: string;
+}
+
+export interface SelectableImage {
+  id: string;
+  name: string;
+  status: string;
+  imageType?: string;
+  thumbnailUrl?: string;
+  driveFileId?: string;
+  image_drive_link?: string;
+  productId: string;
+}
+
 export interface UploadedMedia {
   type: 'video' | 'image';
   localId: string;

@@ -455,7 +455,7 @@ export function ScriptsTab({
                                 {assigningScriptIds.has(script.id) ? 'Assigning...' : 'Assign'}
                               </Button>
                             )}
-                            {onDeleteScript && (
+                            {onDeleteScript && !hasVideos && (
                               <IconButton
                                 size="small"
                                 onClick={(e) => {

@@ -114,7 +114,9 @@ export interface UseImagesControllerResult {
     productName: string,
     productDriveFolderId: string
   ) => Promise<void>;
+  deleteNewImages: (imageIds: string[]) => Promise<void>;
   isUploading: boolean;
+  isDeleting: boolean;
   uploadProgress: { current: number; total: number } | null;
 }
 
@@ -150,6 +152,7 @@ export function useImagesController(
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
   // ---------------------------------------------------------------------------
@@ -385,6 +388,41 @@ export function useImagesController(
   }, [images, imagesQuery]);
 
   // ---------------------------------------------------------------------------
+  // DELETE NEW IMAGES HANDLER
+  // ---------------------------------------------------------------------------
+
+  const handleDeleteNewImages = useCallback(async (imageIds: string[]): Promise<void> => {
+    if (imageIds.length === 0) return;
+
+    setIsDeleting(true);
+    try {
+      const deletePromises = imageIds.map(async (id) => {
+        const image = images.find((i) => i.id === id);
+        if (!image || image.status !== 'new') {
+          console.warn(`Skipping delete: Image not found or not a temp image (${id})`);
+          return;
+        }
+
+        // Delete temp image record from Airtable
+        await deleteTempImage(id);
+
+        // Delete from Cloudflare Images (best effort)
+        if (image.image_url) {
+          const cloudflareImageId = extractImageIdFromUrl(image.image_url);
+          if (cloudflareImageId) {
+            await deleteCloudflareImage(cloudflareImageId);
+          }
+        }
+      });
+
+      await Promise.all(deletePromises);
+      await imagesQuery.refetch();
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [images, imagesQuery]);
+
+  // ---------------------------------------------------------------------------
   // FILTER HANDLERS
   // ---------------------------------------------------------------------------
 
@@ -463,7 +501,9 @@ export function useImagesController(
     // Upload
     uploadImages: handleUploadImages,
     approveImages: handleApproveImages,
+    deleteNewImages: handleDeleteNewImages,
     isUploading,
+    isDeleting,
     uploadProgress,
   };
 }

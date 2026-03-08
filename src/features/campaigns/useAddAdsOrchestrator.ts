@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useVideosController, updateVideoUsage } from '../videos';
 import { useImagesController } from '../images';
 import { getFbCreative, addImageIdsToCampaign } from '.';
-import { usePrelaunchUploader } from './launch/usePrelaunchUploaderEffect';
+import { usePrelaunchUploaderEffect } from './launch/usePrelaunchUploaderEffect';
 import { useLaunchMediaState } from './launch/useLaunchMediaState';
 import { mapTemplateCreative } from './launch/mapTemplateCreative';
 import { createAdsBatch } from './launch/fbLaunchApi';
