@@ -14,6 +14,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import { useListController, FilterPills } from '../../core/list';
 import { matchesAllTokens } from '../../utils';
@@ -44,6 +45,8 @@ interface ImagesTabProps {
   showProductColumn: boolean;
   onApprove?: (ids: string[]) => Promise<void>;
   isApproving?: boolean;
+  onDelete?: (ids: string[]) => Promise<void>;
+  isDeleting?: boolean;
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 }
@@ -53,6 +56,8 @@ export function ImagesTab({
   showProductColumn,
   onApprove,
   isApproving = false,
+  onDelete,
+  isDeleting = false,
   selectedIds: propsSelectedIds,
   onSelectionChange: propsOnSelectionChange,
 }: ImagesTabProps) {
@@ -153,9 +158,21 @@ export function ImagesTab({
                 size="small"
                 color="primary"
                 onClick={() => onApprove(Array.from(effectiveSelectedIds))}
-                disabled={isApproving}
+                disabled={isApproving || isDeleting}
               >
                 {isApproving ? 'Approving...' : `Approve (${effectiveSelectedIds.size})`}
+              </Button>
+            )}
+            {effectiveSelectedIds.size > 0 && onDelete && (
+              <Button
+                variant="outlined"
+                size="small"
+                color="error"
+                startIcon={<DeleteOutlineIcon />}
+                onClick={() => onDelete(Array.from(effectiveSelectedIds))}
+                disabled={isDeleting || isApproving}
+              >
+                {isDeleting ? 'Deleting...' : `Delete (${effectiveSelectedIds.size})`}
               </Button>
             )}
           </>

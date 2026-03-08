@@ -296,6 +296,7 @@ export function ProductsPage() {
   const [addAdvertorialDialogOpen, setAddAdvertorialDialogOpen] = useState(false);
   const [createImagesDialogOpen, setCreateImagesDialogOpen] = useState(false);
   const [isApprovingImages, setIsApprovingImages] = useState(false);
+  const [isDeletingImages, setIsDeletingImages] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const imageFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -411,6 +412,22 @@ export function ProductsPage() {
       alert(`Failed to approve images: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsApprovingImages(false);
+    }
+  };
+
+  // Delete New Images Handler
+  const handleDeleteImages = async (ids: string[]) => {
+    if (!confirm(`Are you sure you want to delete ${ids.length} image${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+
+    setIsDeletingImages(true);
+    try {
+      await imagesController.deleteNewImages(ids);
+      setSelectedImageIds(new Set());
+    } catch (error) {
+      console.error('Failed to delete images:', error);
+      alert(`Failed to delete images: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeletingImages(false);
     }
   };
 
@@ -597,6 +614,8 @@ export function ProductsPage() {
             showProductColumn={showProductColumn}
             onApprove={handleApproveImages}
             isApproving={isApprovingImages}
+            onDelete={handleDeleteImages}
+            isDeleting={isDeletingImages}
             selectedIds={selectedImageIds}
             onSelectionChange={setSelectedImageIds}
           />
