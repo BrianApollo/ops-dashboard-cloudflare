@@ -256,10 +256,6 @@ export function useProductsController(
         throw new Error(`Product not found: ${productId}`);
       }
 
-      if (!product.driveFolderId) {
-        throw new Error('Product does not have a Drive Link configured');
-      }
-
       const existingCount = assetType === 'image'
         ? product.images.length
         : product.logos.length;
@@ -271,7 +267,6 @@ export function useProductsController(
         await uploadAsset({
           productId,
           productName: product.name,
-          driveFolderId: product.driveFolderId,
           file,
           assetType,
           existingCount,
@@ -326,26 +321,19 @@ export function useProductsController(
 
         // 2. Upload image if provided
         if (image) {
-          if (newProduct.driveFolderId) {
-            // Use data-layer uploadAsset directly to avoid looking up product in stale 'products' list
-            // associated with handleUploadAsset
-            setIsUploading(true);
-            try {
-              await uploadAsset({
-                productId: newProduct.id,
-                productName: newProduct.name,
-                driveFolderId: newProduct.driveFolderId,
-                file: image,
-                assetType: 'image',
-                existingCount: 0,
-                onProgress: (progress) => setUploadProgress(progress.percentage),
-              });
-            } finally {
-              setIsUploading(false);
-              setUploadProgress(0);
-            }
-          } else {
-            console.warn('Product created but image skipped: No Drive Link returned.');
+          setIsUploading(true);
+          try {
+            await uploadAsset({
+              productId: newProduct.id,
+              productName: newProduct.name,
+              file: image,
+              assetType: 'image',
+              existingCount: 0,
+              onProgress: (progress) => setUploadProgress(progress.percentage),
+            });
+          } finally {
+            setIsUploading(false);
+            setUploadProgress(0);
           }
         }
 

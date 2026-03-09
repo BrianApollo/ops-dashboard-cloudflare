@@ -243,7 +243,6 @@ export async function createProduct(
 export interface UploadAssetOptions {
   productId: string;
   productName: string;
-  driveFolderId: string;
   file: File;
   assetType: 'image' | 'logo';
   existingCount: number;
@@ -284,12 +283,14 @@ export async function uploadAsset(options: UploadAssetOptions): Promise<UploadAs
 
   const fieldName = assetType === 'image' ? FIELD_PRODUCT_IMAGE : FIELD_PRODUCT_LOGO;
   const existingAttachments = Array.isArray(record.fields[fieldName])
-    ? (record.fields[fieldName] as { url: string }[])
+    ? (record.fields[fieldName] as { id: string }[])
     : [];
 
-  // Step 3: Add new attachment (Airtable accepts URLs for new attachments)
+  // Step 3: Add new attachment
+  // Existing attachments must be kept by ID (their URLs are temporary and expire).
+  // New attachments are added by URL (Airtable downloads from the URL).
   const updatedAttachments = [
-    ...existingAttachments.map((att) => ({ url: att.url })),
+    ...existingAttachments.map((att) => ({ id: att.id })),
     { url: driveResult.url },
   ];
 
@@ -341,13 +342,14 @@ export async function deleteAsset(options: DeleteAssetOptions): Promise<void> {
 
   const fieldName = assetType === 'image' ? FIELD_PRODUCT_IMAGE : FIELD_PRODUCT_LOGO;
   const existingAttachments = Array.isArray(record.fields[fieldName])
-    ? (record.fields[fieldName] as { id: string; url: string }[])
+    ? (record.fields[fieldName] as { id: string }[])
     : [];
 
   // Step 3: Filter out the deleted attachment
+  // Remaining attachments are kept by ID (their URLs are temporary and expire).
   const updatedAttachments = existingAttachments
     .filter((att) => att.id !== assetId)
-    .map((att) => ({ url: att.url }));
+    .map((att) => ({ id: att.id }));
 
   // Step 4: Update Airtable record
   await airtableFetch(`${PRODUCTS_TABLE}/${productId}`, {
