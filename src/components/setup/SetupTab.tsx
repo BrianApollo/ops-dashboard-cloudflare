@@ -4,7 +4,7 @@
  * Controller logic extracted to usePresetController.
  */
 
-import { useRef } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -24,9 +24,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { useQuery } from '@tanstack/react-query';
 import { EmptyState } from '../../core/state';
 import { StatusPill } from '../../ui';
 import { usePresetController } from '../../features/products/usePresetController';
+import { fetchLaunchSetup, updateLaunchSetup, createLaunchSetup } from '../../features/campaigns';
 import type { AdPresetUpdatePayload, AdPreset } from '../../features/ad-presets';
 import type { AdPresetItem, ProductInfo, ProductAssetInfo } from '../products/composition/types';
 import {
@@ -80,6 +82,73 @@ export function SetupTab({
   // File input refs for upload
   const imageInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Campaign Default Setup ──────────────────────────────────────────────
+  const productId = selectedProduct?.id ?? null;
+
+  const launchSetupQuery = useQuery({
+    queryKey: ['launchSetup', productId],
+    queryFn: () => fetchLaunchSetup(productId!),
+    enabled: !!productId,
+    staleTime: 30 * 1000,
+  });
+
+  const [setupDraft, setSetupDraft] = useState<{ pixel: string; page: string; adAccount: string; amount: string }>({
+    pixel: '', page: '', adAccount: '', amount: '',
+  });
+  const [isEditingSetup, setIsEditingSetup] = useState(false);
+  const [isSavingSetup, setIsSavingSetup] = useState(false);
+
+  // Sync draft when data loads or product changes
+  useEffect(() => {
+    const data = launchSetupQuery.data;
+    setSetupDraft({
+      pixel: data?.pixel ?? '',
+      page: data?.page ?? '',
+      adAccount: data?.adAccount ?? '',
+      amount: data?.amount ?? '',
+    });
+    setIsEditingSetup(false);
+  }, [launchSetupQuery.data]);
+
+  const handleSaveSetup = useCallback(async () => {
+    if (!productId) return;
+    setIsSavingSetup(true);
+    try {
+      const existing = launchSetupQuery.data;
+      if (existing) {
+        await updateLaunchSetup(existing.id, setupDraft);
+      } else {
+        await createLaunchSetup(productId, setupDraft);
+      }
+      await launchSetupQuery.refetch();
+      setIsEditingSetup(false);
+    } catch (error) {
+      console.error('Failed to save launch setup:', error);
+      alert(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSavingSetup(false);
+    }
+  }, [productId, setupDraft, launchSetupQuery]);
+
+  const handleCancelSetup = useCallback(() => {
+    const data = launchSetupQuery.data;
+    setSetupDraft({
+      pixel: data?.pixel ?? '',
+      page: data?.page ?? '',
+      adAccount: data?.adAccount ?? '',
+      amount: data?.amount ?? '',
+    });
+    setIsEditingSetup(false);
+  }, [launchSetupQuery.data]);
+
+  const isSetupDirty = (() => {
+    const data = launchSetupQuery.data;
+    return setupDraft.pixel !== (data?.pixel ?? '')
+      || setupDraft.page !== (data?.page ?? '')
+      || setupDraft.adAccount !== (data?.adAccount ?? '')
+      || setupDraft.amount !== (data?.amount ?? '');
+  })();
 
   /** Handle file upload */
   const handleFileChange = async (assetType: 'image' | 'logo', event: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,6 +341,115 @@ export function SetupTab({
             {renderAssetGrid(selectedProduct.images, 'image', 'Product Images')}
             {renderAssetGrid(selectedProduct.logos, 'logo', 'Product Logos')}
           </Box>
+        </Paper>
+      )}
+
+      {/* Campaign Default Setup Section */}
+      {selectedProduct && (
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={sectionLabelSx}>
+              Campaign Default Setup
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {isEditingSetup ? (
+                <>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleCancelSetup}
+                    disabled={isSavingSetup}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={isSavingSetup ? <CircularProgress size={14} color="inherit" /> : <SaveIcon />}
+                    onClick={handleSaveSetup}
+                    disabled={isSavingSetup || !isSetupDirty}
+                  >
+                    {isSavingSetup ? 'Saving...' : 'Save'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={() => setIsEditingSetup(true)}
+                  disabled={launchSetupQuery.isLoading}
+                >
+                  Edit
+                </Button>
+              )}
+            </Box>
+          </Box>
+
+          {launchSetupQuery.isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+                  Pixel
+                </Typography>
+                <TextField
+                  value={setupDraft.pixel}
+                  onChange={(e) => setSetupDraft((d) => ({ ...d, pixel: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  placeholder="Pixel ID"
+                  disabled={!isEditingSetup || isSavingSetup}
+                  sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+                  Page
+                </Typography>
+                <TextField
+                  value={setupDraft.page}
+                  onChange={(e) => setSetupDraft((d) => ({ ...d, page: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  placeholder="Page ID"
+                  disabled={!isEditingSetup || isSavingSetup}
+                  sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+                  Ad Account
+                </Typography>
+                <TextField
+                  value={setupDraft.adAccount}
+                  onChange={(e) => setSetupDraft((d) => ({ ...d, adAccount: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  placeholder="Ad Account ID"
+                  disabled={!isEditingSetup || isSavingSetup}
+                  sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+                  Amount
+                </Typography>
+                <TextField
+                  value={setupDraft.amount}
+                  onChange={(e) => setSetupDraft((d) => ({ ...d, amount: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  placeholder="Budget amount"
+                  disabled={!isEditingSetup || isSavingSetup}
+                  sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
+                />
+              </Box>
+            </Box>
+          )}
         </Paper>
       )}
 
