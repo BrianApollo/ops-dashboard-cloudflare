@@ -39,9 +39,11 @@ export {
   createCampaign,
   updateCampaignStatus,
   fetchLaunchSetup,
+  updateLaunchSetup,
+  createLaunchSetup,
 } from './data';
 
-export type { SaveCampaignDraftParams, CampaignLaunchSetup } from './data';
+export type { SaveCampaignDraftParams, CampaignLaunchSetup, UpdateLaunchSetupPayload } from './data';
 
 // =============================================================================
 // READINESS LOGIC

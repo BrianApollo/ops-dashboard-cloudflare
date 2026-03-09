@@ -813,3 +813,69 @@ export async function fetchLaunchSetup(productId: string): Promise<CampaignLaunc
       : undefined,
   };
 }
+
+export interface UpdateLaunchSetupPayload {
+  pixel?: string;
+  page?: string;
+  adAccount?: string;
+  amount?: string;
+}
+
+/**
+ * Update an existing Campaign Launch Setup record.
+ */
+export async function updateLaunchSetup(
+  recordId: string,
+  payload: UpdateLaunchSetupPayload
+): Promise<void> {
+  const fields: Record<string, unknown> = {};
+  if (payload.pixel !== undefined) fields[FIELD_SETUP_PIXEL] = payload.pixel;
+  if (payload.page !== undefined) fields[FIELD_SETUP_PAGE] = payload.page;
+  if (payload.adAccount !== undefined) fields[FIELD_SETUP_AD_ACCOUNT] = payload.adAccount;
+  if (payload.amount !== undefined) fields[FIELD_SETUP_AMOUNT] = payload.amount;
+
+  await airtableFetch(`${LAUNCH_SETUP_TABLE}/${recordId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields }),
+  });
+}
+
+/**
+ * Create a new Campaign Launch Setup record for a product.
+ */
+export async function createLaunchSetup(
+  productId: string,
+  payload: UpdateLaunchSetupPayload
+): Promise<CampaignLaunchSetup> {
+  const fields: Record<string, unknown> = {
+    [FIELD_SETUP_PRODUCT]: [productId],
+  };
+  if (payload.pixel) fields[FIELD_SETUP_PIXEL] = payload.pixel;
+  if (payload.page) fields[FIELD_SETUP_PAGE] = payload.page;
+  if (payload.adAccount) fields[FIELD_SETUP_AD_ACCOUNT] = payload.adAccount;
+  if (payload.amount) fields[FIELD_SETUP_AMOUNT] = payload.amount;
+
+  const response = await airtableFetch(LAUNCH_SETUP_TABLE, {
+    method: 'POST',
+    body: JSON.stringify({ fields }),
+  });
+
+  const record: AirtableRecord = await response.json();
+  return {
+    id: record.id,
+    adAccount: typeof record.fields[FIELD_SETUP_AD_ACCOUNT] === 'string'
+      ? record.fields[FIELD_SETUP_AD_ACCOUNT]
+      : undefined,
+    amount: typeof record.fields[FIELD_SETUP_AMOUNT] === 'number'
+      ? String(record.fields[FIELD_SETUP_AMOUNT])
+      : typeof record.fields[FIELD_SETUP_AMOUNT] === 'string'
+        ? record.fields[FIELD_SETUP_AMOUNT]
+        : undefined,
+    pixel: typeof record.fields[FIELD_SETUP_PIXEL] === 'string'
+      ? record.fields[FIELD_SETUP_PIXEL]
+      : undefined,
+    page: typeof record.fields[FIELD_SETUP_PAGE] === 'string'
+      ? record.fields[FIELD_SETUP_PAGE]
+      : undefined,
+  };
+}
