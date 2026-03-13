@@ -11,11 +11,14 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import { Advertorial } from '../../features/advertorials';
 
+export type ImageGenerateModel = 'nanobanana-1' | 'nanobanana-2';
+
 export interface CreateImagesData {
     numberOfImages: number;
     advertorial: string;
     imageSize: string;
     outputFormat: string;
+    model: ImageGenerateModel;
 }
 
 interface CreateImagesDialogProps {
@@ -33,6 +36,7 @@ export function CreateImagesDialog({ open, onClose, onSubmit, advertorials }: Cr
     const [selectedAdvertorialId, setSelectedAdvertorialId] = useState('');
     const [imageSize, setImageSize] = useState('9:16');
     const [outputFormat, setOutputFormat] = useState('png');
+    const [model, setModel] = useState<ImageGenerateModel>('nanobanana-1');
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -41,6 +45,7 @@ export function CreateImagesDialog({ open, onClose, onSubmit, advertorials }: Cr
             setSelectedAdvertorialId('');
             setImageSize('9:16');
             setOutputFormat('png');
+            setModel('nanobanana-1');
         }
     }, [open]);
 
@@ -51,6 +56,7 @@ export function CreateImagesDialog({ open, onClose, onSubmit, advertorials }: Cr
             advertorial: selectedAdv?.text || '',
             imageSize,
             outputFormat,
+            model,
         });
     };
 
@@ -63,6 +69,17 @@ export function CreateImagesDialog({ open, onClose, onSubmit, advertorials }: Cr
         >
             <DialogTitle>Create Images</DialogTitle>
             <DialogContent>
+                <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                    <InputLabel>Image Generate Model</InputLabel>
+                    <Select
+                        value={model}
+                        label="Image Generate Model"
+                        onChange={(e) => setModel(e.target.value as ImageGenerateModel)}
+                    >
+                        <MenuItem value="nanobanana-1">Nanobanana-1</MenuItem>
+                        <MenuItem value="nanobanana-2">Nanobanana-2</MenuItem>
+                    </Select>
+                </FormControl>
                 <TextField
                     label="Number of Images"
                     type="number"
@@ -73,7 +90,7 @@ export function CreateImagesDialog({ open, onClose, onSubmit, advertorials }: Cr
                     slotProps={{
                         input: { inputProps: { min: 1, max: 20 } },
                     }}
-                    sx={{ mt: 1 }}
+                    sx={{ mt: 2 }}
                 />
                 <FormControl fullWidth size="small" sx={{ mt: 2 }}>
                     <InputLabel>Advertorial</InputLabel>

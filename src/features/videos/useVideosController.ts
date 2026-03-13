@@ -36,7 +36,7 @@ const videosListConfig = {
   queryKey: ['videos'],
   queryFn: (signal?: AbortSignal) => listVideos(signal),
   initialFilters: {
-    status: [] as VideoStatus[],
+    status: ['todo'] as VideoStatus[],
     format: [] as VideoFormat[],
     textVersion: [] as ('text' | 'no-text')[],
     editorId: null as string | null,
@@ -189,18 +189,35 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
     };
   }, [authUser]);
 
+  // Fetch all users (cached by React Query if used elsewhere)
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: listUsers,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled,
+  });
+
+  // Filter to only Video Editors for the dropdown
+  const editorOptions = useMemo<FilterOption[]>(() => {
+    return allUsers
+      .filter((u) => u.role === 'Video Editor')
+      .map((u) => ({ value: u.id, label: u.name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allUsers]);
+
   const hasSetInitialEditor = useRef(false);
 
-  // Auto-select logged-in editor on mount (once), but allow updates
+  // Auto-select logged-in user in editor dropdown on mount (once)
+  // Only applies if the user exists in the editor options list
   useEffect(() => {
-    if (user.role === 'editor' && user.userId && !hasSetInitialEditor.current) {
-      if (list.filters.editorId !== user.userId) {
+    if (user.userId && !hasSetInitialEditor.current && editorOptions.length > 0) {
+      const isInEditorList = editorOptions.some((e) => e.value === user.userId);
+      if (isInEditorList && list.filters.editorId !== user.userId) {
         list.setFilters({ ...list.filters, editorId: user.userId });
       }
       hasSetInitialEditor.current = true;
     }
-  }, [user.role, user.userId, list.filters, list.setFilters]);
-
+  }, [user.userId, editorOptions, list]);
 
   // Permission helper - check if current user can upload to a video
   const canUploadToVideoFn = useCallback(
@@ -219,22 +236,6 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
     }),
     [list.allRecords]
   );
-
-  // Fetch all users (cached by React Query if used elsewhere)
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: listUsers,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    enabled,
-  });
-
-  // Filter to only Video Editors for the dropdown
-  const editorOptions = useMemo<FilterOption[]>(() => {
-    return allUsers
-      .filter((u) => u.role === 'Video Editor')
-      .map((u) => ({ value: u.id, label: u.name }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [allUsers]);
 
   // Derive unique product options from all records
   const productOptions = useMemo<FilterOption[]>(() => {

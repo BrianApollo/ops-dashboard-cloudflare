@@ -314,14 +314,21 @@ export function ProductsPage() {
         destination_path: 'file-path'
       };
 
+      const selectedModel = data.model;
+
       // Remove the old keys if desired
       delete payload.numberOfImages;
       delete payload.imageSize;
       delete payload.outputFormat;
+      delete payload.model;
 
-      console.log('Sending Create Images payload:', payload);
+      const endpoint = selectedModel === 'nanobanana-2'
+        ? import.meta.env.VITE_IMAGE_GENERATION_V2_URL
+        : import.meta.env.VITE_IMAGE_GENERATION_URL;
 
-      const response = await fetch(import.meta.env.VITE_IMAGE_GENERATION_URL, {
+      console.log('Sending Create Images payload:', payload, 'to', endpoint);
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
