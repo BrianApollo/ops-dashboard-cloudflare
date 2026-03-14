@@ -369,6 +369,7 @@ function Toolbar({
       >
         <MenuItem value="today">Today</MenuItem>
         <MenuItem value="yesterday">Yesterday</MenuItem>
+        <MenuItem value="last_3d">Last 3 Days</MenuItem>
         <MenuItem value="last_7d">Last 7 Days</MenuItem>
         <MenuItem value="last_30d">Last 30 Days</MenuItem>
       </Select>
@@ -660,7 +661,7 @@ export function CampaignTable({
               </TableRow>
             ) : (
               sortedCampaigns.map((campaign) => {
-                const redtrackId = redtrackMap.get(campaign.name);
+                const redtrackId = redtrackMap.get(campaign.id);
                 const isExpanded = expandedIds.has(campaign.id);
 
                 return (

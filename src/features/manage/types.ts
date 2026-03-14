@@ -68,7 +68,7 @@ export interface AdReviewResult {
 // FILTERS
 // =============================================================================
 
-export type DatePreset = 'today' | 'yesterday' | 'last_7d' | 'last_30d';
+export type DatePreset = 'today' | 'yesterday' | 'last_3d' | 'last_7d' | 'last_30d';
 
 export interface ManageFilters {
   search: string;

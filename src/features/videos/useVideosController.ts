@@ -36,7 +36,7 @@ const videosListConfig = {
   queryKey: ['videos'],
   queryFn: (signal?: AbortSignal) => listVideos(signal),
   initialFilters: {
-    status: ['todo'] as VideoStatus[],
+    status: [] as VideoStatus[],
     format: [] as VideoFormat[],
     textVersion: [] as ('text' | 'no-text')[],
     editorId: null as string | null,

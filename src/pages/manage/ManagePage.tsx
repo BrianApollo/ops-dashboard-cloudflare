@@ -151,6 +151,13 @@ export function ManagePage() {
           date_to = formatDate(yesterday);
           break;
         }
+        case 'last_3d': {
+          const from = new Date(now);
+          from.setDate(from.getDate() - 3);
+          date_from = formatDate(from);
+          date_to = formatDate(now);
+          break;
+        }
         case 'last_7d': {
           const from = new Date(now);
           from.setDate(from.getDate() - 7);
