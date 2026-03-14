@@ -710,12 +710,12 @@ export async function addImageIdsToCampaign(
 // =============================================================================
 
 /**
- * Fetch Launched campaigns and return a name → redtrackCampaignId map.
+ * Fetch Launched campaigns and return a fbCampaignId → redtrackCampaignId map.
  * Used by the Manage page to match Facebook campaigns to Airtable campaigns.
  */
 export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, string>> {
   const filterFormula = encodeURIComponent(`{${FIELD_CAMPAIGN_STATUS}} = 'Launched'`);
-  const fieldsParam = 'fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_NAME)
+  const fieldsParam = 'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID)
     + '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_REDTRACK_ID);
 
   const allRecords: AirtableRecord[] = [];
@@ -732,14 +732,14 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
 
   const map = new Map<string, string>();
   for (const record of allRecords) {
-    const name = typeof record.fields[FIELD_CAMPAIGN_NAME] === 'string'
-      ? record.fields[FIELD_CAMPAIGN_NAME]
+    const fbId = typeof record.fields[FIELD_FB_CAMPAIGN_ID] === 'string'
+      ? record.fields[FIELD_FB_CAMPAIGN_ID]
       : '';
     const rtId = typeof record.fields[FIELD_CAMPAIGN_REDTRACK_ID] === 'string'
       ? record.fields[FIELD_CAMPAIGN_REDTRACK_ID]
       : '';
-    if (name && rtId) {
-      map.set(name, rtId);
+    if (fbId && rtId) {
+      map.set(fbId, rtId);
     }
   }
 
