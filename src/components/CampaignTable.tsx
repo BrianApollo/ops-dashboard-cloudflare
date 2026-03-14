@@ -61,6 +61,9 @@ interface CampaignTableProps {
   onEditBudget: (campaignId: string, newBudgetCents: number) => Promise<void>;
   onSchedule?: (campaign: FbManageCampaign) => void;
   adReviewButton?: React.ReactNode;
+  fetchRoasButton?: React.ReactNode;
+  showRoasColumn?: boolean;
+  roasMap?: Map<string, number>;
 }
 
 // =============================================================================
@@ -283,6 +286,7 @@ function Toolbar({
   onRefresh,
   isLoading,
   adReviewButton,
+  fetchRoasButton,
 }: {
   filters: ManageFilters;
   adAccounts: FbAdAccount[];
@@ -293,6 +297,7 @@ function Toolbar({
   onRefresh: () => void;
   isLoading: boolean;
   adReviewButton?: React.ReactNode;
+  fetchRoasButton?: React.ReactNode;
 }) {
   const theme = useTheme();
 
@@ -414,6 +419,7 @@ function Toolbar({
       {/* Spacer to push ad review button right */}
       <Box sx={{ flex: 1 }} />
 
+      {fetchRoasButton}
       {adReviewButton}
     </Box>
   );
@@ -438,6 +444,9 @@ export function CampaignTable({
   onEditBudget,
   onSchedule,
   adReviewButton,
+  fetchRoasButton,
+  showRoasColumn,
+  roasMap,
 }: CampaignTableProps) {
   const theme = useTheme();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -457,6 +466,8 @@ export function CampaignTable({
     () => sortCampaigns(campaigns, sortKey, sortDir),
     [campaigns, sortKey, sortDir],
   );
+
+  const totalColumns = showRoasColumn ? 9 : 8;
 
   // Mutation flash state per campaign
   const [statusFlash, setStatusFlash] = useState<Map<string, 'success' | 'error'>>(new Map());
@@ -568,6 +579,7 @@ export function CampaignTable({
         onRefresh={onRefresh}
         isLoading={isLoading}
         adReviewButton={adReviewButton}
+        fetchRoasButton={fetchRoasButton}
       />
 
       <TableContainer
@@ -610,6 +622,11 @@ export function CampaignTable({
                   Spend
                 </TableSortLabel>
               </TableCell>
+              {showRoasColumn && (
+                <TableCell sx={{ ...headerSx, textAlign: 'right' }}>
+                  ROAS
+                </TableCell>
+              )}
               <TableCell sx={headerSx}>
                 <TableSortLabel active={sortKey === 'status'} direction={sortKey === 'status' ? sortDir : 'asc'} onClick={() => handleSort('status')}>
                   Status
@@ -622,7 +639,7 @@ export function CampaignTable({
           <TableBody>
             {isLoading && campaigns.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 6 }}>
+                <TableCell colSpan={totalColumns} sx={{ textAlign: 'center', py: 6 }}>
                   <CircularProgress size={28} />
                   <Typography
                     variant="body2"
@@ -635,7 +652,7 @@ export function CampaignTable({
               </TableRow>
             ) : campaigns.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 6 }}>
+                <TableCell colSpan={totalColumns} sx={{ textAlign: 'center', py: 6 }}>
                   <Typography variant="body2" color="text.secondary">
                     No campaigns found
                   </Typography>
@@ -730,6 +747,23 @@ export function CampaignTable({
                         {getSpend(campaign)}
                       </TableCell>
 
+                      {/* ROAS */}
+                      {showRoasColumn && (
+                        <TableCell
+                          sx={{
+                            ...cellSx,
+                            textAlign: 'right',
+                            fontFamily: 'monospace',
+                            fontSize: '0.8125rem',
+                            color: roasMap?.has(campaign.id) ? 'text.primary' : 'text.secondary',
+                          }}
+                        >
+                          {roasMap?.has(campaign.id)
+                            ? roasMap.get(campaign.id)!.toFixed(2)
+                            : '—'}
+                        </TableCell>
+                      )}
+
                       {/* Status Toggle */}
                       <TableCell sx={cellSx}>
                         <StatusToggle
@@ -773,7 +807,7 @@ export function CampaignTable({
                     {redtrackId && (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={totalColumns}
                           sx={{ p: 0, borderBottom: isExpanded ? '1px solid' : 'none', borderColor: 'divider' }}
                         >
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>

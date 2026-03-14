@@ -746,6 +746,67 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
   return map;
 }
 
+/**
+ * Given an array of Facebook campaign IDs, look up matching Airtable Campaigns
+ * records and extract the RedTrack campaign ID from the "Launched Data" JSON.
+ *
+ * Returns a Map of fbCampaignId → redtrackCampaignId.
+ */
+export async function getRedtrackIdsByFbCampaignIds(
+  fbCampaignIds: string[],
+): Promise<Map<string, string>> {
+  if (fbCampaignIds.length === 0) return new Map();
+
+  // Airtable OR() formula: match any of the FB Campaign IDs
+  const conditions = fbCampaignIds.map(
+    (id) => `{${FIELD_FB_CAMPAIGN_ID}} = '${id}'`,
+  );
+  const filterFormula = encodeURIComponent(
+    conditions.length === 1 ? conditions[0] : `OR(${conditions.join(',')})`,
+  );
+
+  const fieldsParam =
+    'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID) +
+    '&fields[]=' + encodeURIComponent(FIELD_LAUNCHED_DATA);
+
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+
+  do {
+    const base = `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&${fieldsParam}`;
+    const url = offset ? `${base}&offset=${offset}` : base;
+    const response = await airtableFetch(url);
+    const data: AirtableResponse = await response.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  const map = new Map<string, string>();
+
+  for (const record of allRecords) {
+    const fbId = typeof record.fields[FIELD_FB_CAMPAIGN_ID] === 'string'
+      ? record.fields[FIELD_FB_CAMPAIGN_ID]
+      : '';
+    const launchedDataRaw = typeof record.fields[FIELD_LAUNCHED_DATA] === 'string'
+      ? record.fields[FIELD_LAUNCHED_DATA]
+      : '';
+
+    if (!fbId || !launchedDataRaw) continue;
+
+    try {
+      const launchedData = JSON.parse(launchedDataRaw);
+      const rtId = launchedData?.redtrack?.campaignId;
+      if (typeof rtId === 'string' && rtId) {
+        map.set(fbId, rtId);
+      }
+    } catch {
+      // Skip records with invalid JSON
+    }
+  }
+
+  return map;
+}
+
 // =============================================================================
 // CAMPAIGN LAUNCH SETUP (per-product defaults)
 // =============================================================================

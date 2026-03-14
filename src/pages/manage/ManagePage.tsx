@@ -15,12 +15,15 @@ import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PolicyIcon from '@mui/icons-material/Policy';
+import QueryStatsIcon from '@mui/icons-material/QueryStats';
 
 import { ProfileSelector } from '../../components/ProfileSelector';
 import { CampaignTable } from '../../components/CampaignTable';
 import { AdReviewDialog } from '../../components/AdReviewDialog';
 import { useManageData } from '../../features/manage/useManageData';
 import { checkAdReview } from '../../features/manage/api';
+import { getRedtrackIdsByFbCampaignIds } from '../../features/campaigns/data';
+import { fetchRedtrackCampaignRoas } from '../../features/redtrack/api';
 import type { AdReviewResult, FbManageCampaign } from '../../features/manage/types';
 import { ScheduleActionDialog } from '../../components/schedules/ScheduleActionDialog';
 import type { ScheduleDialogPrefill } from '../../components/schedules/ScheduleActionDialog';
@@ -113,6 +116,96 @@ export function ManagePage() {
         : undefined,
     }
     : undefined;
+
+  // ── Fetch ROAS state ──
+  const [isFetchingRoas, setIsFetchingRoas] = useState(false);
+  const [showRoasColumn, setShowRoasColumn] = useState(false);
+  const [roasMap, setRoasMap] = useState<Map<string, number>>(new Map());
+
+  const handleFetchRoas = useCallback(async () => {
+    if (filteredCampaigns.length === 0) return;
+
+    setIsFetchingRoas(true);
+    try {
+      // 1. Get FB campaign ID → RedTrack campaign ID mapping
+      const fbCampaignIds = filteredCampaigns.map((c) => c.id);
+      const fbToRtMap = await getRedtrackIdsByFbCampaignIds(fbCampaignIds);
+      const redtrackCampaignIds = [...new Set(fbToRtMap.values())];
+
+      // 2. Compute date_from and date_to from the selected date preset
+      const now = new Date();
+      let date_from: string;
+      let date_to: string;
+
+      const formatDate = (d: Date) => d.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      switch (filters.datePreset) {
+        case 'today':
+          date_from = formatDate(now);
+          date_to = formatDate(now);
+          break;
+        case 'yesterday': {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          date_from = formatDate(yesterday);
+          date_to = formatDate(yesterday);
+          break;
+        }
+        case 'last_7d': {
+          const from = new Date(now);
+          from.setDate(from.getDate() - 7);
+          date_from = formatDate(from);
+          date_to = formatDate(now);
+          break;
+        }
+        case 'last_30d': {
+          const from = new Date(now);
+          from.setDate(from.getDate() - 30);
+          date_from = formatDate(from);
+          date_to = formatDate(now);
+          break;
+        }
+      }
+
+      // 3. Fetch ROAS from RedTrack API
+      const roasResults = await fetchRedtrackCampaignRoas(
+        redtrackCampaignIds,
+        date_from,
+        date_to,
+      );
+
+      // 4. Build rtId → roas lookup from API response
+      const rtIdToRoas = new Map<string, number>();
+      for (const r of roasResults) {
+        rtIdToRoas.set(r.id, r.roas);
+      }
+
+      // 5. Build fbCampaignId → roas map
+      const newRoasMap = new Map<string, number>();
+      for (const [fbId, rtId] of fbToRtMap) {
+        const roas = rtIdToRoas.get(rtId);
+        if (roas !== undefined) {
+          newRoasMap.set(fbId, roas);
+        }
+      }
+
+      console.log('=== Fetch ROAS Results ===');
+      console.log(JSON.stringify({
+        redtrackCampaignIds,
+        date_from,
+        date_to,
+        roasResults: roasResults.map((r) => ({ id: r.id, title: r.title, roas: r.roas })),
+        fbCampaignRoasMap: Object.fromEntries(newRoasMap),
+      }, null, 2));
+
+      setRoasMap(newRoasMap);
+      setShowRoasColumn(true);
+    } catch (err) {
+      console.error('Failed to fetch ROAS data:', err);
+    } finally {
+      setIsFetchingRoas(false);
+    }
+  }, [filteredCampaigns, filters.datePreset]);
 
   // ── Ad review check state ──
   const [isChecking, setIsChecking] = useState(false);
@@ -261,6 +354,35 @@ export function ManagePage() {
               : 'Check Ad Review'}
           </Button>
         }
+        fetchRoasButton={
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleFetchRoas}
+            disabled={isFetchingRoas || filteredCampaigns.length === 0}
+            startIcon={
+              isFetchingRoas ? (
+                <CircularProgress size={14} />
+              ) : (
+                <QueryStatsIcon sx={{ fontSize: 16 }} />
+              )
+            }
+            sx={{
+              textTransform: 'none',
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              borderColor: '#e5e7eb',
+              color: 'text.secondary',
+              '&:hover': {
+                borderColor: 'text.secondary',
+              },
+            }}
+          >
+            {isFetchingRoas ? 'Fetching...' : 'Fetch ROAS'}
+          </Button>
+        }
+        showRoasColumn={showRoasColumn}
+        roasMap={roasMap}
       />
 
       {/* Review results dialog */}

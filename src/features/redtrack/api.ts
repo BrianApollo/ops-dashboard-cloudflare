@@ -569,3 +569,52 @@ export async function fetchRedtrackReport(
     cr: Number(row.cr) || 0,
   }));
 }
+
+// =============================================================================
+// FETCH ROAS FOR MULTIPLE CAMPAIGNS
+// =============================================================================
+
+export interface RedTrackCampaignRoas {
+  id: string;
+  title: string;
+  roas: number;
+}
+
+/**
+ * Fetch campaigns with total stats from RedTrack.
+ * Uses GET /campaigns?ids=...&date_from=...&date_to=...&total_stat=true
+ *
+ * Returns an array of { id, title, roas } for each campaign.
+ */
+export async function fetchRedtrackCampaignRoas(
+  ids: string[],
+  dateFrom: string,
+  dateTo: string,
+): Promise<RedTrackCampaignRoas[]> {
+  if (ids.length === 0) return [];
+
+  const url = new URL(`${REDTRACK_API_URL}/campaigns`, window.location.origin);
+  url.searchParams.set('ids', ids.join(','));
+  url.searchParams.set('date_from', dateFrom);
+  url.searchParams.set('date_to', dateTo);
+  url.searchParams.set('total_stat', 'true');
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`RedTrack campaigns fetch failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  const campaigns = Array.isArray(data) ? data : [];
+
+  return campaigns.map((c: Record<string, unknown>) => ({
+    id: String(c.id ?? ''),
+    title: String(c.title ?? ''),
+    roas: Number((c.stat as Record<string, unknown>)?.roas) || 0,
+  }));
+}
