@@ -92,6 +92,35 @@ export async function listAdvertorials(signal?: AbortSignal): Promise<Advertoria
         .filter((a): a is Advertorial => a !== null);
 }
 
+/**
+ * List advertorials filtered by product name.
+ * Uses product name because linked record fields resolve to display names in formulas.
+ */
+export async function listAdvertorialsByProduct(productName: string): Promise<Advertorial[]> {
+    const productsMap = await fetchProducts();
+
+    const filterFormula = encodeURIComponent(
+        `{${FIELD_PRODUCT}} = '${productName}'`
+    );
+
+    const allRecords: AirtableRecord[] = [];
+    let offset: string | undefined;
+
+    do {
+        const url = offset
+            ? `${ADVERTORIALS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
+            : `${ADVERTORIALS_TABLE}?filterByFormula=${filterFormula}`;
+        const response = await airtableFetch(url);
+        const data: AirtableResponse = await response.json();
+        allRecords.push(...data.records);
+        offset = data.offset;
+    } while (offset);
+
+    return allRecords
+        .map((record) => mapAirtableToAdvertorial(record, productsMap))
+        .filter((a): a is Advertorial => a !== null);
+}
+
 // =============================================================================
 // WRITE OPERATIONS
 // =============================================================================

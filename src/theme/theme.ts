@@ -448,13 +448,13 @@ const createComponentOverrides = (mode: 'light' | 'dark', palette: typeof lightP
     styleOverrides: {
       root: {
         '& .MuiTableCell-head': {
-          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#F8FAFC',
+          backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : palette.primary.main,
           fontWeight: 600,
           fontSize: '0.6875rem',
           textTransform: 'uppercase' as const,
           letterSpacing: '0.06em',
-          color: palette.text.secondary,
-          borderBottom: `1px solid ${palette.divider}`,
+          color: mode === 'dark' ? palette.text.primary : '#ffffff',
+          borderBottom: `1px solid ${mode === 'dark' ? palette.divider : 'rgba(255,255,255,0.15)'}`,
         },
       },
     },

@@ -374,6 +374,38 @@ export async function listVideos(signal?: AbortSignal): Promise<VideoAsset[]> {
 }
 
 /**
+ * List videos filtered by product name.
+ * Uses product name (not ID) because ARRAYJOIN on linked records returns display names.
+ */
+export async function listVideosByProduct(productName: string): Promise<VideoAsset[]> {
+  const [editorsMap, productsMap, scriptsMap] = await Promise.all([
+    fetchEditors(),
+    fetchProducts(),
+    fetchScripts(),
+  ]);
+
+  const filterFormula = encodeURIComponent(
+    `{${FIELD_PRODUCT}} = '${productName}'`
+  );
+
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const url = offset
+      ? `${VIDEOS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
+      : `${VIDEOS_TABLE}?filterByFormula=${filterFormula}`;
+    const response = await airtableFetch(url);
+    const data: AirtableResponse = await response.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  return allRecords
+    .map(r => mapAirtableToVideoAsset(r, editorsMap, productsMap, scriptsMap))
+    .filter((v): v is VideoAsset => v !== null);
+}
+
+/**
  * Update a video by ID.
  * Only writes to WRITABLE fields - never to computed fields.
  */

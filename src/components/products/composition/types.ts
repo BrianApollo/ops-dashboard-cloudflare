@@ -51,6 +51,8 @@ export interface ScriptItem {
   videosByEditor: EditorVideoCount[];
   /** Videos that have been uploaded (status !== 'todo') - for sidebar */
   uploadedVideos: UploadedVideo[];
+  /** Video completion percentage (from Airtable formula) */
+  calculation?: number;
 }
 
 export interface AdPresetItem {

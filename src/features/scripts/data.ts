@@ -173,6 +173,7 @@ function mapAirtableToScript(
     body,
     hookNumber,
     baseScriptNumber,
+    calculation: typeof fields['Calculation'] === 'number' ? fields['Calculation'] : undefined,
   };
 }
 
@@ -200,14 +201,26 @@ export async function listScripts(signal?: AbortSignal): Promise<Script[]> {
 }
 
 /**
- * List scripts by product ID.
+ * List scripts by product name.
+ * Uses product name because linked record fields resolve to display names in formulas.
  */
-export async function listScriptsByProduct(productId: string): Promise<Script[]> {
+export async function listScriptsByProduct(productName: string): Promise<Script[]> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
-  const filter = encodeURIComponent(`FIND("${productId}", ARRAYJOIN({Product}))`);
-  const res = await airtableFetch(`${SCRIPTS_TABLE}?filterByFormula=${filter}`);
-  const data: AirtableResponse = await res.json();
-  return data.records
+  const filterFormula = encodeURIComponent(`{${FIELD_PRODUCT}} = '${productName}'`);
+
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const url = offset
+      ? `${SCRIPTS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
+      : `${SCRIPTS_TABLE}?filterByFormula=${filterFormula}`;
+    const res = await airtableFetch(url);
+    const data: AirtableResponse = await res.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  return allRecords
     .map(r => mapAirtableToScript(r, productsMap, usersMap))
     .filter((s): s is Script => s !== null);
 }

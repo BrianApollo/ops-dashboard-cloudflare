@@ -18,6 +18,7 @@ import Link from '@mui/material/Link';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
+import LinearProgress from '@mui/material/LinearProgress';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
@@ -359,6 +360,7 @@ export function ScriptsTab({
                   )}
                   <TableCell sx={tableHeaderCellSx}>Editors</TableCell>
                   <TableCell sx={{ ...tableHeaderCellSx, width: 120 }}>Status</TableCell>
+                  <TableCell sx={{ ...tableHeaderCellSx, width: 140 }}>Progress</TableCell>
                   <TableCell sx={{ ...tableHeaderCellSx, width: 120 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -435,6 +437,31 @@ export function ScriptsTab({
                             status={hasVideos ? 'assigned' : 'unassigned'}
                             label={hasVideos ? 'Assigned' : 'Unassigned'}
                           />
+                        </TableCell>
+                        <TableCell sx={tableDataCellSx}>
+                          {script.calculation != null ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <LinearProgress
+                                variant="determinate"
+                                value={script.calculation * 100}
+                                sx={{
+                                  flex: 1,
+                                  height: 8,
+                                  borderRadius: 4,
+                                  bgcolor: 'grey.200',
+                                  '& .MuiLinearProgress-bar': {
+                                    borderRadius: 4,
+                                    bgcolor: script.calculation >= 1 ? 'success.main' : script.calculation > 0 ? 'primary.main' : 'grey.400',
+                                  },
+                                }}
+                              />
+                              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 32 }}>
+                                {Math.round(script.calculation * 100)}%
+                              </Typography>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">—</Typography>
+                          )}
                         </TableCell>
                         <TableCell sx={tableDataCellSx}>
                           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>

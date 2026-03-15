@@ -26,6 +26,7 @@ import Paper from '@mui/material/Paper';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import SaveIcon from '@mui/icons-material/Save';
 // Controller - canonical location
 import { useCampaignLaunchOrchestrator } from '../../features/campaigns/launch/useCampaignLaunchOrchestrator';
 // Components - canonical location
@@ -34,6 +35,7 @@ import { CampaignSetupColumn } from '../../components/campaigns/CampaignSetupCol
 import { FinalCheckColumn } from '../../components/campaigns/FinalCheckColumn';
 // LaunchProgressView - canonical location
 import { LaunchProgressView } from '../../components/campaigns/LaunchProgressView';
+import { saveLaunchTemplate } from '../../features/campaigns/data';
 
 // =============================================================================
 // UI MODE TYPE
@@ -54,6 +56,28 @@ export function CampaignLaunchPage() {
 
   // UI-only state (not business logic)
   const [mediaCollapsed, setMediaCollapsed] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  const handleSaveTemplate = async () => {
+    if (!c.productId) return;
+    setIsSavingTemplate(true);
+    try {
+      await saveLaunchTemplate({
+        productId: c.productId,
+        adAccount: c.draft.adAccountId ?? undefined,
+        pixel: c.draft.pixelId ?? undefined,
+        page: c.draft.pageId ?? undefined,
+        amount: c.draft.budget || undefined,
+        callToAction: c.draft.ctaOverride || undefined,
+        targeting: c.draft.geo || undefined,
+      });
+      alert('Template saved!');
+    } catch (error) {
+      alert(`Failed to save template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
 
   // Derive UI mode from controller state
   const uiMode: UIMode = useMemo(() => {
@@ -118,6 +142,19 @@ export function CampaignLaunchPage() {
         <Typography variant="h3" sx={{ fontWeight: 600, flex: 1 }}>
           Campaign Launcher - {c.campaign?.product.name || 'Product'}
         </Typography>
+
+        {/* Save as Template */}
+        <Button
+          size="small"
+          variant="outlined"
+          color="info"
+          disabled={isSavingTemplate}
+          startIcon={isSavingTemplate ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+          onClick={handleSaveTemplate}
+          sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+        >
+          {isSavingTemplate ? 'Saving...' : 'Save as Template'}
+        </Button>
 
         {/* Profile Selector */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>

@@ -180,13 +180,14 @@ export async function listAdPresets(signal?: AbortSignal): Promise<AdPreset[]> {
 }
 
 /**
- * List ad presets by product ID.
+ * List ad presets by product name.
+ * Uses product name because linked record fields resolve to display names in formulas.
  */
-export async function listAdPresetsByProduct(productId: string): Promise<AdPreset[]> {
+export async function listAdPresetsByProduct(productName: string): Promise<AdPreset[]> {
   const productsMap = await fetchProducts();
 
   const filterFormula = encodeURIComponent(
-    `FIND("${productId}", ARRAYJOIN({${FIELD_PRODUCT}}))`
+    `{${FIELD_PRODUCT}} = '${productName}'`
   );
 
   const allRecords: AirtableRecord[] = [];

@@ -44,3 +44,5 @@ Thumbs.db
 # TypeScript build info
 tsconfig.app.tsbuildinfo
 tsconfig.node.tsbuildinfo
+*.zip
+**/.wrangler/

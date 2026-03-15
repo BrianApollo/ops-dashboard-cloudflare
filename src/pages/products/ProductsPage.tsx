@@ -6,21 +6,25 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import Tooltip from '@mui/material/Tooltip';
 import AddIcon from '@mui/icons-material/Add';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { ToggleTabs } from '../../ui';
 import { useProductsController } from '../../features/products';
-import { useCampaignsController } from '../../features/campaigns';
-import { useScriptsController } from '../../features/scripts';
-import { useImagesController } from '../../features/images';
-import { useAdPresetsController, getPrimaryTexts, getHeadlines, getDescriptions } from '../../features/ad-presets';
+import { useCampaignsController, listCampaignsByProduct } from '../../features/campaigns';
+import { useScriptsController, listScriptsByProduct } from '../../features/scripts';
+import { useImagesController, listImagesByProduct } from '../../features/images';
+import { useAdPresetsController, getPrimaryTexts, getHeadlines, getDescriptions, listAdPresetsByProduct } from '../../features/ad-presets';
 import { useVideosController } from '../../features/videos/useVideosController';
-import { updateVideo } from '../../features/videos/data';
-import { useAdvertorialsController } from '../../features/advertorials';
+import { updateVideo, listVideosByProduct } from '../../features/videos/data';
+import { useAdvertorialsController, listAdvertorialsByProduct } from '../../features/advertorials';
 import { StatusCard } from '../../core/status';
 import { ProductSelector } from '../../components/products/ProductSelector';
 import { ProductCreationModal } from '../../components/products/ProductCreationModal';
@@ -54,7 +58,9 @@ import { AddScriptDialog } from '../../components/scripts/AddScriptDialog';
 export function ProductsPage() {
   const { id: productIdParam } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('campaigns');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Deferred loading: render campaigns immediately, load rest after first paint
   const [backgroundReady, setBackgroundReady] = useState(false);
@@ -167,6 +173,7 @@ export function ProductsPage() {
         videos: scriptVideos.map((v) => ({ id: v.id, name: v.name, status: v.status, format: v.format })),
         videosByEditor,
         uploadedVideos,
+        calculation: s.calculation,
       };
     });
   }, [filteredScripts, filteredVideos, productNameMap]);
@@ -263,6 +270,80 @@ export function ProductsPage() {
       alert(`Failed to update status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
+
+  // Refresh: fetch only the active tab's data, scoped to selected product
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      if (selectedProduct) {
+        const productName = selectedProduct.name;
+        const productId = selectedProduct.id;
+
+        const mergeByProductId = <T extends { product: { id: string } }>(
+          queryKey: string[],
+          freshRecords: T[],
+        ) => {
+          queryClient.setQueryData<T[]>(queryKey, (old = []) => {
+            const otherProducts = old.filter((r) => r.product.id !== productId);
+            return [...otherProducts, ...freshRecords];
+          });
+        };
+
+        switch (activeTab) {
+          case 'campaigns':
+            mergeByProductId(['campaigns'], await listCampaignsByProduct(productName));
+            break;
+          case 'scripts':
+            mergeByProductId(['scripts'], await listScriptsByProduct(productName));
+            break;
+          case 'videos':
+            mergeByProductId(['videos'], await listVideosByProduct(productName));
+            break;
+          case 'images':
+            mergeByProductId(['images'], await listImagesByProduct(productName));
+            break;
+          case 'advertorials': {
+            const fresh = await listAdvertorialsByProduct(productName);
+            queryClient.setQueryData<typeof fresh>(['advertorials'], (old = []) => {
+              const otherProducts = old.filter((r) => r.productId !== productId);
+              return [...otherProducts, ...fresh];
+            });
+            break;
+          }
+          case 'setup':
+            await Promise.all([
+              listAdPresetsByProduct(productName).then((fresh) =>
+                mergeByProductId(['ad-presets'], fresh)
+              ),
+              productsController.refetch(),
+              queryClient.invalidateQueries({ queryKey: ['launchSetup', productId] }),
+            ]);
+            break;
+        }
+      } else {
+        // All Products: full refetch for the active tab only
+        switch (activeTab) {
+          case 'campaigns': await campaignsController.refetch(); break;
+          case 'scripts': await scriptsController.refetch(); break;
+          case 'videos': await videosController.list.refetch(); break;
+          case 'images': await imagesController.refetch(); break;
+          case 'advertorials': await advertorialsController.refetch(); break;
+          case 'setup':
+            await Promise.all([
+              adPresetsController.refetch(),
+              productsController.refetch(),
+              queryClient.invalidateQueries({ queryKey: ['launchSetup'] }),
+            ]);
+            break;
+        }
+      }
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedProduct, queryClient]);
 
   const handleBulkAssignScripts = async (scriptIds: string[], editorId?: string) => {
     const scripts = scriptIds
@@ -494,8 +575,20 @@ export function ProductsPage() {
           size="medium"
         />
 
-        {/* Action Buttons - conditional per tab */}
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        {/* Refresh + Action Buttons */}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Tooltip title={productIdParam ? 'Refresh this tab for selected product' : 'Refresh this tab'}>
+            <IconButton
+              size="small"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              sx={{ color: 'text.secondary' }}
+            >
+              {isRefreshing
+                ? <CircularProgress size={20} />
+                : <RefreshIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
           {activeTab === 'campaigns' && (
             <Button
               variant="contained"
