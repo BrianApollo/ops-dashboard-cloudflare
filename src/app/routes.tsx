@@ -7,6 +7,7 @@ import { InfrastructurePage } from "../pages/infrastructure/InfrastructurePage";
 import { ManagePage } from "../pages/manage/ManagePage";
 import { RulesPage } from "../pages/rules/RulesPage";
 import { SchedulesPage } from "../pages/schedules/SchedulesPage";
+import { OverviewPage } from "../pages/overview/OverviewPage";
 import { EditorPortalPage } from "../pages/videos/EditorPortalPage";
 import LoginPage from "../pages/auth/LoginPage";
 import { RequireAuth, RedirectIfAuthenticated, RootRedirect } from "../core/auth/AuthGuard";
@@ -22,6 +23,7 @@ export function AppRoutes() {
         <Route path="/" element={<RootRedirect />} />
 
         <Route element={<OpsLayout />}>
+          <Route path="/ops/overview" element={<OverviewPage />} />
           <Route path="/ops" element={<ProductsPage />} />
           <Route path="/ops/products" element={<ProductsPage />} />
           <Route path="/ops/products/:id" element={<ProductsPage />} />

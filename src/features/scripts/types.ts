@@ -73,6 +73,9 @@ export interface Script {
 
   /** The base script number for querying sibling hooks (e.g., 1014 for "Script 1014 Hk2") */
   baseScriptNumber?: number;
+
+  /** Video completion percentage (Airtable formula field) */
+  calculation?: number;
 }
 
 // =============================================================================

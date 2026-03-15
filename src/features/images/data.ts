@@ -325,13 +325,14 @@ export async function listImages(signal?: AbortSignal): Promise<Image[]> {
 }
 
 /**
- * List images by product ID (Images + Temp Images).
+ * List images by product name (Images + Temp Images).
+ * Uses product name because linked record fields resolve to display names in formulas.
  */
-export async function listImagesByProduct(productId: string): Promise<Image[]> {
+export async function listImagesByProduct(productName: string): Promise<Image[]> {
   const productsMap = await fetchProducts();
 
   const filterFormula = encodeURIComponent(
-    `FIND("${productId}", ARRAYJOIN({${FIELD_PRODUCT}}))`
+    `{${FIELD_PRODUCT}} = '${productName}'`
   );
 
   // Helper to fetch filtered records from a table

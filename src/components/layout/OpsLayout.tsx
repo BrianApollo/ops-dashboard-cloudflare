@@ -26,6 +26,7 @@ import SettingsInputComponentIcon from '@mui/icons-material/SettingsInputCompone
 import TuneIcon from '@mui/icons-material/Tune';
 import GavelIcon from '@mui/icons-material/Gavel';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 
@@ -60,6 +61,7 @@ export function OpsLayout() {
 
   // Dynamic navigation items based on role
   const mainNavItems = [
+    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/overview', label: 'Overview', icon: DashboardIcon }] : []),
     ...(user?.role !== 'Video Editor' ? [{ to: '/ops', label: 'Products', icon: InventoryIcon }] : []),
     ...(user?.role !== 'Video Editor' ? [{ to: '/ops/manage', label: 'Manage', icon: TuneIcon }] : []),
     ...(user?.role !== 'Video Editor' ? [{ to: '/ops/schedules', label: 'Schedules', icon: ScheduleIcon }] : []),

@@ -360,14 +360,14 @@ export async function listCampaigns(signal?: AbortSignal): Promise<Campaign[]> {
 }
 
 /**
- * List campaigns filtered by product ID.
+ * List campaigns filtered by product name.
+ * Uses product name because linked record fields resolve to display names in formulas.
  */
-export async function listCampaignsByProduct(productId: string): Promise<Campaign[]> {
+export async function listCampaignsByProduct(productName: string): Promise<Campaign[]> {
   const productsMap = await fetchProducts();
 
-  // Use Airtable formula to filter server-side
   const filterFormula = encodeURIComponent(
-    `FIND("${productId}", ARRAYJOIN({${FIELD_CAMPAIGN_PRODUCT}}))`
+    `{${FIELD_CAMPAIGN_PRODUCT}} = '${productName}'`
   );
 
   const allRecords: AirtableRecord[] = [];
@@ -817,6 +817,10 @@ const FIELD_SETUP_AMOUNT = 'Amount';
 const FIELD_SETUP_AD_ACCOUNT = 'Ad Account';
 const FIELD_SETUP_PIXEL = 'Pixel';
 const FIELD_SETUP_PAGE = 'Page';
+const FIELD_SETUP_CTA = 'Call to Action';
+const FIELD_SETUP_TARGETING = 'Targeting';
+const FIELD_SETUP_NAME = 'Name';
+const FIELD_SETUP_COUNT = 'Count';
 
 export interface CampaignLaunchSetup {
   id: string;
@@ -939,4 +943,67 @@ export async function createLaunchSetup(
       ? record.fields[FIELD_SETUP_PAGE]
       : undefined,
   };
+}
+
+// =============================================================================
+// SAVE LAUNCH TEMPLATE
+// =============================================================================
+
+export interface SaveLaunchTemplateParams {
+  productId: string;
+  adAccount?: string;
+  pixel?: string;
+  page?: string;
+  amount?: string;
+  callToAction?: string;
+  targeting?: string;
+}
+
+/**
+ * Save current launch page values as a new template in Campaign Launch Setup.
+ * Standalone write — does not interact with the auto-load/save flow.
+ */
+export async function saveLaunchTemplate(params: SaveLaunchTemplateParams): Promise<void> {
+  // 1. Count existing records for this product to generate name
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+  do {
+    const url = offset
+      ? `${LAUNCH_SETUP_TABLE}?offset=${offset}`
+      : LAUNCH_SETUP_TABLE;
+    const response = await airtableFetch(url);
+    const data: AirtableResponse = await response.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  const productRecords = allRecords.filter((r) => {
+    const productIds = r.fields[FIELD_SETUP_PRODUCT];
+    return Array.isArray(productIds) && productIds.includes(params.productId);
+  });
+
+  const nextCount = productRecords.length + 1;
+
+  // 2. Get product name for the record name
+  const productsMap = await fetchProducts();
+  const productName = productsMap.get(params.productId)?.name ?? 'Unknown';
+
+  // 3. Create record
+  const fields: Record<string, unknown> = {
+    [FIELD_SETUP_PRODUCT]: [params.productId],
+    [FIELD_SETUP_NAME]: `${productName} Default ${nextCount}`,
+    [FIELD_SETUP_COUNT]: nextCount,
+  };
+
+  if (params.adAccount) fields[FIELD_SETUP_AD_ACCOUNT] = params.adAccount;
+  if (params.pixel) fields[FIELD_SETUP_PIXEL] = params.pixel;
+  if (params.page) fields[FIELD_SETUP_PAGE] = params.page;
+  if (params.amount) fields[FIELD_SETUP_AMOUNT] = params.amount;
+  if (params.callToAction) fields[FIELD_SETUP_CTA] = params.callToAction;
+  if (params.targeting) fields[FIELD_SETUP_TARGETING] = params.targeting;
+
+  await airtableFetch(LAUNCH_SETUP_TABLE, {
+    method: 'POST',
+    body: JSON.stringify({ fields }),
+  });
 }

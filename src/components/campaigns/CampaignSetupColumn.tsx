@@ -24,6 +24,7 @@ import { FormField } from '../../core/form';
 import { StatusPill } from '../../ui';
 import { textMd, textSm, textXs, helperText } from '../../theme/typography';
 import { RedtrackCampaignSelector } from './RedtrackCampaignSelector';
+import { RedtrackDuplicateCampaign } from './RedtrackDuplicateCampaign';
 import type { CampaignDraft, InfraOption } from '../../features/campaigns/launch/types';
 import type { RedTrackCampaignDetails, CampaignOption } from '../../features/redtrack';
 
@@ -208,6 +209,13 @@ export function CampaignSetupColumn({
         </FormField>
 
         {/* Redtrack Campaign */}
+        <Box sx={{ position: 'relative' }}>
+          <RedtrackDuplicateCampaign
+            campaigns={redtrackCampaigns}
+            campaignsLoading={redtrackCampaignsLoading}
+            launchCampaignName={draft.name}
+            onDuplicated={(id, name) => onDraftChange({ redtrackCampaignId: id, redtrackCampaignName: name })}
+          />
         <FormField label="Redtrack Campaign" noMargin>
           <RedtrackCampaignSelector
             value={draft.redtrackCampaignId}
@@ -217,6 +225,7 @@ export function CampaignSetupColumn({
             displayName={draft.redtrackCampaignName || redtrackData?.campaign?.title}
           />
         </FormField>
+        </Box>
 
         {/* Pixel & Page on same row */}
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -348,7 +357,18 @@ export function CampaignSetupColumn({
         </Box>
 
         {/* Ad Preset */}
-        <Box>
+        <Box sx={{ position: 'relative' }}>
+          {(() => {
+            const textsHaveLink = [...draft.primaryTexts, ...draft.headlines, ...draft.descriptions].some(t => t.includes('{{link}}'));
+            const presetHadLink = selectedPreset && [...selectedPreset.primaryTexts, ...selectedPreset.headlines, ...selectedPreset.descriptions].some(t => t.includes('{{link}}'));
+            if (textsHaveLink) {
+              return <Chip label="{{link}} not replaced" color="warning" size="small" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />;
+            }
+            if (draft.linkVariable && presetHadLink) {
+              return <Chip label="{{link}} replaced" color="success" size="small" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />;
+            }
+            return null;
+          })()}
           <SectionHeader
             title="Ad Preset"
             expanded={presetExpanded}
@@ -377,17 +397,6 @@ export function CampaignSetupColumn({
               </MenuItem>
             ))}
           </Select>
-          {(() => {
-            const textsHaveLink = [...draft.primaryTexts, ...draft.headlines, ...draft.descriptions].some(t => t.includes('{{link}}'));
-            const presetHadLink = selectedPreset && [...selectedPreset.primaryTexts, ...selectedPreset.headlines, ...selectedPreset.descriptions].some(t => t.includes('{{link}}'));
-            if (textsHaveLink) {
-              return <Chip label="{{link}} not replaced" color="warning" size="small" sx={{ mt: 1 }} />;
-            }
-            if (draft.linkVariable && presetHadLink) {
-              return <Chip label="{{link}} replaced" color="success" size="small" sx={{ mt: 1 }} />;
-            }
-            return null;
-          })()}
 
           <Collapse in={presetExpanded && !!selectedPreset}>
             {selectedPreset && (

@@ -43,6 +43,7 @@ export {
 // Data layer (for direct access if needed)
 export {
   listVideos,
+  listVideosByProduct,
   createVideo,
   createVideoBatch,
   updateVideo,

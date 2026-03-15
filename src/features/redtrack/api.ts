@@ -394,6 +394,110 @@ export async function fetchRedtrackCampaignList(
 }
 
 // =============================================================================
+// CAMPAIGN DUPLICATE
+// =============================================================================
+
+/**
+ * Helper for POST/PUT through the proxy (api_key injected server-side).
+ */
+async function rtApiWrite<T>(
+  endpoint: string,
+  method: 'POST' | 'PUT',
+  body: Record<string, unknown>
+): Promise<T> {
+  const url = new URL(`${REDTRACK_API_URL}${endpoint}`, window.location.origin);
+  const response = await fetch(url.toString(), {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new RedTrackApiException({
+      code: `HTTP_${response.status}`,
+      message: errorText || response.statusText,
+    });
+  }
+  const json = await response.json();
+  return (json.data ?? json) as T;
+}
+
+/**
+ * Duplicate a RedTrack campaign.
+ *
+ * 1. GET source campaign (extract source_id, domain_id, tags, cost_model, lander/offer IDs)
+ * 2. POST /campaigns (create with basic fields + new title)
+ * 3. POST /streams (create stream with lander + offer)
+ * 4. PUT /campaigns/{newId} (link stream to campaign)
+ *
+ * Returns { id, title } of the new campaign.
+ */
+export async function duplicateRedtrackCampaign(
+  apiKey: string,
+  sourceCampaignId: string,
+  newTitle: string
+): Promise<{ id: string; title: string }> {
+  // 1. Fetch source campaign
+  const source = await rtApiFetch<Record<string, unknown>>(
+    apiKey,
+    `/campaigns/${sourceCampaignId}`
+  );
+
+  const sourceId = source.source_id as string;
+  const domainId = source.domain_id as string;
+  const tags = source.tags as string[] | undefined;
+  const costModel = source.cost_model as string;
+  const redirectType = (source.redirect_type as number) ?? 1;
+
+  // Extract lander/offer from first stream
+  const streams = source.streams as Array<{ stream?: { landings?: Array<{ id: string }>; offers?: Array<{ id: string }> } }> | undefined;
+  const firstStream = streams?.[0]?.stream;
+  const landerId = firstStream?.landings?.[0]?.id;
+  const offerId = firstStream?.offers?.[0]?.id;
+
+  // 2. Create campaign
+  const created = await rtApiWrite<{ id: string; title: string }>(
+    '/campaigns',
+    'POST',
+    {
+      title: newTitle,
+      source_id: sourceId,
+      domain_id: domainId,
+      cost_model: costModel,
+      redirect_type: redirectType,
+      ...(tags && { tags }),
+    }
+  );
+
+  const newCampaignId = created.id;
+
+  // 3. Create stream with lander + offer (if source had them)
+  if (landerId || offerId) {
+    const streamBody: Record<string, unknown> = {
+      campaign_id: newCampaignId,
+      weight: 100,
+    };
+    if (landerId) streamBody.landings = [{ id: landerId, weight: 100 }];
+    if (offerId) streamBody.offers = [{ id: offerId, weight: 100 }];
+
+    const stream = await rtApiWrite<{ id: string }>(
+      '/streams',
+      'POST',
+      streamBody
+    );
+
+    // 4. Link stream to campaign
+    await rtApiWrite(
+      `/campaigns/${newCampaignId}`,
+      'PUT',
+      { streams: [{ id: stream.id, weight: 100 }] }
+    );
+  }
+
+  return { id: newCampaignId, title: newTitle };
+}
+
+// =============================================================================
 // LANDER FETCH
 // =============================================================================
 
