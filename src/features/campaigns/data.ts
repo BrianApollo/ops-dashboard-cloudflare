@@ -828,6 +828,8 @@ export interface CampaignLaunchSetup {
   amount: string | undefined;
   pixel: string | undefined;
   page: string | undefined;
+  callToAction: string | undefined;
+  targeting: string | undefined;
 }
 
 /**
@@ -876,6 +878,12 @@ export async function fetchLaunchSetup(productId: string): Promise<CampaignLaunc
     page: typeof fields[FIELD_SETUP_PAGE] === 'string'
       ? fields[FIELD_SETUP_PAGE]
       : undefined,
+    callToAction: typeof fields[FIELD_SETUP_CTA] === 'string'
+      ? fields[FIELD_SETUP_CTA]
+      : undefined,
+    targeting: typeof fields[FIELD_SETUP_TARGETING] === 'string'
+      ? fields[FIELD_SETUP_TARGETING]
+      : undefined,
   };
 }
 
@@ -884,6 +892,8 @@ export interface UpdateLaunchSetupPayload {
   page?: string;
   adAccount?: string;
   amount?: string;
+  callToAction?: string;
+  targeting?: string;
 }
 
 /**
@@ -898,6 +908,8 @@ export async function updateLaunchSetup(
   if (payload.page !== undefined) fields[FIELD_SETUP_PAGE] = payload.page;
   if (payload.adAccount !== undefined) fields[FIELD_SETUP_AD_ACCOUNT] = payload.adAccount;
   if (payload.amount !== undefined) fields[FIELD_SETUP_AMOUNT] = payload.amount;
+  if (payload.callToAction !== undefined) fields[FIELD_SETUP_CTA] = payload.callToAction;
+  if (payload.targeting !== undefined) fields[FIELD_SETUP_TARGETING] = payload.targeting;
 
   await airtableFetch(`${LAUNCH_SETUP_TABLE}/${recordId}`, {
     method: 'PATCH',
@@ -919,6 +931,8 @@ export async function createLaunchSetup(
   if (payload.page) fields[FIELD_SETUP_PAGE] = payload.page;
   if (payload.adAccount) fields[FIELD_SETUP_AD_ACCOUNT] = payload.adAccount;
   if (payload.amount) fields[FIELD_SETUP_AMOUNT] = payload.amount;
+  if (payload.callToAction) fields[FIELD_SETUP_CTA] = payload.callToAction;
+  if (payload.targeting) fields[FIELD_SETUP_TARGETING] = payload.targeting;
 
   const response = await airtableFetch(LAUNCH_SETUP_TABLE, {
     method: 'POST',
@@ -941,6 +955,12 @@ export async function createLaunchSetup(
       : undefined,
     page: typeof record.fields[FIELD_SETUP_PAGE] === 'string'
       ? record.fields[FIELD_SETUP_PAGE]
+      : undefined,
+    callToAction: typeof record.fields[FIELD_SETUP_CTA] === 'string'
+      ? record.fields[FIELD_SETUP_CTA]
+      : undefined,
+    targeting: typeof record.fields[FIELD_SETUP_TARGETING] === 'string'
+      ? record.fields[FIELD_SETUP_TARGETING]
       : undefined,
   };
 }

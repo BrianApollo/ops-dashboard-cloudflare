@@ -406,16 +406,23 @@ export function useCampaignLaunchOrchestrator(
   // ---------------------------------------------------------------------------
   // LAUNCH SETUP DEFAULTS (per-product defaults from Airtable)
   // ---------------------------------------------------------------------------
-  const handleSetupDefaults = useCallback((defaults: { budget?: string; adAccountId?: string; pixelId?: string; pageId?: string }) => {
+  const handleSetupDefaults = useCallback((defaults: { budget?: string; adAccountId?: string; pixelId?: string; pageId?: string; ctaOverride?: string; geo?: string }) => {
     const updates: Partial<CampaignDraft> = {};
     if (defaults.budget && !draft.budget) updates.budget = defaults.budget;
     if (defaults.adAccountId && !draft.adAccountId) updates.adAccountId = defaults.adAccountId;
     if (defaults.pixelId && !draft.pixelId) updates.pixelId = defaults.pixelId;
     if (defaults.pageId && !draft.pageId) updates.pageId = defaults.pageId;
+    
+    // Only override CTA if currently at default 'Learn More'
+    if (defaults.ctaOverride && draft.ctaOverride === 'Learn More') updates.ctaOverride = defaults.ctaOverride;
+    
+    // Only override geo if empty
+    if (defaults.geo && !draft.geo) updates.geo = defaults.geo;
+
     if (Object.keys(updates).length > 0) {
       setDraft((prev) => ({ ...prev, ...updates }));
     }
-  }, [draft.budget, draft.adAccountId, draft.pixelId, draft.pageId, setDraft]);
+  }, [draft.budget, draft.adAccountId, draft.pixelId, draft.pageId, draft.ctaOverride, draft.geo, setDraft]);
 
   useLaunchSetupDefaults({
     productId,
