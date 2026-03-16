@@ -174,7 +174,7 @@ export function useFbLaunchRunner(): UseFbLaunchRunnerReturn {
   // RETURN
   // ---------------------------------------------------------------------------
   return {
-    isLaunching,
+    isLaunching: isLaunching || (state?.isRunning ?? false),
     state,
     phase: state?.phase ?? null,
     stats: state?.stats ?? null,

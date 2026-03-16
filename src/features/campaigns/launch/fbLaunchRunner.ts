@@ -685,6 +685,8 @@ export function createController(
    */
   async function retrySingleItem(item: FbLaunchMediaState): Promise<void> {
     state.isStopped = false;
+    state.isRunning = true;
+    emitProgress();
 
     // Step 1: Upload if needed (video without fbVideoId)
     if (item.state === 'queued' && item.type === 'video') {
@@ -802,6 +804,7 @@ export function createController(
     if (stats.done + stats.failed === stats.total) {
       state.phase = 'complete';
     }
+    state.isRunning = false;
     emitProgress();
   }
 
