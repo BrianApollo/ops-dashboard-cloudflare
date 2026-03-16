@@ -211,28 +211,37 @@ export async function createAdSet(
   const beneficiary = adSet.beneficiaryName || 'Online Marketing';
   const payor = adSet.payerName || beneficiary;
 
+  const countries = adSet.targeting.geoLocations.countries;
+
+  const params: Record<string, string> = {
+    access_token: accessToken,
+    name: adSet.name,
+    campaign_id: campaignId,
+    optimization_goal: adSet.optimizationGoal,
+    billing_event: adSet.billingEvent,
+    status: adSet.status,
+    targeting: JSON.stringify({
+      geo_locations: { countries },
+      age_min: adSet.targeting.ageMin,
+      age_max: adSet.targeting.ageMax,
+    }),
+    promoted_object: JSON.stringify({
+      pixel_id: pixelId,
+      custom_event_type: adSet.promotedObject.customEventType,
+    }),
+    start_time: String(startTime),
+    dsa_beneficiary: beneficiary,
+    dsa_payor: payor,
+  };
+
+  // Singapore requires regional_regulated_categories
+  if (countries.includes('SG')) {
+    params.regional_regulated_categories = JSON.stringify(['SINGAPORE_UNIVERSAL']);
+  }
+
   return request<FbAdSetResponse>(`${BASE_URL}/${adAccountId}/adsets`, {
     method: 'POST',
-    body: new URLSearchParams({
-      access_token: accessToken,
-      name: adSet.name,
-      campaign_id: campaignId,
-      optimization_goal: adSet.optimizationGoal,
-      billing_event: adSet.billingEvent,
-      status: adSet.status,
-      targeting: JSON.stringify({
-        geo_locations: { countries: adSet.targeting.geoLocations.countries },
-        age_min: adSet.targeting.ageMin,
-        age_max: adSet.targeting.ageMax,
-      }),
-      promoted_object: JSON.stringify({
-        pixel_id: pixelId,
-        custom_event_type: adSet.promotedObject.customEventType,
-      }),
-      start_time: String(startTime),
-      dsa_beneficiary: beneficiary,
-      dsa_payor: payor,
-    }),
+    body: new URLSearchParams(params),
   });
 }
 
