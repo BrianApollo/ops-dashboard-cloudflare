@@ -216,15 +216,15 @@ export function CampaignSetupColumn({
             launchCampaignName={draft.name}
             onDuplicated={(id, name) => onDraftChange({ redtrackCampaignId: id, redtrackCampaignName: name })}
           />
-        <FormField label="Redtrack Campaign" noMargin>
-          <RedtrackCampaignSelector
-            value={draft.redtrackCampaignId}
-            campaigns={redtrackCampaigns}
-            campaignsLoading={redtrackCampaignsLoading}
-            onSelect={(id, name) => onDraftChange({ redtrackCampaignId: id, redtrackCampaignName: name })}
-            displayName={draft.redtrackCampaignName || redtrackData?.campaign?.title}
-          />
-        </FormField>
+          <FormField label="Redtrack Campaign" noMargin>
+            <RedtrackCampaignSelector
+              value={draft.redtrackCampaignId}
+              campaigns={redtrackCampaigns}
+              campaignsLoading={redtrackCampaignsLoading}
+              onSelect={(id, name) => onDraftChange({ redtrackCampaignId: id, redtrackCampaignName: name })}
+              displayName={draft.redtrackCampaignName || redtrackData?.campaign?.title}
+            />
+          </FormField>
         </Box>
 
         {/* Pixel & Page on same row */}
@@ -337,6 +337,7 @@ export function CampaignSetupColumn({
               <MenuItem value="US">US</MenuItem>
               <MenuItem value="US,CA">US + Canada</MenuItem>
               <MenuItem value="US,CA,GB,IE,AU,NZ">US, CA, UK, IE, AU, NZ</MenuItem>
+              <MenuItem value="US,CA,GB,IE,DE,FR,NL,BE,CH,AT,SE,NO,DK,FI,ES,IT,PT,PL,AU,NZ,JP,SG,KR">US, CA, GB, IE, DE, FR, NL, BE, CH, AT, SE, NO, DK, FI, ES, IT, PT, PL, AU, NZ, JP, SG, KR</MenuItem>
             </Select>
           </FormField>
 

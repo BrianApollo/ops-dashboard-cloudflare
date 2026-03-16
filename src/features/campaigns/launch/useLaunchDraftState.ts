@@ -54,6 +54,15 @@ export interface UseLaunchDraftStateReturn {
   draftInitializedRef: React.MutableRefObject<boolean>;
 }
 
+function getTomorrowDateStr(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const day = String(tomorrow.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const INITIAL_DRAFT: CampaignDraft = {
   name: '',
   redtrackCampaignId: '',
@@ -62,8 +71,8 @@ const INITIAL_DRAFT: CampaignDraft = {
   adAccountId: null,
   pageId: null,
   pixelId: null,
-  startDate: '',
-  startTime: '',
+  startDate: getTomorrowDateStr(),
+  startTime: '00:00',
   budget: '',
   geo: '',
   ctaOverride: 'Learn More',
@@ -107,8 +116,8 @@ export function useLaunchDraftState({
       adAccountId: campaign.adAccUsed ?? null,
       pageId: campaign.pageUsed ?? null,
       pixelId: campaign.pixelUsed ?? null,
-      startDate: campaign.launchDate ?? '',
-      startTime: campaign.launchTime ?? '',
+      startDate: campaign.launchDate || getTomorrowDateStr(),
+      startTime: campaign.launchTime || '00:00',
       budget: campaign.budget?.toString() ?? '',
       geo: campaign.locationTargeting ?? '',
       ctaOverride: campaign.cta ?? 'Learn More',

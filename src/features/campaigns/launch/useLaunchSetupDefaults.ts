@@ -29,7 +29,7 @@ export interface UseLaunchSetupDefaultsOptions {
   adAccounts: InfraOption[];
   pixels: InfraOption[];
   pages: InfraOption[];
-  onApply: (defaults: { budget?: string; adAccountId?: string; pixelId?: string; pageId?: string }) => void;
+  onApply: (defaults: { budget?: string; adAccountId?: string; pixelId?: string; pageId?: string; ctaOverride?: string; geo?: string }) => void;
 }
 
 export interface UseLaunchSetupDefaultsReturn {
@@ -74,12 +74,20 @@ export function useLaunchSetupDefaults({
   useEffect(() => {
     if (!setup || appliedAccountRef.current) return;
 
-    const defaults: { budget?: string; adAccountId?: string } = {};
+    const defaults: { budget?: string; adAccountId?: string; ctaOverride?: string; geo?: string; } = {};
     let hasDefaults = false;
 
-    // Apply amount (always available, no matching needed)
+    // Apply amount, cta, and targeting (always available, no matching needed)
     if (setup.amount) {
       defaults.budget = setup.amount;
+      hasDefaults = true;
+    }
+    if (setup.callToAction) {
+      defaults.ctaOverride = setup.callToAction;
+      hasDefaults = true;
+    }
+    if (setup.targeting) {
+      defaults.geo = setup.targeting;
       hasDefaults = true;
     }
 
