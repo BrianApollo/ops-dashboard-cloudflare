@@ -26,7 +26,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useQuery } from '@tanstack/react-query';
 import { EmptyState } from '../../core/state';
-import { StatusPill } from '../../ui';
+import { StatusPill, hiddenInputStyle } from '../../ui';
 import { usePresetController } from '../../features/products/usePresetController';
 import { fetchLaunchSetup, updateLaunchSetup, createLaunchSetup } from '../../features/campaigns';
 import type { AdPresetUpdatePayload, AdPreset } from '../../features/ad-presets';
@@ -246,7 +246,7 @@ export function SetupTab({
           ref={inputRef}
           type="file"
           accept="image/*"
-          style={{ display: 'none' }}
+          style={hiddenInputStyle}
           onChange={(e) => handleFileChange(assetType, e)}
         />
       </Box>

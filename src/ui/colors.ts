@@ -6,7 +6,6 @@
  * Also includes pill style helpers (merged from pills.ts).
  */
 
-import type { CSSProperties } from 'react';
 import type { SxProps, Theme } from '@mui/material';
 
 // Re-export all constants for backward compatibility
@@ -100,16 +99,17 @@ export interface PillStyle {
 // =============================================================================
 
 /**
- * Base CSS properties for all pills (React inline styles).
+ * Base MUI sx props for all pills (Box component="span").
  */
-export const basePillStyle: CSSProperties = {
+export const basePillSx: SxProps<Theme> = {
   display: 'inline-block',
   fontFamily: '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   fontSize: 10,
   fontWeight: 500,
   letterSpacing: '0.01em',
-  padding: '4px 8px',
-  borderRadius: 5,
+  px: 1,
+  py: 0.5,
+  borderRadius: '5px',
   lineHeight: 1,
 };
 

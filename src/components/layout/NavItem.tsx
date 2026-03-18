@@ -8,6 +8,9 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import { alpha, useTheme } from '@mui/material/styles';
+import type { CSSProperties } from 'react';
+
+const navLinkStyle: CSSProperties = { textDecoration: 'none' };
 
 export interface NavItemProps {
   to: string;
@@ -72,7 +75,7 @@ export function NavItem({ to, label, icon: Icon, active, collapsed }: NavItemPro
   );
 
   return (
-    <NavLink to={to} style={{ textDecoration: 'none' }}>
+    <NavLink to={to} style={navLinkStyle}>
       {collapsed ? (
         <Tooltip title={label} placement="right" arrow>
           {content}

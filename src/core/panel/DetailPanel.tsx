@@ -5,6 +5,7 @@
  */
 
 import { ReactNode } from 'react';
+import Box from '@mui/material/Box';
 import { SlideInPanel } from './SlideInPanel';
 import { SlideInPanelBody } from './SlideInPanelBody';
 
@@ -37,9 +38,9 @@ interface DetailPanelBodyProps {
 export function DetailPanelBody({ children, hasActions = false }: DetailPanelBodyProps) {
   return (
     <SlideInPanelBody noPadding>
-      <div style={{ padding: '20px', paddingBottom: hasActions ? 100 : 20 }}>
+      <Box sx={{ p: 2.5, pb: hasActions ? 12.5 : 2.5 }}>
         {children}
-      </div>
+      </Box>
     </SlideInPanelBody>
   );
 }

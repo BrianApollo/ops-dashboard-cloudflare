@@ -3,6 +3,9 @@ export { VideoDetailPanel } from '../../components/videos/VideoDetailPanel';
 export { ScriptProductionGrid, buildGridCards, SLOT_DEFINITIONS } from '../../components/videos/ScriptProductionGrid';
 export type { GridCard, SlotState, SlotKey } from '../../components/videos/ScriptProductionGrid';
 
+// AI Videos
+export { CreateAIVideoDialog } from '../../components/videos/CreateAIVideoDialog';
+
 // Reusable UI components
 export { VideoNameCell, VideoTable, defaultVideoColumns, getColumnsWithoutProduct, getColumnsWithoutEditor } from '../../components/videos';
 export type { VideoTableColumn, VideoTableProps } from '../../components/videos';

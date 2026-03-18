@@ -17,7 +17,7 @@ export {
   type StatusColorSet,
   type ProductColorSet,
   type EditorColorSet,
-  basePillStyle,
+  basePillSx,
   baseChipSx,
   getStatusPillStyle,
   getStatusChipSx,
@@ -27,6 +27,9 @@ export {
   getEditorChipSx,
   type PillStyle,
 } from './colors';
+
+// Shared style constants
+export { hiddenInputStyle, nativeDateInputStyle, nativeTimeInputStyle } from './styles';
 
 // Components
 export { StatusPill } from './StatusPill';

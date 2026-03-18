@@ -4,6 +4,7 @@
  */
 
 import { useState } from 'react';
+import { nativeDateInputStyle, nativeTimeInputStyle } from '../../ui';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -279,32 +280,13 @@ export function CampaignSetupColumn({
                 type="date"
                 value={draft.startDate}
                 onChange={(e) => onDraftChange({ startDate: e.target.value })}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  border: 'none',
-                  outline: 'none',
-                  padding: '8px 12px',
-                  fontSize: '0.75rem',
-                  fontFamily: 'inherit',
-                  background: 'transparent',
-                  color: 'inherit',
-                }}
+                style={nativeDateInputStyle}
               />
               <input
                 type="time"
                 value={draft.startTime || '00:00'}
                 onChange={(e) => onDraftChange({ startTime: e.target.value })}
-                style={{
-                  width: '90px',
-                  border: 'none',
-                  outline: 'none',
-                  padding: '8px 12px',
-                  fontSize: '0.75rem',
-                  fontFamily: 'inherit',
-                  background: 'transparent',
-                  color: 'inherit',
-                }}
+                style={nativeTimeInputStyle}
               />
             </Box>
           </FormField>
