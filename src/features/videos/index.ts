@@ -52,6 +52,7 @@ export {
   updateVideo,
   updateVideoStatus,
   updateVideoUsage,
+  appendCampaignToVideos,
   deleteVideo,
   deleteVideos,
   getEditors,
