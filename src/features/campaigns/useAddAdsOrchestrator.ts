@@ -10,16 +10,19 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useVideosController, updateVideoUsage } from '../videos';
+import { useVideosController, updateVideoUsage, appendCampaignToVideos } from '../videos';
 import { useImagesController } from '../images';
 import { getFbCreative, addImageIdsToCampaign } from '.';
 import { usePrelaunchUploaderEffect } from './launch/usePrelaunchUploaderEffect';
 import { useLaunchMediaState } from './launch/useLaunchMediaState';
 import { mapTemplateCreative } from './launch/mapTemplateCreative';
 import { createAdsBatch } from './launch/fbLaunchApi';
+import { listAIVideosByProduct, updateAIVideoUsage, appendCampaignToAIVideos } from '../ai-videos/data';
+import type { AIVideo } from '../ai-videos/data';
 import type { FbCreative } from '.';
 import type { SelectableVideo, SelectableImage } from './launch/types';
 import type { MediaItemForAd, FbBatchResponseItem } from './launch/fbLaunchApi';
+import type { FilterOption } from '../../core/list';
 
 // =============================================================================
 // TYPES
@@ -30,6 +33,7 @@ export interface UseAddAdsOrchestratorOptions {
   templateCreativeId: string;
   campaignId: string;
   productId: string | undefined;
+  productName: string | undefined;
   adAccountId: string;
   accessToken: string;
 }
@@ -50,6 +54,7 @@ export interface CreationResult {
 export interface UseAddAdsOrchestratorReturn {
   // Media lists
   availableVideos: SelectableVideo[];
+  usedVideos: SelectableVideo[];
   availableImages: SelectableImage[];
 
   // Selection
@@ -82,6 +87,10 @@ export interface UseAddAdsOrchestratorReturn {
   isCreating: boolean;
   creationProgress: CreationProgress | null;
   creationResult: CreationResult | null;
+
+  // AI Video creation support
+  editorOptions: FilterOption[];
+  refetchVideos: () => Promise<void>;
 }
 
 // =============================================================================
@@ -109,6 +118,7 @@ export function useAddAdsOrchestrator({
   templateCreativeId,
   campaignId,
   productId,
+  productName,
   adAccountId,
   accessToken,
 }: UseAddAdsOrchestratorOptions): UseAddAdsOrchestratorReturn {
@@ -148,24 +158,45 @@ export function useAddAdsOrchestrator({
   const imagesController = useImagesController();
 
   // ---------------------------------------------------------------------------
+  // AI VIDEOS (fetched from separate "AI Videos" table)
+  // ---------------------------------------------------------------------------
+  const [aiVideos, setAiVideos] = useState<AIVideo[]>([]);
+  const aiVideosFetchRef = useRef(0);
+
+  const fetchAIVideos = useCallback(async () => {
+    if (!productName) return;
+    const fetchId = ++aiVideosFetchRef.current;
+    const result = await listAIVideosByProduct(productName);
+    if (fetchId === aiVideosFetchRef.current) setAiVideos(result);
+  }, [productName]);
+
+  useEffect(() => { fetchAIVideos(); }, [fetchAIVideos]);
+
+  // ---------------------------------------------------------------------------
   // PRELAUNCH UPLOADER (uses base videos for library check / upload)
   // ---------------------------------------------------------------------------
 
   // Compute baseVideos independently (same logic as useLaunchMediaState)
   // so we can pass them to the uploader before calling useLaunchMediaState
   // for the merged display state.
+  // Includes AI videos that are not "Used" so the uploader can check/upload them.
   const baseVideos = useMemo(() => {
     if (!productId) return [];
-    return videosController.list.allRecords
+    const regular = videosController.list.allRecords
       .filter(
         (v) =>
           v.product.id === productId &&
-          ['available', 'review'].includes(v.status) &&
+          ['available', 'review', 'used'].includes(v.status) &&
           v.format !== 'youtube',
       )
-      .map((v) => ({ id: v.id, name: v.name, creativeLink: v.creativeLink }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [videosController.list.allRecords, productId]);
+      .map((v) => ({ id: v.id, name: v.name, creativeLink: v.creativeLink }));
+
+    const ai = aiVideos
+      .filter((v) => v.status !== 'Used')
+      .map((v) => ({ id: v.id, name: v.name, creativeLink: v.creativeLink }));
+
+    return [...regular, ...ai].sort((a, b) => a.name.localeCompare(b.name));
+  }, [videosController.list.allRecords, productId, aiVideos]);
 
   const uploader = usePrelaunchUploaderEffect({
     accessToken,
@@ -174,12 +205,68 @@ export function useAddAdsOrchestrator({
   });
 
   // Re-derive media state with the real uploader
-  const { availableVideos, availableImages } = useLaunchMediaState({
+  const { availableVideos: regularAvailableVideos, availableImages } = useLaunchMediaState({
     productId,
     videosController,
     imagesController,
     prelaunchUploader: uploader,
   });
+
+  // Merge AI videos (not used) into the available videos list
+  const availableVideos = useMemo((): SelectableVideo[] => {
+    const aiSelectableVideos: SelectableVideo[] = aiVideos
+      .filter((v) => v.status !== 'Used')
+      .map((v) => {
+        const libraryEntry = uploader.libraryMap.get(v.name);
+        const uploadState = uploader.uploadStates.get(v.name);
+        return {
+          id: v.id,
+          name: v.name,
+          status: v.status,
+          format: 'ai-video',
+          creativeLink: v.creativeLink,
+          productId: v.productId,
+          inLibrary: !!libraryEntry,
+          fbVideoId: libraryEntry?.fbVideoId || uploadState?.fbVideoId,
+          fbThumbnailUrl: libraryEntry?.thumbnailUrl || uploadState?.thumbnailUrl,
+          uploadStatus: uploadState?.status,
+          uploadError: uploadState?.error,
+        };
+      });
+
+    return [...regularAvailableVideos, ...aiSelectableVideos]
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [regularAvailableVideos, aiVideos, uploader.libraryMap, uploader.uploadStates]);
+
+  // Derive used videos (status === 'used') with same merge logic
+  const usedVideos = useMemo((): SelectableVideo[] => {
+    if (!productId) return [];
+    return videosController.list.allRecords
+      .filter(
+        (v) =>
+          v.product.id === productId &&
+          v.status === 'used' &&
+          v.format.toLowerCase() !== 'youtube',
+      )
+      .map((v) => {
+        const libraryEntry = uploader.libraryMap.get(v.name);
+        const uploadState = uploader.uploadStates.get(v.name);
+        return {
+          id: v.id,
+          name: v.name,
+          status: v.status,
+          format: v.format,
+          creativeLink: v.creativeLink,
+          productId: v.product.id,
+          inLibrary: !!libraryEntry,
+          fbVideoId: libraryEntry?.fbVideoId || uploadState?.fbVideoId,
+          fbThumbnailUrl: libraryEntry?.thumbnailUrl || uploadState?.thumbnailUrl,
+          uploadStatus: uploadState?.status,
+          uploadError: uploadState?.error,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [videosController.list.allRecords, productId, uploader.libraryMap, uploader.uploadStates]);
 
   // ---------------------------------------------------------------------------
   // SELECTION
@@ -208,7 +295,7 @@ export function useAddAdsOrchestrator({
   // ---------------------------------------------------------------------------
   // READINESS
   // ---------------------------------------------------------------------------
-  const selectedVideos = availableVideos.filter((v) => selectedVideoIds.has(v.id));
+  const selectedVideos = [...availableVideos, ...usedVideos].filter((v) => selectedVideoIds.has(v.id));
   const selectedImages = availableImages.filter((i) => selectedImageIds.has(i.id));
   const totalSelectedCount = selectedVideos.length + selectedImages.length;
 
@@ -391,14 +478,50 @@ export function useAddAdsOrchestrator({
 
       // 6. Update usage in Airtable (fire-and-forget)
       if (result.succeededMediaNames.length > 0) {
-        // Update Videos
-        const succeededVideos = selectedVideos
-          .filter(v => result.succeededMediaNames.includes(v.name))
+        const succeededVideoRecords = selectedVideos
+          .filter(v => result.succeededMediaNames.includes(v.name));
+
+        // Split into regular videos vs AI videos
+        const regularVideos = succeededVideoRecords.filter(v => v.format !== 'ai-video');
+        const aiVideoRecords = succeededVideoRecords.filter(v => v.format === 'ai-video');
+
+        // Regular videos: newly-used vs already-used
+        const newlyUsedIds = regularVideos
+          .filter(v => v.status !== 'used')
+          .map(v => v.id);
+        const alreadyUsedIds = regularVideos
+          .filter(v => v.status === 'used')
           .map(v => v.id);
 
-        if (succeededVideos.length > 0) {
-          updateVideoUsage(succeededVideos, campaignId).catch((err: unknown) => {
+        if (newlyUsedIds.length > 0) {
+          updateVideoUsage(newlyUsedIds, campaignId).catch((err: unknown) => {
             console.error('Failed to update video usage:', err);
+          });
+        }
+
+        if (alreadyUsedIds.length > 0) {
+          appendCampaignToVideos(alreadyUsedIds, campaignId).catch((err: unknown) => {
+            console.error('Failed to append campaign to used videos:', err);
+          });
+        }
+
+        // AI videos: newly-used vs already-used
+        const newlyUsedAIIds = aiVideoRecords
+          .filter(v => v.status !== 'Used')
+          .map(v => v.id);
+        const alreadyUsedAIIds = aiVideoRecords
+          .filter(v => v.status === 'Used')
+          .map(v => v.id);
+
+        if (newlyUsedAIIds.length > 0) {
+          updateAIVideoUsage(newlyUsedAIIds, campaignId).catch((err: unknown) => {
+            console.error('Failed to update AI video usage:', err);
+          });
+        }
+
+        if (alreadyUsedAIIds.length > 0) {
+          appendCampaignToAIVideos(alreadyUsedAIIds, campaignId).catch((err: unknown) => {
+            console.error('Failed to append campaign to used AI videos:', err);
           });
         }
 
@@ -442,6 +565,7 @@ export function useAddAdsOrchestrator({
   // ---------------------------------------------------------------------------
   return {
     availableVideos,
+    usedVideos,
     availableImages,
     selectedVideoIds,
     selectedImageIds,
@@ -462,6 +586,10 @@ export function useAddAdsOrchestrator({
     isCreating,
     creationProgress,
     creationResult,
+    editorOptions: videosController.editorOptions.filter(
+      (o): o is { value: string; label: string } => o.value !== null,
+    ),
+    refetchVideos: async () => { await videosController.list.refetch(); await fetchAIVideos(); },
   };
 }
 

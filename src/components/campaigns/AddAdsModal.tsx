@@ -28,7 +28,9 @@ import Tooltip from '@mui/material/Tooltip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SearchIcon from '@mui/icons-material/Search';
+import AddIcon from '@mui/icons-material/Add';
 import { useAddAdsOrchestrator } from '../../features/campaigns/useAddAdsOrchestrator';
+import { CreateAIVideoDialog } from '../videos/CreateAIVideoDialog';
 import type { Campaign } from '../../features/campaigns';
 import type { SelectableVideo, SelectableImage } from '../../features/campaigns/launch/types';
 
@@ -111,11 +113,14 @@ export function AddAdsModal({
     templateCreativeId,
     campaignId: campaignRecord.id,
     productId,
+    productName: campaignRecord.product?.name,
     adAccountId,
     accessToken,
   });
 
   const [mediaTab, setMediaTab] = useState<'videos' | 'images'>('videos');
+  const [showUsedVideos, setShowUsedVideos] = useState(false);
+  const [createAIVideoOpen, setCreateAIVideoOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // LOADING / ERROR STATES
@@ -193,7 +198,7 @@ export function AddAdsModal({
             size="small"
           >
             <ToggleButton value="videos">
-              Videos ({flow.availableVideos.length})
+              Videos ({showUsedVideos ? flow.usedVideos.length : flow.availableVideos.length})
             </ToggleButton>
             <ToggleButton value="images">
               Images ({flow.availableImages.length})
@@ -204,12 +209,29 @@ export function AddAdsModal({
             <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
               <Button
                 size="small"
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setCreateAIVideoOpen(true)}
+                disabled={!productId}
+                sx={{ textTransform: 'none' }}
+              >
+                Create AI Video
+              </Button>
+              <Button
+                size="small"
                 variant="outlined"
                 startIcon={<SearchIcon />}
                 onClick={() => flow.uploader.checkLibrary()}
                 disabled={flow.uploader.isChecking || flow.availableVideos.length === 0}
               >
                 {flow.uploader.isChecking ? 'Checking…' : 'Check Library'}
+              </Button>
+              <Button
+                size="small"
+                variant={showUsedVideos ? 'contained' : 'outlined'}
+                onClick={() => setShowUsedVideos((prev) => !prev)}
+              >
+                Used Videos
               </Button>
               <Button
                 size="small"
@@ -227,24 +249,30 @@ export function AddAdsModal({
         {flow.uploader.error && <Alert severity="error" sx={{ py: 0.5 }}>{flow.uploader.error}</Alert>}
 
         {/* Video list */}
-        {mediaTab === 'videos' && (
-          <Box sx={{ maxHeight: 350, overflow: 'auto', border: '1px solid', borderColor: 'grey.200', borderRadius: 1 }}>
-            {flow.availableVideos.length === 0 ? (
-              <Typography color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                No videos available for this product.
-              </Typography>
-            ) : (
-              flow.availableVideos.map((video) => (
-                <VideoRow
-                  key={video.id}
-                  video={video}
-                  selected={flow.selectedVideoIds.has(video.id)}
-                  onToggle={() => flow.toggleVideo(video.id)}
-                />
-              ))
-            )}
-          </Box>
-        )}
+        {mediaTab === 'videos' && (() => {
+          const displayVideos = showUsedVideos ? flow.usedVideos : flow.availableVideos;
+          const emptyMessage = showUsedVideos
+            ? 'No used videos for this product.'
+            : 'No videos available for this product.';
+          return (
+            <Box sx={{ maxHeight: 350, overflow: 'auto', border: '1px solid', borderColor: 'grey.200', borderRadius: 1 }}>
+              {displayVideos.length === 0 ? (
+                <Typography color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+                  {emptyMessage}
+                </Typography>
+              ) : (
+                displayVideos.map((video) => (
+                  <VideoRow
+                    key={video.id}
+                    video={video}
+                    selected={flow.selectedVideoIds.has(video.id)}
+                    onToggle={() => flow.toggleVideo(video.id)}
+                  />
+                ))
+              )}
+            </Box>
+          );
+        })()}
 
         {/* Image list */}
         {mediaTab === 'images' && (
@@ -359,6 +387,18 @@ export function AddAdsModal({
           </>
         )}
       </DialogActions>
+
+      {/* Create AI Video Dialog */}
+      <CreateAIVideoDialog
+        open={createAIVideoOpen}
+        onClose={async () => {
+          setCreateAIVideoOpen(false);
+          await flow.refetchVideos();
+        }}
+        editorOptions={flow.editorOptions}
+        productId={productId ?? ''}
+        productName={campaignRecord.product?.name ?? ''}
+      />
     </Dialog>
   );
 }
