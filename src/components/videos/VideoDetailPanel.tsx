@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useRef, useState, useEffect } from 'react';
+import { hiddenInputStyle } from '../../ui';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -275,7 +276,7 @@ export function VideoDetailPanel({
         type="file"
         accept="video/*"
         onChange={handleFileChange}
-        style={{ display: 'none' }}
+        style={hiddenInputStyle}
       />
 
       <DetailPanel open={open} onClose={onClose} width={520}>

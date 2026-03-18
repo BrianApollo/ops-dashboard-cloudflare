@@ -5,15 +5,17 @@
 
 import { ReactNode } from 'react';
 import Box from '@mui/material/Box';
-import { basePillStyle, NEUTRAL_PILL } from '../../ui';
+import type { SxProps, Theme } from '@mui/material/styles';
+import { basePillSx, NEUTRAL_PILL } from '../../ui';
 
 // Larger pill style for sidebar (matches Video Editor Portal)
-const largePillStyle: React.CSSProperties = {
-  ...basePillStyle,
+const largePillSx: SxProps<Theme> = {
+  ...basePillSx as object,
   fontSize: 11,
   fontWeight: 500,
-  padding: '5px 10px',
-  borderRadius: 6,
+  px: 1.25,
+  py: '5px',
+  borderRadius: '6px',
 };
 
 export interface PillConfig {
@@ -32,11 +34,12 @@ export function DetailPills({ pills }: DetailPillsProps) {
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
       {pills.map((pill, index) => (
-        <span
+        <Box
           key={index}
-          style={{
-            ...largePillStyle,
-            backgroundColor: pill.backgroundColor || NEUTRAL_PILL.bg,
+          component="span"
+          sx={{
+            ...largePillSx as object,
+            bgcolor: pill.backgroundColor || NEUTRAL_PILL.bg,
             color: pill.color || NEUTRAL_PILL.text,
           }}
         >
@@ -55,7 +58,7 @@ export function DetailPills({ pills }: DetailPillsProps) {
             />
           )}
           {pill.label}
-        </span>
+        </Box>
       ))}
     </Box>
   );
@@ -72,14 +75,15 @@ interface DetailPillProps {
 
 export function DetailPill({ children, backgroundColor, color }: DetailPillProps) {
   return (
-    <span
-      style={{
-        ...largePillStyle,
-        backgroundColor: backgroundColor || NEUTRAL_PILL.bg,
+    <Box
+      component="span"
+      sx={{
+        ...largePillSx as object,
+        bgcolor: backgroundColor || NEUTRAL_PILL.bg,
         color: color || NEUTRAL_PILL.text,
       }}
     >
       {children}
-    </span>
+    </Box>
   );
 }

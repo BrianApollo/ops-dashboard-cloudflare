@@ -28,6 +28,9 @@
  */
 
 import { useMemo, useState, useCallback } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import CircularProgress from '@mui/material/CircularProgress';
 import type { VideoAsset, VideoFormat, VideoStatus } from '../../features/videos/types';
 import type { UploadProgress } from '../../features/videos/drive';
 import { STATUS_LABELS } from '../../features/videos/status';
@@ -35,10 +38,39 @@ import {
   getStatusPillStyle,
   getEditorPillStyle,
   getProductPillStyle,
-  basePillStyle,
+  basePillSx,
   NEUTRAL_PILL,
   type StatusKey,
 } from '../../ui';
+import {
+  gridEmptyStateSx,
+  gridContainerSx,
+  gridPaginationSx,
+  gridPaginationInfoSx,
+  gridPaginationButtonsSx,
+  getGridPaginationButtonSx,
+  gridPaginationCounterSx,
+  gridCardSx,
+  gridCardHeaderSx,
+  gridCardTitleSx,
+  gridPillContainerSx,
+  gridProductPillSx,
+  gridProductDotSx,
+  gridEditorPillSx,
+  gridSlotAreaSx,
+  gridSlotRowSx,
+  gridSlotRowWithMarginSx,
+  gridColHeaderSx,
+  getSlotTileSx,
+  slotRowLabelSx,
+  slotProgressContainerSx,
+  slotProgressBarBgSx,
+  getSlotProgressBarFillSx,
+  slotProgressTextContainerSx,
+  slotProgressTextSx,
+  slotErrorContainerSx,
+  slotErrorMessageSx,
+} from './styles';
 
 // =============================================================================
 // GRID DATA MODEL
@@ -230,8 +262,6 @@ export function ScriptProductionGrid({
 }: ScriptProductionGridProps) {
   // Build ALL cards from ALL videos
   const allCards = useMemo(() => buildGridCards(videos), [videos]);
-  console.log(videos.filter(video => video.name === 'GhostWing - Script 1058 - Nick - Square - Waqar'))
-
 
   // Card pagination state
   const [cardPageIndex, setCardPageIndex] = useState(0);
@@ -345,28 +375,18 @@ export function ScriptProductionGrid({
     [onUpload]
   );
 
-  // System font stack (matches MUI theme)
-  const fontFamily = '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-
   if (paginatedCards.length === 0) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13, fontFamily }}>
+      <Box sx={gridEmptyStateSx}>
         No scripts to display.
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div style={{ fontFamily }}>
+    <Box>
       {/* Card Grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-          gap: 16,
-          padding: 16,
-        }}
-      >
+      <Box sx={gridContainerSx}>
         {paginatedCards.map((card) => (
           <GridCardComponent
             key={`${card.scriptId}::${card.editorId}`}
@@ -380,60 +400,38 @@ export function ScriptProductionGrid({
             activeStatus={activeStatus}
           />
         ))}
-      </div>
+      </Box>
 
       {/* Pagination Footer */}
       {totalPages > 1 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderTop: '1px solid #e5e7eb',
-          }}
-        >
-          <span style={{ fontSize: 13, color: '#6b7280' }}>
+        <Box sx={gridPaginationSx}>
+          <Box component="span" sx={gridPaginationInfoSx}>
             Showing {paginatedCards.length} of {totalCards} scripts
-          </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
+          </Box>
+          <Box sx={gridPaginationButtonsSx}>
+            <Box
+              component="button"
               onClick={() => setCardPageIndex((p) => Math.max(0, p - 1))}
               disabled={cardPageIndex === 0}
-              style={{
-                padding: '6px 12px',
-                fontSize: 13,
-                border: '1px solid #e5e7eb',
-                borderRadius: 6,
-                backgroundColor: cardPageIndex === 0 ? '#f1f3f6' : '#ffffff',
-                color: cardPageIndex === 0 ? '#9ca3af' : '#374151',
-                cursor: cardPageIndex === 0 ? 'not-allowed' : 'pointer',
-              }}
+              sx={getGridPaginationButtonSx(cardPageIndex === 0)}
             >
               Previous
-            </button>
-            <span style={{ padding: '6px 12px', fontSize: 13, color: '#6b7280' }}>
+            </Box>
+            <Box component="span" sx={gridPaginationCounterSx}>
               {cardPageIndex + 1} / {totalPages}
-            </span>
-            <button
+            </Box>
+            <Box
+              component="button"
               onClick={() => setCardPageIndex((p) => Math.min(totalPages - 1, p + 1))}
               disabled={cardPageIndex >= totalPages - 1}
-              style={{
-                padding: '6px 12px',
-                fontSize: 13,
-                border: '1px solid #e5e7eb',
-                borderRadius: 6,
-                backgroundColor: cardPageIndex >= totalPages - 1 ? '#f1f3f6' : '#ffffff',
-                color: cardPageIndex >= totalPages - 1 ? '#9ca3af' : '#374151',
-                cursor: cardPageIndex >= totalPages - 1 ? 'not-allowed' : 'pointer',
-              }}
+              sx={getGridPaginationButtonSx(cardPageIndex >= totalPages - 1)}
             >
               Next
-            </button>
-          </div>
-        </div>
+            </Box>
+          </Box>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -469,82 +467,58 @@ function GridCardComponent({
   const editorPillStyle = getEditorPillStyle(card.editorId);
 
   return (
-    <div
-      style={{
-        backgroundColor: '#ffffff',
-        borderRadius: 12,
-        border: '1px solid #e5e7eb',
-        overflow: 'hidden',
-      }}
-    >
+    <Box sx={gridCardSx}>
       {/* Header: Title left, Pills right */}
-      <div
-        style={{
-          padding: '14px 16px 12px',
-          borderBottom: '1px solid #f3f4f6',
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 12,
-        }}
-      >
+      <Box sx={gridCardHeaderSx}>
         {/* Title - left */}
-        <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', lineHeight: 1.3, flex: 1, minWidth: 0 }}>
+        <Box sx={gridCardTitleSx}>
           {card.scriptName}
-        </div>
+        </Box>
         {/* Pills - right */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <Box sx={gridPillContainerSx}>
           {/* Product pill with colored dot */}
-          <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              fontSize: 10,
-              fontWeight: 500,
-              padding: '3px 8px',
-              borderRadius: 6,
-              backgroundColor: productPillStyle.backgroundColor,
+          <Box
+            component="span"
+            sx={{
+              ...gridProductPillSx as object,
+              bgcolor: productPillStyle.backgroundColor,
               color: productPillStyle.color,
             }}
           >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                backgroundColor: productPillStyle.dotColor,
+            <Box
+              component="span"
+              sx={{
+                ...gridProductDotSx as object,
+                bgcolor: productPillStyle.dotColor,
               }}
             />
             {card.productName}
-          </span>
+          </Box>
           {/* Editor pill - deterministic color */}
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 500,
-              padding: '3px 8px',
-              borderRadius: 6,
-              backgroundColor: editorPillStyle.backgroundColor,
+          <Box
+            component="span"
+            sx={{
+              ...gridEditorPillSx as object,
+              bgcolor: editorPillStyle.backgroundColor,
               color: editorPillStyle.color,
             }}
           >
             {card.editorName}
-          </span>
-        </div>
-      </div>
+          </Box>
+        </Box>
+      </Box>
 
       {/* Slot Grid */}
-      <div style={{ padding: '12px 12px 14px' }}>
+      <Box sx={gridSlotAreaSx}>
         {/* Column Headers */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
-          <ColHeader>Square</ColHeader>
-          <ColHeader>Vertical</ColHeader>
-          <ColHeader>YouTube</ColHeader>
-        </div>
+        <Box sx={gridSlotRowWithMarginSx}>
+          <Typography sx={gridColHeaderSx}>Square</Typography>
+          <Typography sx={gridColHeaderSx}>Vertical</Typography>
+          <Typography sx={gridColHeaderSx}>YouTube</Typography>
+        </Box>
 
         {/* Row 1: Text */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
+        <Box sx={gridSlotRowWithMarginSx}>
           {card.slots.slice(0, 3).map((slotState) => {
             const slotUniqueKey = `${cardKey}::${slotState.slot.key}`;
             const slotStatus = getSlotStatus(slotState);
@@ -565,10 +539,10 @@ function GridCardComponent({
               />
             );
           })}
-        </div>
+        </Box>
 
         {/* Row 2: No Text */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <Box sx={gridSlotRowSx}>
           {card.slots.slice(3, 6).map((slotState) => {
             const slotUniqueKey = `${cardKey}::${slotState.slot.key}`;
             const slotStatus = getSlotStatus(slotState);
@@ -589,27 +563,9 @@ function GridCardComponent({
               />
             );
           })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function ColHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 9,
-        fontWeight: 600,
-        color: '#9ca3af',
-        textAlign: 'center',
-        textTransform: 'uppercase',
-        letterSpacing: '0.04em',
-      }}
-    >
-      {children}
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
@@ -662,10 +618,6 @@ function SlotTile({
 
   // Drag state
   const [isDragOver, setIsDragOver] = useState(false);
-  // Hover state for lift effect
-  const [isHovered, setIsHovered] = useState(false);
-  // Active/pressed state
-  const [isPressed, setIsPressed] = useState(false);
 
   // CLICK: Opens sidebar if video exists (does NOT trigger upload)
   const handleClick = () => {
@@ -702,181 +654,73 @@ function SlotTile({
     }
   };
 
-  // BINARY BACKGROUND: Highlighted (matches active tab) or Neutral
-  // Primary neutral grey: #f1f3f6
-  const HIGHLIGHT_BG = '#f8f9fb';  // Slightly lighter for emphasis
-  const HIGHLIGHT_BORDER = '#e5e7eb';  // Subtle border
-  const NEUTRAL_BG = '#f1f3f6';  // Primary neutral grey
-  const NEUTRAL_BORDER = '#e5e7eb';  // Consistent border
-
-  let tileBackground = NEUTRAL_BG;
-  let tileBorder = `1px solid ${NEUTRAL_BORDER}`;
-  let transform = 'none';
-  let boxShadow = 'none';
-
-  if (isDragOver && canDrop) {
-    tileBackground = '#fef3c7';  // Warm amber for drop target
-    tileBorder = '2px dashed #f59e0b';
-  } else if (isUploading) {
-    tileBackground = '#f1f3f6';
-  } else if (isPressed) {
-    // Active/pressed: slightly darken, no lift
-    tileBackground = '#e8eaee';
-    transform = 'none';
-    boxShadow = 'none';
-  } else if (isHovered) {
-    // Hover: lift, soft shadow, shift toward white
-    tileBackground = '#f8f9fb';
-    transform = 'translateY(-1px)';
-    boxShadow = '0 2px 4px rgba(0,0,0,0.04)';
-  } else if (isEmphasized) {
-    tileBackground = HIGHLIGHT_BG;
-    tileBorder = `1px solid ${HIGHLIGHT_BORDER}`;
-  }
-
-  // Opacity for non-matching slots when a tab is active
-  const opacity = isFaded ? 0.5 : 1;
-
-  // All slots are always interactive
-  const cursor = isUploading ? 'wait' : 'pointer';
-
   // Status label and colors from centralized UI system
   const statusLabel = STATUS_LABELS[status];
   const statusPillColors = getStatusPillStyle(status as StatusKey);
 
+  const tileSx = getSlotTileSx({ isDragOver, canDrop: !!canDrop, isUploading, isEmphasized, isFaded });
+
   return (
-    <div
-      style={{
-        backgroundColor: tileBackground,
-        borderRadius: 8,
-        border: tileBorder,
-        height: 68,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor,
-        transition: 'background-color 0.15s, border-color 0.15s, opacity 0.15s, transform 0.15s, box-shadow 0.15s',
-        position: 'relative',
-        opacity,
-        transform,
-        boxShadow,
-      }}
+    <Box
+      sx={tileSx}
       onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => { setIsHovered(false); setIsPressed(false); }}
-      onMouseDown={() => setIsPressed(true)}
-      onMouseUp={() => setIsPressed(false)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {/* Row label - top left, muted */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 4,
-          left: 6,
-          fontSize: 8,
-          fontWeight: 500,
-          color: '#94a3b8',
-          textTransform: 'uppercase',
-          letterSpacing: '0.03em',
-        }}
-      >
+      <Box sx={slotRowLabelSx}>
         {rowLabel}
-      </div>
+      </Box>
 
       {/* Content - centered */}
       {isUploading ? (
         // Upload progress display
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 4, width: '80%' }}>
+        <Box sx={slotProgressContainerSx}>
           {/* Progress bar */}
-          <div
-            style={{
-              width: '100%',
-              height: 4,
-              backgroundColor: '#e2e8f0',
-              borderRadius: 2,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${uploadProgress ?? 0}%`,
-                height: '100%',
-                backgroundColor: '#3b82f6',
-                borderRadius: 2,
-                transition: 'width 0.2s ease-out',
-              }}
-            />
-          </div>
+          <Box sx={slotProgressBarBgSx}>
+            <Box sx={getSlotProgressBarFillSx(uploadProgress ?? 0)} />
+          </Box>
           {/* Progress text */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Spinner />
-            <span style={{ fontSize: 9, color: '#64748b' }}>
+          <Box sx={slotProgressTextContainerSx}>
+            <CircularProgress size={12} />
+            <Box component="span" sx={slotProgressTextSx}>
               {uploadProgress !== undefined ? `${uploadProgress}%` : 'Uploading...'}
-            </span>
-          </div>
-        </div>
+            </Box>
+          </Box>
+        </Box>
       ) : errorMessage ? (
         // Error state
-        <div style={{ textAlign: 'center', marginTop: 4 }}>
-          <span style={{ ...basePillStyle, backgroundColor: NEUTRAL_PILL.bg, color: NEUTRAL_PILL.text }}>Error</span>
-          <div style={{ fontSize: 7, color: '#dc2626', marginTop: 3, maxWidth: 80, lineHeight: 1.2 }}>
+        <Box sx={slotErrorContainerSx}>
+          <Box component="span" sx={{ ...basePillSx as object, bgcolor: NEUTRAL_PILL.bg, color: NEUTRAL_PILL.text }}>Error</Box>
+          <Box sx={slotErrorMessageSx}>
             {errorMessage.length > 25 ? errorMessage.slice(0, 25) + '...' : errorMessage}
-          </div>
-        </div>
+          </Box>
+        </Box>
       ) : hasError ? (
         // Duplicate error
-        <span style={{ ...basePillStyle, marginTop: 4, backgroundColor: '#fef2f2', color: '#dc2626' }}>
+        <Box component="span" sx={{ ...basePillSx as object, mt: 0.5, bgcolor: '#fef2f2', color: 'error.main' }}>
           {videos.length} Dup
-        </span>
+        </Box>
       ) : isDragOver && canDrop ? (
         // Drag hover state - show action hint (warm amber)
-        <span style={{ ...basePillStyle, marginTop: 4, backgroundColor: '#fef3c7', color: '#92400e' }}>
+        <Box component="span" sx={{ ...basePillSx as object, mt: 0.5, bgcolor: '#fef3c7', color: '#92400e' }}>
           Drop File
-        </span>
+        </Box>
       ) : (
         // Normal state: Status pill (no border, colors only)
-        <span
-          style={{
-            ...basePillStyle,
-            marginTop: 4,
-            backgroundColor: statusPillColors.backgroundColor,
+        <Box
+          component="span"
+          sx={{
+            ...basePillSx as object,
+            mt: 0.5,
+            bgcolor: statusPillColors.backgroundColor,
             color: statusPillColors.color,
           }}
         >
           {statusLabel}
-        </span>
+        </Box>
       )}
-    </div>
-  );
-}
-
-// =============================================================================
-// SPINNER COMPONENT
-// =============================================================================
-
-function Spinner() {
-  return (
-    <div
-      style={{
-        width: 12,
-        height: 12,
-        border: '2px solid #e5e7eb',
-        borderTopColor: '#3b82f6',
-        borderRadius: '50%',
-        animation: 'spin 0.8s linear infinite',
-      }}
-    >
-      <style>
-        {`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}
-      </style>
-    </div>
+    </Box>
   );
 }

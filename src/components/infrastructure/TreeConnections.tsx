@@ -3,8 +3,17 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { useTheme, alpha } from '@mui/material/styles';
 import type { TreeConnection } from '../../features/infrastructure/types';
+
+const svgOverlayStyle: CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  pointerEvents: 'none',
+  overflow: 'visible',
+};
 
 interface TreeConnectionsProps {
   connections: TreeConnection[];
@@ -176,13 +185,7 @@ export function TreeConnections({
   return (
     <svg
       ref={svgRef}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        pointerEvents: 'none',
-        overflow: 'visible',
-      }}
+      style={svgOverlayStyle}
     />
   );
 }

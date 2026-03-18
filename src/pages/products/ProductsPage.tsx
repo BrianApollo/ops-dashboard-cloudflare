@@ -16,7 +16,7 @@ import Tooltip from '@mui/material/Tooltip';
 import AddIcon from '@mui/icons-material/Add';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { ToggleTabs } from '../../ui';
+import { ToggleTabs, hiddenInputStyle } from '../../ui';
 import { useProductsController } from '../../features/products';
 import { useCampaignsController, listCampaignsByProduct } from '../../features/campaigns';
 import { useScriptsController, listScriptsByProduct } from '../../features/scripts';
@@ -32,6 +32,7 @@ import { CampaignsTab } from '../../components/campaigns/CampaignsTab';
 import { AddCampaignDialog } from '../../components/campaigns/AddCampaignDialog';
 import { ScriptsTab } from '../../components/scripts/ScriptsTab';
 import { VideosTab } from '../../components/videos/VideosTab';
+import { CreateAIVideoDialog } from '../../components/videos/CreateAIVideoDialog';
 import { ImagesTab } from '../../components/images/ImagesTab';
 import { CreateImagesDialog } from '../../components/images/CreateImagesDialog';
 import { AdvertorialsTab } from '../../components/advertorials/AdvertorialsTab';
@@ -376,6 +377,7 @@ export function ProductsPage() {
   const [addScriptDialogOpen, setAddScriptDialogOpen] = useState(false);
   const [addAdvertorialDialogOpen, setAddAdvertorialDialogOpen] = useState(false);
   const [createImagesDialogOpen, setCreateImagesDialogOpen] = useState(false);
+  const [createAIVideoDialogOpen, setCreateAIVideoDialogOpen] = useState(false);
   const [isApprovingImages, setIsApprovingImages] = useState(false);
   const [isDeletingImages, setIsDeletingImages] = useState(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
@@ -613,6 +615,18 @@ export function ProductsPage() {
               Add Script
             </Button>
           )}
+          {activeTab === 'videos' && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateAIVideoDialogOpen(true)}
+              disabled={!productIdParam}
+              sx={{ textTransform: 'none' }}
+            >
+              Create AI Video
+            </Button>
+          )}
           {activeTab === 'images' && (
             <>
               <input
@@ -621,7 +635,7 @@ export function ProductsPage() {
                 accept="image/*"
                 multiple
                 onChange={handleImageFileSelect}
-                style={{ display: 'none' }}
+                style={hiddenInputStyle}
               />
               <Button
                 variant="contained"
@@ -796,6 +810,15 @@ export function ProductsPage() {
           productId={productIdParam}
         />
       )}
+
+      {/* Create AI Video Dialog */}
+      <CreateAIVideoDialog
+        open={createAIVideoDialogOpen}
+        onClose={() => setCreateAIVideoDialogOpen(false)}
+        editorOptions={videosController.editorOptions.filter((o): o is { value: string; label: string } => o.value !== null)}
+        productId={productIdParam ?? ''}
+        productName={selectedProduct?.name ?? ''}
+      />
 
       {/* Create Images Dialog */}
       <CreateImagesDialog

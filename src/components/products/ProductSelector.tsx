@@ -244,7 +244,7 @@ export function ProductSelector({
                 {p.name.charAt(0)}
               </Box>
             )}
-            <span style={{ flex: 1 }}>{p.name}</span>
+            <Box component="span" sx={{ flex: 1 }}>{p.name}</Box>
             <StatusPill status={p.status} />
           </MenuItem>
         ))}
