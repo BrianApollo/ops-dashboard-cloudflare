@@ -32,7 +32,10 @@ import { CampaignsTab } from '../../components/campaigns/CampaignsTab';
 import { AddCampaignDialog } from '../../components/campaigns/AddCampaignDialog';
 import { ScriptsTab } from '../../components/scripts/ScriptsTab';
 import { VideosTab } from '../../components/videos/VideosTab';
+import { AIVideosTab } from '../../components/videos/AIVideosTab';
 import { CreateAIVideoDialog } from '../../components/videos/CreateAIVideoDialog';
+import { listAIVideosByProduct } from '../../features/ai-videos/data';
+import type { AIVideo } from '../../features/ai-videos/data';
 import { ImagesTab } from '../../components/images/ImagesTab';
 import { CreateImagesDialog } from '../../components/images/CreateImagesDialog';
 import { AdvertorialsTab } from '../../components/advertorials/AdvertorialsTab';
@@ -61,6 +64,7 @@ export function ProductsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('campaigns');
+  const [videoSubTab, setVideoSubTab] = useState<'script' | 'ai'>('script');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Deferred loading: render campaigns immediately, load rest after first paint
@@ -90,6 +94,26 @@ export function ProductsPage() {
       logos: product.logos,
     };
   }, [productsController.products, productIdParam]);
+
+  // AI Videos data (fetched per-product, only when AI sub-tab is active)
+  const [aiVideos, setAiVideos] = useState<AIVideo[]>([]);
+  const [isLoadingAIVideos, setIsLoadingAIVideos] = useState(false);
+  const [aiVideosNonce, setAiVideosNonce] = useState(0);
+
+  useEffect(() => {
+    if (videoSubTab !== 'ai' || !selectedProduct?.name) {
+      setAiVideos([]);
+      return;
+    }
+    const productName = selectedProduct.name;
+    let cancelled = false;
+    setIsLoadingAIVideos(true);
+    listAIVideosByProduct(productName)
+      .then((result) => { if (!cancelled) setAiVideos(result); })
+      .catch((err) => console.error('Failed to fetch AI Videos:', err))
+      .finally(() => { if (!cancelled) setIsLoadingAIVideos(false); });
+    return () => { cancelled = true; };
+  }, [videoSubTab, selectedProduct?.name, aiVideosNonce]);
 
   // Set ALL controller filters when route param changes
   // Note: controller methods excluded from deps to avoid infinite loop
@@ -298,7 +322,11 @@ export function ProductsPage() {
             mergeByProductId(['scripts'], await listScriptsByProduct(productName));
             break;
           case 'videos':
-            mergeByProductId(['videos'], await listVideosByProduct(productName));
+            if (videoSubTab === 'ai') {
+              setAiVideosNonce((n) => n + 1);
+            } else {
+              mergeByProductId(['videos'], await listVideosByProduct(productName));
+            }
             break;
           case 'images':
             mergeByProductId(['images'], await listImagesByProduct(productName));
@@ -326,7 +354,13 @@ export function ProductsPage() {
         switch (activeTab) {
           case 'campaigns': await campaignsController.refetch(); break;
           case 'scripts': await scriptsController.refetch(); break;
-          case 'videos': await videosController.list.refetch(); break;
+          case 'videos':
+            if (videoSubTab === 'ai') {
+              setAiVideosNonce((n) => n + 1);
+            } else {
+              await videosController.list.refetch();
+            }
+            break;
           case 'images': await imagesController.refetch(); break;
           case 'advertorials': await advertorialsController.refetch(); break;
           case 'setup':
@@ -344,7 +378,7 @@ export function ProductsPage() {
       setIsRefreshing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, selectedProduct, queryClient]);
+  }, [activeTab, videoSubTab, selectedProduct, queryClient]);
 
   const handleBulkAssignScripts = async (scriptIds: string[], editorId?: string) => {
     const scripts = scriptIds
@@ -615,7 +649,7 @@ export function ProductsPage() {
               Add Script
             </Button>
           )}
-          {activeTab === 'videos' && (
+          {activeTab === 'videos' && videoSubTab === 'ai' && (
             <Button
               variant="contained"
               size="small"
@@ -712,15 +746,36 @@ export function ProductsPage() {
           />
         )}
         {activeTab === 'videos' && (
-          <VideosTab
-            videos={filteredVideos}
-            showProductColumn={showProductColumn}
-            onStatusChange={handleVideoStatusChange}
-            onNotesChange={handleVideoNotesChange}
-            isUpdating={isUpdatingVideo}
-            onUpload={productIdParam ? videosController.uploadCreative : undefined}
-            canUploadToVideo={productIdParam ? videosController.canUploadToVideo : undefined}
-          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <ToggleTabs
+              value={videoSubTab}
+              onChange={setVideoSubTab}
+              options={[
+                { value: 'script' as const, label: 'Script Videos' },
+                { value: 'ai' as const, label: 'AI Videos' },
+              ]}
+              size="small"
+              sx={{ alignSelf: 'flex-start' }}
+            />
+            {videoSubTab === 'script' && (
+              <VideosTab
+                videos={filteredVideos}
+                showProductColumn={showProductColumn}
+                onStatusChange={handleVideoStatusChange}
+                onNotesChange={handleVideoNotesChange}
+                isUpdating={isUpdatingVideo}
+                onUpload={productIdParam ? videosController.uploadCreative : undefined}
+                canUploadToVideo={productIdParam ? videosController.canUploadToVideo : undefined}
+              />
+            )}
+            {videoSubTab === 'ai' && (
+              <AIVideosTab
+                aiVideos={aiVideos}
+                isLoading={isLoadingAIVideos}
+                productSelected={!!productIdParam}
+              />
+            )}
+          </Box>
         )}
         {activeTab === 'images' && (
           <ImagesTab
@@ -814,7 +869,10 @@ export function ProductsPage() {
       {/* Create AI Video Dialog */}
       <CreateAIVideoDialog
         open={createAIVideoDialogOpen}
-        onClose={() => setCreateAIVideoDialogOpen(false)}
+        onClose={() => {
+          setCreateAIVideoDialogOpen(false);
+          setAiVideosNonce((n) => n + 1);
+        }}
         editorOptions={videosController.editorOptions.filter((o): o is { value: string; label: string } => o.value !== null)}
         productId={productIdParam ?? ''}
         productName={selectedProduct?.name ?? ''}

@@ -129,7 +129,7 @@ export async function createAIVideo(
 ): Promise<{ id: string; name: string }> {
   const fields: Record<string, unknown> = {
     [FIELD_VIDEO_NAME]: name,
-    [FIELD_STATUS]: 'To Do',
+    [FIELD_STATUS]: 'Available',
     [FIELD_EDITOR]: [editorId],
     [FIELD_CREATIVE_LINK]: videoLink,
     [FIELD_PRODUCT]: [productId],
