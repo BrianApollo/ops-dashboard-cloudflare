@@ -37,8 +37,10 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import AddIcon from '@mui/icons-material/Add';
 
 import { RedTrackDataPanel } from '../features/redtrack';
+import { LinkRedtrackDialog } from './LinkRedtrackDialog';
 
 import type { FbManageCampaign, FbAdAccount, ManageFilters, DatePreset } from '../features/manage/types';
 
@@ -60,6 +62,7 @@ interface CampaignTableProps {
   onToggleStatus: (campaignId: string, currentStatus: string) => Promise<void>;
   onEditBudget: (campaignId: string, newBudgetCents: number) => Promise<void>;
   onSchedule?: (campaign: FbManageCampaign) => void;
+  onLinkRedtrack?: (fbCampaignId: string, fbCampaignName: string, fbAdAccountId: string, redtrackCampaignId: string, redtrackCampaignName: string) => Promise<void>;
   adReviewButton?: React.ReactNode;
   fetchRoasButton?: React.ReactNode;
   showRoasColumn?: boolean;
@@ -444,6 +447,7 @@ export function CampaignTable({
   onToggleStatus,
   onEditBudget,
   onSchedule,
+  onLinkRedtrack,
   adReviewButton,
   fetchRoasButton,
   showRoasColumn,
@@ -453,6 +457,7 @@ export function CampaignTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [linkDialogCampaign, setLinkDialogCampaign] = useState<FbManageCampaign | null>(null);
 
   // Sort state
   const [sortKey, setSortKey] = useState<SortKey>('spend');
@@ -673,7 +678,7 @@ export function CampaignTable({
                         '&:last-child td': isExpanded ? {} : { borderBottom: 0 },
                       }}
                     >
-                      {/* Expand button */}
+                      {/* Expand / Link button */}
                       <TableCell sx={{ ...cellSx, width: 40, px: 0.5 }}>
                         {redtrackId ? (
                           <IconButton
@@ -687,7 +692,17 @@ export function CampaignTable({
                               <KeyboardArrowDownIcon sx={{ fontSize: 18 }} />
                             )}
                           </IconButton>
-                        ) : null}
+                        ) : (
+                          <Tooltip title="Link RedTrack campaign" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => setLinkDialogCampaign(campaign)}
+                              sx={{ color: 'text.secondary' }}
+                            >
+                              <AddIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </TableCell>
 
                       {/* Checkbox */}
@@ -853,6 +868,19 @@ export function CampaignTable({
           {toast.message}
         </Alert>
       </Snackbar>
+
+      {/* Link RedTrack dialog */}
+      <LinkRedtrackDialog
+        campaign={linkDialogCampaign}
+        onClose={() => setLinkDialogCampaign(null)}
+        onSave={async (fbId, fbName, adAccountId, rtId, rtName) => {
+          if (onLinkRedtrack) {
+            await onLinkRedtrack(fbId, fbName, adAccountId, rtId, rtName);
+          }
+          showToast('success', 'Campaign linked to RedTrack successfully');
+          setLinkDialogCampaign(null);
+        }}
+      />
     </Box>
   );
 }

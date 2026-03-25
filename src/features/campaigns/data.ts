@@ -706,6 +706,39 @@ export async function addImageIdsToCampaign(
 }
 
 // =============================================================================
+// MANUAL CAMPAIGN LINKING
+// =============================================================================
+
+/**
+ * Create a new Campaigns record for a Facebook campaign that was launched
+ * outside of the Launcher. Links it to a RedTrack campaign.
+ */
+export async function createLinkedCampaign(params: {
+  fbCampaignId: string;
+  fbCampaignName: string;
+  fbAdAccountId: string;
+  redtrackCampaignId: string;
+  redtrackCampaignName: string;
+}): Promise<void> {
+  const fields: Record<string, unknown> = {
+    [FIELD_CAMPAIGN_NAME]: params.fbCampaignName,
+    [FIELD_CAMPAIGN_STATUS]: 'Launched',
+    [FIELD_CAMPAIGN_PLATFORM]: 'Facebook',
+    [FIELD_FB_CAMPAIGN_ID]: params.fbCampaignId,
+    [FIELD_FB_AD_ACCOUNT_ID]: params.fbAdAccountId,
+    [FIELD_CAMPAIGN_REDTRACK_ID]: params.redtrackCampaignId,
+    [FIELD_CAMPAIGN_REDTRACK_NAME]: params.redtrackCampaignName,
+    [FIELD_LAUNCHED_DATA]: 'This campaign is launched without using Launcher',
+    [FIELD_LAUNCHED_AT]: new Date().toISOString(),
+  };
+
+  await airtableFetch(CAMPAIGNS_TABLE, {
+    method: 'POST',
+    body: JSON.stringify({ fields }),
+  });
+}
+
+// =============================================================================
 // LIGHTWEIGHT LOOKUPS
 // =============================================================================
 
@@ -748,7 +781,7 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
 
 /**
  * Given an array of Facebook campaign IDs, look up matching Airtable Campaigns
- * records and extract the RedTrack campaign ID from the "Launched Data" JSON.
+ * records and return the RedTrack campaign ID from the "RedTrack Campaign Id" field.
  *
  * Returns a Map of fbCampaignId → redtrackCampaignId.
  */
@@ -767,7 +800,7 @@ export async function getRedtrackIdsByFbCampaignIds(
 
   const fieldsParam =
     'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID) +
-    '&fields[]=' + encodeURIComponent(FIELD_LAUNCHED_DATA);
+    '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_REDTRACK_ID);
 
   const allRecords: AirtableRecord[] = [];
   let offset: string | undefined;
@@ -787,20 +820,12 @@ export async function getRedtrackIdsByFbCampaignIds(
     const fbId = typeof record.fields[FIELD_FB_CAMPAIGN_ID] === 'string'
       ? record.fields[FIELD_FB_CAMPAIGN_ID]
       : '';
-    const launchedDataRaw = typeof record.fields[FIELD_LAUNCHED_DATA] === 'string'
-      ? record.fields[FIELD_LAUNCHED_DATA]
+    const rtId = typeof record.fields[FIELD_CAMPAIGN_REDTRACK_ID] === 'string'
+      ? record.fields[FIELD_CAMPAIGN_REDTRACK_ID]
       : '';
 
-    if (!fbId || !launchedDataRaw) continue;
-
-    try {
-      const launchedData = JSON.parse(launchedDataRaw);
-      const rtId = launchedData?.redtrack?.campaignId;
-      if (typeof rtId === 'string' && rtId) {
-        map.set(fbId, rtId);
-      }
-    } catch {
-      // Skip records with invalid JSON
+    if (fbId && rtId) {
+      map.set(fbId, rtId);
     }
   }
 

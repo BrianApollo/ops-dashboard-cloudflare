@@ -93,8 +93,8 @@ export function SetupTab({
     staleTime: 30 * 1000,
   });
 
-  const [setupDraft, setSetupDraft] = useState<{ pixel: string; page: string; adAccount: string; amount: string }>({
-    pixel: '', page: '', adAccount: '', amount: '',
+  const [setupDraft, setSetupDraft] = useState<{ pixel: string; page: string; adAccount: string; amount: string; callToAction: string; geo: string }>({
+    pixel: '', page: '', adAccount: '', amount: '', callToAction: '', geo: '',
   });
   const [isEditingSetup, setIsEditingSetup] = useState(false);
   const [isSavingSetup, setIsSavingSetup] = useState(false);
@@ -107,6 +107,8 @@ export function SetupTab({
       page: data?.page ?? '',
       adAccount: data?.adAccount ?? '',
       amount: data?.amount ?? '',
+      callToAction: data?.callToAction ?? '',
+      geo: data?.targeting ?? '',
     });
     setIsEditingSetup(false);
   }, [launchSetupQuery.data]);
@@ -116,10 +118,18 @@ export function SetupTab({
     setIsSavingSetup(true);
     try {
       const existing = launchSetupQuery.data;
+      const payload = {
+        pixel: setupDraft.pixel,
+        page: setupDraft.page,
+        adAccount: setupDraft.adAccount,
+        amount: setupDraft.amount,
+        callToAction: setupDraft.callToAction,
+        targeting: setupDraft.geo,
+      };
       if (existing) {
-        await updateLaunchSetup(existing.id, setupDraft);
+        await updateLaunchSetup(existing.id, payload);
       } else {
-        await createLaunchSetup(productId, setupDraft);
+        await createLaunchSetup(productId, payload);
       }
       await launchSetupQuery.refetch();
       setIsEditingSetup(false);
@@ -138,6 +148,8 @@ export function SetupTab({
       page: data?.page ?? '',
       adAccount: data?.adAccount ?? '',
       amount: data?.amount ?? '',
+      callToAction: data?.callToAction ?? '',
+      geo: data?.targeting ?? '',
     });
     setIsEditingSetup(false);
   }, [launchSetupQuery.data]);
@@ -147,7 +159,9 @@ export function SetupTab({
     return setupDraft.pixel !== (data?.pixel ?? '')
       || setupDraft.page !== (data?.page ?? '')
       || setupDraft.adAccount !== (data?.adAccount ?? '')
-      || setupDraft.amount !== (data?.amount ?? '');
+      || setupDraft.amount !== (data?.amount ?? '')
+      || setupDraft.callToAction !== (data?.callToAction ?? '')
+      || setupDraft.geo !== (data?.targeting ?? '');
   })();
 
   /** Handle file upload */
@@ -447,6 +461,44 @@ export function SetupTab({
                   disabled={!isEditingSetup || isSavingSetup}
                   sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
                 />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+                  Call to Action
+                </Typography>
+                <Select
+                  value={setupDraft.callToAction}
+                  onChange={(e) => setSetupDraft((d) => ({ ...d, callToAction: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  displayEmpty
+                  disabled={!isEditingSetup || isSavingSetup}
+                  sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
+                >
+                  <MenuItem value="">Select CTA...</MenuItem>
+                  <MenuItem value="Learn More">Learn More</MenuItem>
+                  <MenuItem value="Shop Now">Shop Now</MenuItem>
+                </Select>
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+                  Location Targeting
+                </Typography>
+                <Select
+                  value={setupDraft.geo}
+                  onChange={(e) => setSetupDraft((d) => ({ ...d, geo: e.target.value }))}
+                  fullWidth
+                  size="small"
+                  displayEmpty
+                  disabled={!isEditingSetup || isSavingSetup}
+                  sx={isEditingSetup ? textFieldEditModeSx : textFieldViewModeSx}
+                >
+                  <MenuItem value="">Select location...</MenuItem>
+                  <MenuItem value="US">US</MenuItem>
+                  <MenuItem value="US,CA">US + Canada</MenuItem>
+                  <MenuItem value="US,CA,GB,IE,AU,NZ">US, CA, UK, IE, AU, NZ</MenuItem>
+                  <MenuItem value="US,CA,GB,IE,DE,FR,NL,BE,CH,AT,SE,NO,DK,FI,ES,IT,PT,PL,AU,NZ,JP,SG,KR">US, CA, GB, IE, DE, FR, NL, BE, CH, AT, SE, NO, DK, FI, ES, IT, PT, PL, AU, NZ, JP, SG, KR</MenuItem>
+                </Select>
               </Box>
             </Box>
           )}
