@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
@@ -22,7 +23,7 @@ import { CampaignTable } from '../../components/CampaignTable';
 import { AdReviewDialog } from '../../components/AdReviewDialog';
 import { useManageData } from '../../features/manage/useManageData';
 import { checkAdReview } from '../../features/manage/api';
-import { getRedtrackIdsByFbCampaignIds } from '../../features/campaigns/data';
+import { getRedtrackIdsByFbCampaignIds, createLinkedCampaign } from '../../features/campaigns/data';
 import { fetchRedtrackCampaignRoas } from '../../features/redtrack/api';
 import type { AdReviewResult, FbManageCampaign } from '../../features/manage/types';
 import { ScheduleActionDialog } from '../../components/schedules/ScheduleActionDialog';
@@ -33,6 +34,7 @@ import type { ScheduleFormState } from '../../features/schedules/types';
 import { useToast } from '../../core/toast/ToastContext';
 
 export function ManagePage() {
+  const queryClient = useQueryClient();
   const {
     profiles,
     selectedProfile,
@@ -116,6 +118,25 @@ export function ManagePage() {
         : undefined,
     }
     : undefined;
+
+  // ── Link RedTrack handler ──
+  const handleLinkRedtrack = useCallback(async (
+    fbCampaignId: string,
+    fbCampaignName: string,
+    fbAdAccountId: string,
+    redtrackCampaignId: string,
+    redtrackCampaignName: string,
+  ) => {
+    await createLinkedCampaign({
+      fbCampaignId,
+      fbCampaignName,
+      fbAdAccountId,
+      redtrackCampaignId,
+      redtrackCampaignName,
+    });
+    await queryClient.invalidateQueries({ queryKey: ['launched-redtrack-map'] });
+    refetch();
+  }, [refetch, queryClient]);
 
   // ── Fetch ROAS state ──
   const [isFetchingRoas, setIsFetchingRoas] = useState(false);
@@ -331,6 +352,7 @@ export function ManagePage() {
         onToggleStatus={toggleCampaignStatus}
         onEditBudget={editCampaignBudget}
         onSchedule={handleSchedule}
+        onLinkRedtrack={handleLinkRedtrack}
         // Ad review button
         adReviewButton={
           <Button
