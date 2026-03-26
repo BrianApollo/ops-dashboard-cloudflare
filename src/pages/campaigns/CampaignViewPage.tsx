@@ -323,7 +323,7 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
     );
   }
 
-  const { config, facebook, profile, adPreset, media, result } = snapshot;
+  const { config, facebook, adPreset, media, result } = snapshot;
 
   // Determine result status
   const resultStatus = result.success ? 'success' : result.partialSuccess ? 'partial' : 'failed';
@@ -375,9 +375,9 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {result.adsCreated}/{result.adsAttempted} ads created
           </Typography>
-          {profile.name && (
+          {facebook.profile?.name && (
             <Typography variant="body2" color="text.secondary">
-              Profile: {profile.name}
+              Profile: {facebook.profile.name}
             </Typography>
           )}
           <Typography variant="body2" color="text.secondary">
@@ -404,7 +404,7 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
             ['Name', config.campaignName],
             ['Budget', `$${(config.budgetCents / 100).toFixed(2)}/day`],
             ['Status', config.launchStatus],
-            ['Campaign ID', facebook.campaignId || 'N/A'],
+            ['Campaign ID', facebook.campaign?.id || 'N/A'],
           ].map(([label, value], i) => (
             <Box key={label} sx={stripedRow(i)}>
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120, maxWidth: 120, flexShrink: 0 }}>{label}</Typography>
@@ -420,7 +420,7 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
           {[
             ['Ad Set ID', facebook.adSetId || 'N/A'],
             ['Targeting', config.geo.length > 0 ? config.geo.join(', ') : 'N/A'],
-            ['Pixel ID', facebook.pixelId || 'N/A'],
+            ['Pixel', facebook.pixel?.name || facebook.pixel?.id || 'N/A'],
             ['Start Date', config.startDate || 'N/A'],
             ['Start Time', config.startTime || 'N/A'],
             ['Website URL', config.websiteUrl || 'N/A'],
@@ -611,7 +611,7 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
           {!showRefs && (
             <Box sx={{ display: 'flex', gap: 1, ml: 1, flexWrap: 'wrap' }}>
               {[
-                facebook.campaignId && `Campaign: ${facebook.campaignId}`,
+                facebook.campaign?.id && `Campaign: ${facebook.campaign.id}`,
                 facebook.adSetId && `Ad Set: ${facebook.adSetId}`,
               ].filter(Boolean).map((text, i) => (
                 <Chip key={i} label={text} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.6875rem', color: 'rgba(255,255,255,0.85)', borderColor: 'rgba(255,255,255,0.3)' }} />
@@ -622,13 +622,13 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
         <Collapse in={showRefs}>
           <Divider />
           {[
-            ['Ad Account', facebook.adAccountId],
-            ['Page', facebook.pageId],
-            ['Pixel', facebook.pixelId],
-            ['Campaign ID', facebook.campaignId],
+            ['Ad Account', facebook.adAccount?.name ? `${facebook.adAccount.name} (${facebook.adAccount.id})` : facebook.adAccount?.id],
+            ['Page', facebook.page?.name ? `${facebook.page.name} (${facebook.page.id})` : facebook.page?.id],
+            ['Pixel', facebook.pixel?.name ? `${facebook.pixel.name} (${facebook.pixel.id})` : facebook.pixel?.id],
+            ['Campaign ID', facebook.campaign?.id],
             ['Ad Set ID', facebook.adSetId],
             ['RedTrack ID', snapshot.redtrack?.campaignId],
-            ['Profile ID', profile.id],
+            ['Profile', facebook.profile?.name ? `${facebook.profile.name} (${facebook.profile.id})` : facebook.profile?.id],
           ].map(([label, value], i) => (
             <Box key={label} sx={stripedRow(i)}>
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120, maxWidth: 120, flexShrink: 0 }}>{label}</Typography>

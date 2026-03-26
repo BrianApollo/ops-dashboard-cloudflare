@@ -101,8 +101,8 @@ export function useLaunchMediaState({
         driveFileId: i.driveFileId,
         image_drive_link: i.image_drive_link,
         productId: i.product.id,
-      }));
-    // .sort((a, b) => a.name.localeCompare(b.name));
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [imagesController.images, productId]);
 
   // ---------------------------------------------------------------------------

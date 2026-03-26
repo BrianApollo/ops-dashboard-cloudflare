@@ -54,6 +54,11 @@ export interface LaunchResult {
 
 export { MediaCounts };
 
+interface InfraOptionForLookup {
+  id: string;
+  name: string;
+}
+
 export interface UseLaunchOrchestratorOptions {
   campaignId: string;
   draft: CampaignDraft; // Use shared CampaignDraft type which allows nulls
@@ -66,6 +71,10 @@ export interface UseLaunchOrchestratorOptions {
   reuseCreatives: boolean;
   launchStatusActive: boolean;
   redtrackTrackingParams: string | null;
+  /** Facebook infra arrays for resolving names in snapshot */
+  adAccounts: InfraOptionForLookup[];
+  pixels: InfraOptionForLookup[];
+  pages: InfraOptionForLookup[];
 }
 
 export interface UseLaunchOrchestratorReturn {
@@ -93,6 +102,9 @@ export function useLaunchOrchestrator({
   reuseCreatives,
   launchStatusActive,
   redtrackTrackingParams,
+  adAccounts,
+  pixels,
+  pages,
 }: UseLaunchOrchestratorOptions): UseLaunchOrchestratorReturn {
   // ---------------------------------------------------------------------------
   // STATE
@@ -176,8 +188,11 @@ export function useLaunchOrchestrator({
           draft: {
             name: draft.name,
             adAccountId: draft.adAccountId!,
+            adAccountName: adAccounts.find(a => a.id === draft.adAccountId)?.name || draft.adAccountId!,
             pageId: draft.pageId!,
+            pageName: pages.find(p => p.id === draft.pageId)?.name || draft.pageId!,
             pixelId: draft.pixelId!,
+            pixelName: pixels.find(p => p.id === draft.pixelId)?.name || draft.pixelId!,
             budget: draft.budget,
             geo: draft.geo,
             startDate: draft.startDate,
@@ -233,7 +248,7 @@ export function useLaunchOrchestrator({
         error: (err as Error).message,
       });
     }
-  }, [campaignId, draft, selectedProfile, availableVideos, availableImages, selectedVideoIds, selectedImageIds, productPresets, reuseCreatives, launchStatusActive, redtrackTrackingParams, pipeline]);
+  }, [campaignId, draft, selectedProfile, availableVideos, availableImages, selectedVideoIds, selectedImageIds, productPresets, reuseCreatives, launchStatusActive, redtrackTrackingParams, pipeline, adAccounts, pixels, pages]);
 
   // ---------------------------------------------------------------------------
   // RETURN

@@ -11,6 +11,7 @@
 
 import { updateLaunchData } from '../data';
 import { updateVideosBatch, FIELD_USED_IN_CAMPAIGN } from '../../videos/data';
+import { nowGMT7 } from '../../../utils/date';
 import type { FbLaunchState, LaunchSnapshot, LaunchSnapshotMedia, LaunchSnapshotFailedMedia } from '.';
 
 // =============================================================================
@@ -31,8 +32,11 @@ export interface ImageForSnapshot {
 export interface DraftForSnapshot {
   name?: string;
   adAccountId: string;
+  adAccountName: string;
   pageId: string;
+  pageName: string;
   pixelId: string;
+  pixelName: string;
   budget?: string;
   geo?: string;
   startDate?: string;
@@ -184,7 +188,7 @@ export async function writeLaunchSnapshot({
     // Build the full snapshot
     const snapshot: LaunchSnapshot = {
       version: 1,
-      launchedAt: new Date().toISOString(),
+      launchedAt: nowGMT7(),
 
       config: {
         campaignName: draft.name || `Campaign ${campaignId}`,
@@ -200,17 +204,13 @@ export async function writeLaunchSnapshot({
       },
 
       facebook: {
-        adAccountId: draft.adAccountId,
-        pageId: draft.pageId,
-        pixelId: draft.pixelId,
-        campaignId: result.campaignId || undefined,
+        adAccount: { id: draft.adAccountId, name: draft.adAccountName },
+        page: { id: draft.pageId, name: draft.pageName },
+        pixel: { id: draft.pixelId, name: draft.pixelName },
+        campaign: { id: result.campaignId || '', name: draft.name || `Campaign ${campaignId}` },
+        profile: { id: profile.id, name: profile.profileName },
         adSetId: result.adsetId || undefined,
         adIds,
-      },
-
-      profile: {
-        id: profile.id,
-        name: profile.profileName,
       },
 
       adPreset: preset ? {
@@ -253,7 +253,7 @@ export async function writeLaunchSnapshot({
         adsAttempted: videosWithUrls.length + imagesWithUrls.length,
         adsCreated: adIds.length,
         adsFailed: failedMedia.length,
-        completedAt: new Date().toISOString(),
+        completedAt: nowGMT7(),
         errors: failedMedia.map(m => ({
           mediaId: m.name,
           mediaName: m.name,
