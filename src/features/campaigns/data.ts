@@ -17,6 +17,7 @@ import { listVideos } from '../videos/data';
 import { listImages } from '../images/data';
 import { airtableFetch } from '../../core/data/airtable-client';
 import { provider } from '../../data/provider';
+import { nowGMT7 } from '../../utils/date';
 import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 
 // =============================================================================
@@ -501,7 +502,7 @@ export async function updateLaunchData(params: UpdateLaunchDataParams): Promise<
     [FIELD_FB_AD_ACCOUNT_ID]: fbAdAccountId,
     [FIELD_LAUNCH_PROFILE_ID]: launchProfileId,
     [FIELD_CAMPAIGN_STATUS]: 'Launched',
-    [FIELD_LAUNCHED_AT]: new Date().toISOString(),
+    [FIELD_LAUNCHED_AT]: nowGMT7(),
   };
 
   if (snapshot) {
@@ -729,7 +730,7 @@ export async function createLinkedCampaign(params: {
     [FIELD_CAMPAIGN_REDTRACK_ID]: params.redtrackCampaignId,
     [FIELD_CAMPAIGN_REDTRACK_NAME]: params.redtrackCampaignName,
     [FIELD_LAUNCHED_DATA]: 'This campaign is launched without using Launcher',
-    [FIELD_LAUNCHED_AT]: new Date().toISOString(),
+    [FIELD_LAUNCHED_AT]: nowGMT7(),
   };
 
   await airtableFetch(CAMPAIGNS_TABLE, {

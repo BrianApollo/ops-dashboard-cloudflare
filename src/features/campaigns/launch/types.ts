@@ -413,17 +413,13 @@ export interface LaunchSnapshot {
   };
 
   facebook: {
-    adAccountId: string;
-    pageId: string;
-    pixelId: string;
-    campaignId?: string;
+    adAccount: { id: string; name: string };
+    page: { id: string; name: string };
+    pixel: { id: string; name: string };
+    campaign: { id: string; name: string };
+    profile: { id: string; name: string };
     adSetId?: string;
     adIds: string[];
-  };
-
-  profile: {
-    id: string;
-    name?: string;
   };
 
   adPreset?: {

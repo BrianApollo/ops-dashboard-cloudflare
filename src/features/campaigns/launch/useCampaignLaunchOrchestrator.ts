@@ -458,6 +458,9 @@ export function useCampaignLaunchOrchestrator(
     reuseCreatives,
     launchStatusActive,
     redtrackTrackingParams,
+    adAccounts,
+    pixels,
+    pages,
   });
 
   // ---------------------------------------------------------------------------
