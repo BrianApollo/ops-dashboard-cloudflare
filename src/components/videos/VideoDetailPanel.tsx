@@ -264,9 +264,11 @@ export function VideoDetailPanel({
   ];
 
   // Show bottom button?
+  const isEditor = user?.role?.toLowerCase() === 'video editor';
   const showUploadButton = isTodo && canUpload;
-  const showReplaceButton = isReview && canUpload;
-  const showBottomButton = showUploadButton || showReplaceButton;
+  const showReplaceButton = isReview && !!onUpload;
+  const showReviewActions = isReview && !isEditor && !!onStatusChange;
+  const showBottomButton = showUploadButton || showReplaceButton || showReviewActions;
 
   return (
     <>
@@ -563,66 +565,70 @@ export function VideoDetailPanel({
         {/* Bottom Action Button (pinned) */}
         {showBottomButton && (
           <DetailActions>
-            {isReview && user?.role === 'Video Editor' ? (
-              // Editor viewing review status: show Replace Video button
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                startIcon={<CloudUploadIcon />}
-                onClick={handleUploadClick}
-                disabled={isUploading}
-                sx={{
-                  py: 1.25,
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  borderRadius: 1.5,
-                }}
-              >
-                {isUploading ? 'Uploading...' : 'Replace Video'}
-              </Button>
-            ) : isReview ? (
-              // Ops viewing review status: show Reject/Accept buttons
-              <Box sx={{ display: 'flex', gap: 1.5 }}>
-                <Button
-                  variant="outlined"
-                  size="large"
-                  fullWidth
-                  startIcon={<CloseOutlinedIcon />}
-                  onClick={handleReject}
-                  disabled={isUpdating}
-                  sx={{
-                    py: 1.25,
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    borderRadius: 1.5,
-                    borderColor: '#d6d3d1',
-                    color: 'text.primary',
-                    '&:hover': {
-                      borderColor: 'error.main',
-                      bgcolor: 'error.50',
-                    },
-                  }}
-                >
-                  Reject
-                </Button>
-                <Button
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                  startIcon={<CheckIcon />}
-                  onClick={handleAccept}
-                  disabled={isUpdating}
-                  color="success"
-                  sx={{
-                    py: 1.25,
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    borderRadius: 1.5,
-                  }}
-                >
-                  Accept
-                </Button>
+            {isReview ? (
+              // Review status: reupload for all roles, approve/reject for admin/ops only
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {onUpload && (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    fullWidth
+                    startIcon={<CloudUploadIcon />}
+                    onClick={handleUploadClick}
+                    disabled={isUploading}
+                    sx={{
+                      py: 1.25,
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      borderRadius: 1.5,
+                    }}
+                  >
+                    {isUploading ? 'Uploading...' : 'Replace Video'}
+                  </Button>
+                )}
+                {!isEditor && onStatusChange && (
+                  <Box sx={{ display: 'flex', gap: 1.5 }}>
+                    <Button
+                      variant="outlined"
+                      size="large"
+                      fullWidth
+                      startIcon={<CloseOutlinedIcon />}
+                      onClick={handleReject}
+                      disabled={isUpdating}
+                      sx={{
+                        py: 1.25,
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                        borderColor: '#d6d3d1',
+                        color: 'text.primary',
+                        '&:hover': {
+                          borderColor: 'error.main',
+                          bgcolor: 'error.50',
+                        },
+                      }}
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      fullWidth
+                      startIcon={<CheckIcon />}
+                      onClick={handleAccept}
+                      disabled={isUpdating}
+                      color="success"
+                      sx={{
+                        py: 1.25,
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      Accept
+                    </Button>
+                  </Box>
+                )}
               </Box>
             ) : (
               // Todo status: show Upload Video button
