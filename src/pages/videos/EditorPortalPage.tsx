@@ -43,6 +43,7 @@ import {
   STATUS_LABELS,
 } from '../../features/videos';
 import type { VideoAsset, VideoFormat, TextVersion } from '../../features/videos';
+import { VideoEditorsTab } from '../overview/VideoEditorsTab';
 
 export function EditorPortalPage() {
   // Local UI state only
@@ -258,6 +259,11 @@ export function EditorPortalPage() {
           Manage and track video production across all products
         </Typography>
       </Box>
+
+      {/* Editor performance summary — shows only their own data */}
+      {user.role === 'editor' && user.userId && (
+        <VideoEditorsTab editorId={user.userId} />
+      )}
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
         <StatusPill

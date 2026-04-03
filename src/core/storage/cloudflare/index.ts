@@ -18,3 +18,8 @@ export {
   isCloudflareConfigured,
   validateConfig,
 } from './config';
+
+export {
+  extractVideoMetadata,
+  type VideoMetadata,
+} from './videoMetadata';

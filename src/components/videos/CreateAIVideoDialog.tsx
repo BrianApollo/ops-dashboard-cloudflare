@@ -21,7 +21,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { AppDialog } from '../../core/dialog';
 import { createAIVideo } from '../../features/ai-videos/data';
-import { uploadFile } from '../../core/storage/cloudflare';
+import { uploadVideoWithFolder } from '../../features/videos/drive';
 import type { FilterOption } from '../../core/list';
 
 interface CreateAIVideoDialogProps {
@@ -75,18 +75,23 @@ export function CreateAIVideoDialog({
     setUploadProgress(0);
 
     try {
-      // 1. Upload to R2
-      const ext = file.name.split('.').pop() || 'mp4';
-      const fileName = `${name.trim()}.${ext}`;
-      const prefix = `${productName}/AI-Videos`;
-
-      const { url } = await uploadFile(file, fileName, {
-        prefix,
+      // 1. Upload to R2 via global upload path
+      const result = await uploadVideoWithFolder({
+        videoName: name.trim(),
+        file,
+        productStorageKey: productName,
+        subfolder: 'AI-Videos',
         onProgress: (p) => setUploadProgress(p.percentage),
       });
 
-      // 2. Create Airtable record with the R2 URL
-      await createAIVideo(name.trim(), editorId, url, productId);
+      // 2. Create Airtable record with the R2 URL and metadata
+      await createAIVideo(
+        name.trim(),
+        editorId,
+        result.url,
+        productId,
+        result.metadata ? JSON.stringify(result.metadata) : undefined
+      );
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create AI video');
