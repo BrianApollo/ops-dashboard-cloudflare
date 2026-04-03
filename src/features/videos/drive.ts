@@ -4,9 +4,13 @@
  * Video-specific orchestration using Cloudflare R2 storage.
  * Throws on failure; caller handles orchestration.
  *
+ * This is the SINGLE entry point for all video file uploads (regular + AI).
+ * All callers MUST go through uploadVideoWithFolder().
+ *
  * Upload Strategy:
- * 1. Files are uploaded to Cloudflare R2 with "{productId}/Videos" prefix
+ * 1. Files are uploaded to Cloudflare R2 with "{productStorageKey}/{subfolder}" prefix
  * 2. File is named using the Airtable record name
+ * 3. Video metadata (duration, resolution, etc.) is extracted client-side
  *
  * INVARIANTS (enforced at runtime):
  * 1. A video URL may ONLY come from uploadFile() return value
@@ -22,50 +26,42 @@
 import {
   uploadFile,
   deleteFile,
+  extractVideoMetadata,
   type UploadProgress,
   type UploadResult,
+  type VideoMetadata,
 } from '../../core/storage/cloudflare';
 
 // =============================================================================
-// RE-EXPORTS (for backwards compatibility)
+// RE-EXPORTS
 // =============================================================================
 
-/** @deprecated Use deleteFile from core/storage/cloudflare */
-export const deleteDriveFile = deleteFile;
-/** @deprecated No longer needed with Cloudflare storage */
-export function clearFolderCache(): void {
-  // No-op: Cloudflare doesn't use folder caching
-}
-export type { UploadProgress, UploadResult };
-
-// =============================================================================
-// CONFIGURATION
-// =============================================================================
-
-// Videos subfolder name (constant)
-const VIDEOS_FOLDER_NAME = 'Videos';
+export { deleteFile };
+export type { UploadProgress, UploadResult, VideoMetadata };
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
 export interface VideoUploadOptions {
-  videoId: string;
+  /** Airtable record ID. Optional for new records (e.g., AI video creation). */
+  videoId?: string;
   /** The video name from Airtable - used as the file name */
   videoName: string;
   file: File;
   /** The product slug/name (used as prefix for storage path). MUST NOT be an Airtable record ID. */
   productStorageKey: string;
-  /** @deprecated No longer used with Cloudflare storage */
-  productDriveFolderId?: string;
+  /** Storage subfolder. Default: 'Videos'. AI videos use 'AI-Videos'. */
+  subfolder?: string;
+  /** Existing Video Data JSON from Airtable. Used to preserve firstUploadedAt on re-upload. */
+  existingVideoData?: string;
   onProgress?: (progress: UploadProgress) => void;
 }
 
 export interface VideoUploadResult {
   url: string;
   fileId: string;
-  /** @deprecated Always empty with Cloudflare storage */
-  folderId: string;
+  metadata: VideoMetadata | null;
 }
 
 // =============================================================================
@@ -92,21 +88,25 @@ export function isUploadInProgress(videoId: string): boolean {
 /**
  * Upload a video file to Cloudflare R2 storage.
  *
+ * This is the GLOBAL entry point for all video uploads.
+ * Both regular videos and AI videos MUST use this function.
+ *
  * ALGORITHM:
- * 1. Validate productId exists
- * 2. Upload file to R2 with prefix "videos/{productId}"
- * 3. File is named using videoName (Airtable record name)
+ * 1. Validate productStorageKey exists
+ * 2. Extract video metadata (duration, resolution, etc.)
+ * 3. Upload file to R2 with prefix "{productStorageKey}/{subfolder}"
+ * 4. File is named using videoName (Airtable record name)
  *
  * RULES:
  * - Filename content has ZERO effect on behavior
- * - productId determines storage path prefix
+ * - productStorageKey determines storage path prefix
  *
- * @throws Error if productId is missing
- * @throws Error if upload is already in progress
+ * @throws Error if productStorageKey is missing
+ * @throws Error if upload is already in progress (when videoId provided)
  * @throws Error if upload fails
  */
 export async function uploadVideoWithFolder(options: VideoUploadOptions): Promise<VideoUploadResult> {
-  const { videoId, videoName, file, productStorageKey, onProgress } = options;
+  const { videoId, videoName, file, productStorageKey, subfolder = 'Videos', existingVideoData, onProgress } = options;
 
   // ==========================================================================
   // VALIDATION: Product storage key is REQUIRED
@@ -126,12 +126,13 @@ export async function uploadVideoWithFolder(options: VideoUploadOptions): Promis
     );
   }
 
-  // Prevent duplicate uploads
-  if (uploadLocks.has(videoId)) {
-    throw new Error('Upload already in progress for this video');
+  // Prevent duplicate uploads (only when videoId is provided)
+  if (videoId) {
+    if (uploadLocks.has(videoId)) {
+      throw new Error('Upload already in progress for this video');
+    }
+    uploadLocks.add(videoId);
   }
-
-  uploadLocks.add(videoId);
 
   try {
     // ==========================================================================
@@ -159,18 +160,53 @@ export async function uploadVideoWithFolder(options: VideoUploadOptions): Promis
     const finalFilename = `${videoName}.${extension}`;
 
     console.log(`[Storage] Uploading video: ${finalFilename}`);
-    console.log(`[Storage] Storage path: ${productStorageKey}/Videos/${finalFilename}`);
+    console.log(`[Storage] Storage path: ${productStorageKey}/${subfolder}/${finalFilename}`);
 
-    // INVARIANT: uploadFile() is the ONLY source of truth for URLs
-    // If this call fails, no URL is generated and no Airtable write occurs
-    const result = await uploadFile(
-      file,
-      finalFilename, // Canonical filename from Airtable + extension
-      {
-        prefix: `${productStorageKey}/Videos`,
-        onProgress,
+    // ==========================================================================
+    // Extract metadata + upload in parallel
+    // ==========================================================================
+    const [metadataResult, uploadResult] = await Promise.allSettled([
+      extractVideoMetadata(file),
+      uploadFile(
+        file,
+        finalFilename,
+        {
+          prefix: `${productStorageKey}/${subfolder}`,
+          onProgress,
+        }
+      ),
+    ]);
+
+    // Upload failure is fatal
+    if (uploadResult.status === 'rejected') {
+      throw uploadResult.reason;
+    }
+
+    const result = uploadResult.value;
+
+    // Metadata failure is non-fatal — log and continue
+    let metadata = metadataResult.status === 'fulfilled' ? metadataResult.value : null;
+    if (metadataResult.status === 'rejected') {
+      console.warn('[Storage] Metadata extraction failed (non-fatal):', metadataResult.reason);
+    } else {
+      console.log(`[Storage] Metadata extracted: ${metadata?.durationFormatted ?? 'unknown'} duration, ${metadata?.width}x${metadata?.height}`);
+    }
+
+    // ==========================================================================
+    // TIMESTAMP LOGIC:
+    // - First upload: firstUploadedAt = now, lastUploadedAt = now
+    // - Re-upload: preserve firstUploadedAt from existing data, update lastUploadedAt
+    // ==========================================================================
+    if (metadata && existingVideoData) {
+      try {
+        const existing = JSON.parse(existingVideoData);
+        if (existing.firstUploadedAt) {
+          metadata = { ...metadata, firstUploadedAt: existing.firstUploadedAt };
+        }
+      } catch {
+        // Invalid existing JSON — use fresh timestamps
       }
-    );
+    }
 
     // ==========================================================================
     // INVARIANT CHECKS: URL must exist and be valid
@@ -195,10 +231,12 @@ export async function uploadVideoWithFolder(options: VideoUploadOptions): Promis
     return {
       url: result.url,
       fileId: result.fileId,
-      folderId: '', // Deprecated: not used with Cloudflare
+      metadata,
     };
   } finally {
     // Always release the lock
-    uploadLocks.delete(videoId);
+    if (videoId) {
+      uploadLocks.delete(videoId);
+    }
   }
 }

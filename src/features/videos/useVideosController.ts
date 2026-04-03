@@ -24,9 +24,8 @@ import { listVideos, updateVideo, updateVideoStatus, deleteVideos, updateVideoAf
 import { listUsers } from '../scripts/data';
 import type { CreateVideoInput } from './data';
 import { generateVideoName } from './generateVideoName';
-import { uploadVideoWithFolder, isUploadInProgress } from './drive';
+import { uploadVideoWithFolder, isUploadInProgress, deleteFile } from './drive';
 import type { UploadProgress, VideoUploadResult } from './drive';
-import { deleteFile } from '../../core/storage/cloudflare';
 import { CF_R2_PUBLIC_URL } from '../../core/storage/cloudflare/config';
 import { canUploadToVideo, getBulkPermissions } from './permissions';
 import type { UserContext } from './permissions';
@@ -434,6 +433,7 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
           videoName: video.name, // Use Airtable record name, NOT original filename
           file,
           productStorageKey, // Product name for storage path prefix (NOT Airtable record ID)
+          existingVideoData: video.videoData, // Preserve firstUploadedAt on re-upload
           onProgress,
         });
 
@@ -447,12 +447,13 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
           );
         }
 
-        // Step 4: Update Airtable with Creative Link and status
+        // Step 4: Update Airtable with Creative Link, status, and video metadata
         // ONLY called after successful upload with valid URL
         await updateVideoAfterUpload(
           videoId,
-          result.url, // Creative Link field - ONLY from uploadFile() return value
-          'review'    // Status transitions to 'review' after upload
+          result.url,   // Creative Link field - ONLY from uploadFile() return value
+          'review',     // Status transitions to 'review' after upload
+          result.metadata ? JSON.stringify(result.metadata) : undefined
         );
 
         // Step 5: Delete old file AFTER successful upload and Airtable update

@@ -46,6 +46,8 @@ export interface VideoAsset {
   scrollstopperNumber?: number;
   /** Parent Drive Folder Link */
   parentDriveLink?: string;
+  /** Video metadata JSON (duration, resolution, etc.) from upload */
+  videoData?: string;
 }
 
 export interface VideoFilters {

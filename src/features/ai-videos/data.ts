@@ -17,6 +17,7 @@ const FIELD_EDITOR = 'Editor';
 const FIELD_CREATIVE_LINK = 'Creative Link';
 const FIELD_PRODUCT = 'Product';
 const FIELD_USED_IN_CAMPAIGN = 'Used In Campaign';
+const FIELD_VIDEO_DATA = 'Video Data';
 
 export interface AIVideo {
   id: string;
@@ -125,7 +126,8 @@ export async function createAIVideo(
   name: string,
   editorId: string,
   videoLink: string,
-  productId: string
+  productId: string,
+  videoData?: string
 ): Promise<{ id: string; name: string }> {
   const fields: Record<string, unknown> = {
     [FIELD_VIDEO_NAME]: name,
@@ -134,6 +136,10 @@ export async function createAIVideo(
     [FIELD_CREATIVE_LINK]: videoLink,
     [FIELD_PRODUCT]: [productId],
   };
+
+  if (videoData) {
+    fields[FIELD_VIDEO_DATA] = videoData;
+  }
 
   const response = await airtableFetch(AI_VIDEOS_TABLE, {
     method: 'POST',
