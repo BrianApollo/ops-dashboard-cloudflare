@@ -155,7 +155,7 @@ export function getStats(media: FbLaunchMediaState[]): FbLaunchStats {
   };
 }
 
-function safeParseBatchBody(body: string): { id?: string } | null {
+function safeParseBatchBody(body: string): { id?: string; error?: { message: string; type?: string; code?: number } } | null {
   try {
     return JSON.parse(body);
   } catch {
@@ -477,7 +477,12 @@ export function createController(
                 handleAdFailure(media, body ? 'No ad ID in response' : 'Malformed response');
               }
             } else {
-              handleAdFailure(media, `HTTP ${item.code}`);
+              // Parse Facebook error message from batch response body
+              const body = safeParseBatchBody(item.body);
+              const fbError = body?.error?.message
+                ? `${body.error.message}${body.error.code ? ` (code ${body.error.code})` : ''}`
+                : `HTTP ${item.code}`;
+              handleAdFailure(media, fbError);
             }
           });
         } else {
@@ -786,8 +791,12 @@ export function createController(
               item.error = 'No ad ID in response';
             }
           } else {
+            const body = safeParseBatchBody(data[0].body);
+            const fbError = body?.error?.message
+              ? `${body.error.message}${body.error.code ? ` (code ${body.error.code})` : ''}`
+              : `HTTP ${data[0].code}`;
             item.state = 'failed';
-            item.error = `Ad creation failed: HTTP ${data[0].code}`;
+            item.error = fbError;
           }
         } else {
           item.state = 'failed';
