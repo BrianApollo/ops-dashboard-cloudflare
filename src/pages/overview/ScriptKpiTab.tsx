@@ -20,13 +20,18 @@ import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import Popover from '@mui/material/Popover';
+import Tooltip from '@mui/material/Tooltip';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import LinearProgress from '@mui/material/LinearProgress';
 import { useTheme, alpha } from '@mui/material/styles';
 import { listVideos } from '../../features/videos/data';
 import { provider } from '../../data/provider';
+import { ToggleTabs } from '../../ui/ToggleTabs';
+
+type SubView = 'calendar' | 'progress';
 
 // =============================================================================
 // CONSTANTS
@@ -128,13 +133,13 @@ function getMondayOfWeek(dateStr: string): string {
   return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
 }
 
-function getFridayOfWeek(dateStr: string): string {
+function getSundayOfWeek(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const day = d.getDay();
-  const diff = (day === 0 ? -2 : 5) - day;
-  const friday = new Date(d);
-  friday.setDate(d.getDate() + diff);
-  return `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`;
+  const diff = day === 0 ? 0 : 7 - day;
+  const sunday = new Date(d);
+  sunday.setDate(d.getDate() + diff);
+  return `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
 }
 
 function formatShortDate(dateStr: string): string {
@@ -327,10 +332,17 @@ function computeScriptKpiStats(
       let weekNum = 1;
 
       const weeks: WeekScriptKpi[] = weekEntries.map(([monday, weekDays]) => {
-        const friday = getFridayOfWeek(monday);
+        const friday = getSundayOfWeek(monday);
+        const weekdayDays = weekDays.filter(d => d.dayOfWeek >= 1 && d.dayOfWeek <= 5);
+        const weekendWorked = weekDays.filter(d => (d.dayOfWeek === 0 || d.dayOfWeek === 6) && d.scriptsCompleted > 0);
         const scriptsCompleted = weekDays.reduce((sum, d) => sum + d.scriptsCompleted, 0);
-        const target = weekDays.reduce((sum, d) => sum + d.target, 0);
-        const deficit = weekDays.reduce((sum, d) => sum + d.deficit, 0);
+        // Weekly target = 3 × actual weekdays, minus 1 for each with >3min scripts
+        // Plus target for each weekend day worked (treated as makeup day)
+        const numWeekdays = weekdayDays.length;
+        const longWeekdays = weekdayDays.filter(d => d.scripts.some(s => s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN)).length;
+        const weekendTarget = weekendWorked.reduce((sum, d) => sum + d.target, 0);
+        const target = (TARGET_NORMAL * numWeekdays) - longWeekdays + weekendTarget;
+        const deficit = target - scriptsCompleted;
 
         return {
           weekNumber: weekNum++,
@@ -410,38 +422,80 @@ function StatBox({ label, value, sub }: { label: string; value: string | number;
 function ScriptList({ scripts }: { scripts: CompletedScript[] }) {
   const theme = useTheme();
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
       {scripts.map((s) => (
         <Box
           key={s.scriptId}
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 2,
+            gap: 1.5,
             px: 1.5,
-            py: 0.75,
-            borderRadius: 1,
+            py: 1,
+            borderRadius: 1.5,
             bgcolor: alpha(theme.palette.primary.main, 0.04),
-            fontSize: '0.8125rem',
+            borderLeft: '3px solid',
+            borderLeftColor: s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN ? 'warning.main' : 'success.main',
           }}
         >
-          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 500, flex: 1 }}>
-            {s.scriptName}
-          </Typography>
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-            avg {s.avgDurationMin} min
-          </Typography>
-          <Chip
-            label={s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN ? '>3 min' : '≤3 min'}
-            size="small"
-            color={s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN ? 'warning' : 'default'}
-            sx={{ height: 20, fontSize: '0.6875rem' }}
-          />
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-            {s.videoCount} videos
-          </Typography>
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+              {s.scriptName}
+            </Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+              {s.avgDurationMin} min avg  •  {s.videoCount} videos
+            </Typography>
+          </Box>
         </Box>
       ))}
+    </Box>
+  );
+}
+
+function DayPopoverContent({ day }: { day: DayScriptKpi }) {
+  const theme = useTheme();
+  const weekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
+  return (
+    <Box sx={{ p: 2.5, minWidth: 300 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem' }}>{day.dayLabel}</Typography>
+        {!weekend && (
+          <Chip
+            label={day.passed ? 'Passed' : 'Missed'}
+            size="small"
+            color={day.passed ? 'success' : 'error'}
+            sx={{ fontWeight: 600 }}
+          />
+        )}
+      </Box>
+      {/* Summary */}
+      {!weekend && (
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, p: 1.5, borderRadius: 1.5, bgcolor: alpha(theme.palette.primary.main, 0.03), border: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ textAlign: 'center', flex: 1 }}>
+            <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>{day.scriptsCompleted}</Typography>
+            <Typography variant="caption" color="text.secondary">completed</Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center', flex: 1 }}>
+            <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>{day.target}</Typography>
+            <Typography variant="caption" color="text.secondary">target</Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center', flex: 1 }}>
+            <Typography sx={{ fontSize: '1.25rem', fontWeight: 700, color: day.deficit > 0 ? 'error.main' : 'success.main' }}>
+              {day.deficit > 0 ? `-${day.deficit}` : day.deficit === 0 ? '0' : `+${Math.abs(day.deficit)}`}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">deficit</Typography>
+          </Box>
+        </Box>
+      )}
+      {/* Scripts */}
+      {day.scripts.length > 0 ? (
+        <ScriptList scripts={day.scripts} />
+      ) : (
+        <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', textAlign: 'center', py: 2 }}>
+          No scripts completed
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -450,7 +504,7 @@ function ScriptList({ scripts }: { scripts: CompletedScript[] }) {
 // CALENDAR VIEW
 // =============================================================================
 
-function DayCell({ day, onClick }: { day: DayScriptKpi | null; onClick?: (e: React.MouseEvent<HTMLElement>) => void }) {
+function DayCell({ day, onClick }: { day: DayScriptKpi | null; isWeekend?: boolean; onClick?: (e: React.MouseEvent<HTMLElement>) => void }) {
   const theme = useTheme();
 
   if (!day) {
@@ -458,6 +512,21 @@ function DayCell({ day, onClick }: { day: DayScriptKpi | null; onClick?: (e: Rea
       <Box sx={{ width: 80, height: 60, borderRadius: 1, bgcolor: alpha(theme.palette.action.disabled, 0.05) }} />
     );
   }
+
+  const weekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
+
+  // Weekend: idle = grey empty, worked = treated as makeup day with pass/fail
+  if (weekend) {
+    const hasWork = day.scriptsCompleted > 0;
+    if (!hasWork) {
+      return (
+        <Box sx={{ width: 80, height: 60, borderRadius: 1, bgcolor: alpha(theme.palette.action.disabled, 0.05) }} />
+      );
+    }
+    // Worked weekend — same display as weekday (makeup day)
+  }
+
+  const hasLongScript = day.scripts.some(s => s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN);
 
   return (
     <Box
@@ -479,16 +548,22 @@ function DayCell({ day, onClick }: { day: DayScriptKpi | null; onClick?: (e: Rea
         justifyContent: 'center',
         cursor: day.scripts.length > 0 ? 'pointer' : 'default',
         transition: 'all 0.15s ease',
+        position: 'relative',
         '&:hover': day.scripts.length > 0 ? {
           boxShadow: `0 0 0 2px ${day.passed ? theme.palette.success.main : theme.palette.error.main}`,
         } : {},
       }}
     >
-      <Typography sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}>
+      <Typography sx={{ fontSize: '0.625rem', color: 'text.secondary', position: 'absolute', top: 3, left: 6 }}>
         {day.date.slice(8)}
       </Typography>
-      <Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>
-        {day.scriptsCompleted}/{day.target}
+      {hasLongScript && (
+        <Typography sx={{ fontSize: '0.5625rem', color: 'warning.main', fontWeight: 700, position: 'absolute', top: 3, right: 4 }}>
+          -1
+        </Typography>
+      )}
+      <Typography sx={{ fontWeight: 700, fontSize: '1rem', mt: 0.5 }}>
+        {day.scriptsCompleted}
       </Typography>
       <PassFailIcon passed={day.passed} />
     </Box>
@@ -509,15 +584,19 @@ function MonthCalendar({ month }: { month: MonthScriptKpi }) {
   };
 
   const weekRows = month.weeks.map(week => {
-    const slots: (DayScriptKpi | null)[] = [null, null, null, null, null];
+    // 7 slots: Mon(0) Tue(1) Wed(2) Thu(3) Fri(4) Sat(5) Sun(6)
+    const slots: (DayScriptKpi | null)[] = [null, null, null, null, null, null, null];
     for (const day of week.days) {
       const dow = day.dayOfWeek;
       if (dow >= 1 && dow <= 5) {
-        slots[dow - 1] = day;
+        slots[dow - 1] = day; // Mon=0, Fri=4
+      } else if (dow === 6) {
+        slots[5] = day; // Sat
+      } else {
+        slots[6] = day; // Sun
       }
     }
-    const weekendDays = week.days.filter(d => d.dayOfWeek === 0 || d.dayOfWeek === 6);
-    return { week, slots, weekendDays };
+    return { week, slots };
   });
 
   return (
@@ -544,8 +623,9 @@ function MonthCalendar({ month }: { month: MonthScriptKpi }) {
           )}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {month.scriptsCompleted}/{month.target} scripts
+          {month.scriptsCompleted}/{month.target} Scripts
         </Typography>
+        <PassFailIcon passed={month.scriptsCompleted >= month.target} />
         <Box sx={{ ml: 'auto' }}>
           <DeficitChip deficit={month.deficit} />
         </Box>
@@ -553,16 +633,16 @@ function MonthCalendar({ month }: { month: MonthScriptKpi }) {
       <Collapse in={expanded}>
         <Box sx={{ px: 2, pb: 2 }}>
           <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(d => (
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
               <Box key={d} sx={{ width: 80, textAlign: 'center' }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>{d}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: (d === 'Sat' || d === 'Sun') ? 'info.main' : 'text.secondary' }}>{d}</Typography>
               </Box>
             ))}
             <Box sx={{ width: 80, textAlign: 'center' }}>
               <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>Week</Typography>
             </Box>
           </Box>
-          {weekRows.map(({ week, slots, weekendDays }) => (
+          {weekRows.map(({ week, slots }) => (
             <Box key={week.weekNumber} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
               {slots.map((day, i) => (
                 <DayCell
@@ -571,15 +651,75 @@ function MonthCalendar({ month }: { month: MonthScriptKpi }) {
                   onClick={day ? (e) => handleDayClick(e, day) : undefined}
                 />
               ))}
-              <Box sx={{ width: 80, textAlign: 'center' }}>
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                  {week.scriptsCompleted}/{week.target}
-                </Typography>
-                <DeficitChip deficit={week.deficit} size="small" />
-              </Box>
-              {weekendDays.map(day => (
-                <DayCell key={day.date} day={day} onClick={(e) => handleDayClick(e, day)} />
-              ))}
+              {(() => {
+                const weekdayDays = week.days.filter(d => d.dayOfWeek >= 1 && d.dayOfWeek <= 5);
+                const weekendWorkedDays = week.days.filter(d => (d.dayOfWeek === 0 || d.dayOfWeek === 6) && d.scriptsCompleted > 0);
+                const longWeekdays = weekdayDays.filter(d => d.scripts.some(s => s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN)).length;
+                const numWeekdays = weekdayDays.length;
+                const baseTarget = TARGET_NORMAL * numWeekdays;
+                const weekendTarget = weekendWorkedDays.reduce((sum, d) => sum + d.target, 0);
+                const weekPassed = week.scriptsCompleted >= week.target;
+
+                const targetTooltip = (
+                  <Box sx={{ p: 0.5 }}>
+                    <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 1 }}>Weekly Target Breakdown</Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, mb: 0.5 }}>
+                      <span>Base target ({numWeekdays} day{numWeekdays !== 1 ? 's' : ''})</span>
+                      <strong>{baseTarget}</strong>
+                    </Box>
+                    {longWeekdays > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, mb: 0.5, color: '#ffb74d' }}>
+                        <span>Long scripts ({longWeekdays} day{longWeekdays > 1 ? 's' : ''})</span>
+                        <strong>−{longWeekdays}</strong>
+                      </Box>
+                    )}
+                    {weekendWorkedDays.length > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, mb: 0.5, color: '#64b5f6' }}>
+                        <span>Makeup days ({weekendWorkedDays.length})</span>
+                        <strong>+{weekendTarget}</strong>
+                      </Box>
+                    )}
+                    <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.2)', pt: 0.5, mt: 0.5, display: 'flex', justifyContent: 'space-between', gap: 3 }}>
+                      <strong>Total target</strong>
+                      <strong>{week.target}</strong>
+                    </Box>
+                  </Box>
+                );
+
+                const deficitTooltip = (
+                  <Box sx={{ p: 0.5 }}>
+                    {week.deficit > 0 ? (
+                      <>
+                        <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.5 }}>Behind Target</Box>
+                        <Box>Completed <strong>{week.scriptsCompleted}</strong> of <strong>{week.target}</strong> Scripts</Box>
+                        <Box sx={{ mt: 0.5, color: '#ef9a9a', fontWeight: 600 }}>Short by {week.deficit} Script{week.deficit !== 1 ? 's' : ''}</Box>
+                      </>
+                    ) : week.deficit === 0 ? (
+                      <Box sx={{ fontWeight: 600 }}>Exactly on target this week</Box>
+                    ) : (
+                      <>
+                        <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.5 }}>Ahead of Target</Box>
+                        <Box>Completed <strong>{week.scriptsCompleted}</strong> of <strong>{week.target}</strong> Scripts</Box>
+                        <Box sx={{ mt: 0.5, color: '#a5d6a7', fontWeight: 600 }}>+{Math.abs(week.deficit)} extra Script{Math.abs(week.deficit) !== 1 ? 's' : ''}</Box>
+                      </>
+                    )}
+                  </Box>
+                );
+
+                return (
+                  <Box sx={{ minWidth: 140, pl: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Tooltip title={targetTooltip} arrow>
+                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, cursor: 'help' }}>
+                        {week.scriptsCompleted}/{week.target} <Typography component="span" sx={{ fontSize: '0.75rem', fontWeight: 400, color: 'text.secondary' }}>Scripts</Typography>
+                      </Typography>
+                    </Tooltip>
+                    <PassFailIcon passed={weekPassed} />
+                    <Tooltip title={deficitTooltip} arrow>
+                      <Box sx={{ cursor: 'help' }}><DeficitChip deficit={week.deficit} size="small" /></Box>
+                    </Tooltip>
+                  </Box>
+                );
+              })()}
             </Box>
           ))}
         </Box>
@@ -591,16 +731,215 @@ function MonthCalendar({ month }: { month: MonthScriptKpi }) {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         transformOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        {popoverDay && (
-          <Box sx={{ p: 2, minWidth: 280 }}>
-            <Typography sx={{ fontWeight: 600, mb: 1 }}>
-              {popoverDay.dayLabel} — {popoverDay.scriptsCompleted}/{popoverDay.target}
-              {popoverDay.passed ? ' ✓' : ' ✗'}
-            </Typography>
-            <ScriptList scripts={popoverDay.scripts} />
-          </Box>
-        )}
+        {popoverDay && <DayPopoverContent day={popoverDay} />}
       </Popover>
+    </Paper>
+  );
+}
+
+
+// =============================================================================
+// PROGRESS BARS VIEW — weekly progress bars
+// =============================================================================
+
+function ProgressWeekBar({ week }: { week: WeekScriptKpi }) {
+  const theme = useTheme();
+  const [expanded, setExpanded] = useState(false);
+  const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
+  const [popoverDay, setPopoverDay] = useState<DayScriptKpi | null>(null);
+
+  const pct = week.target > 0 ? Math.min((week.scriptsCompleted / week.target) * 100, 100) : 0;
+  const weekPassed = week.scriptsCompleted >= week.target;
+
+  // Compute tooltip data
+  const weekdayDays = week.days.filter(d => d.dayOfWeek >= 1 && d.dayOfWeek <= 5);
+  const weekendWorkedDays = week.days.filter(d => (d.dayOfWeek === 0 || d.dayOfWeek === 6) && d.scriptsCompleted > 0);
+  const longWeekdays = weekdayDays.filter(d => d.scripts.some(s => s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN)).length;
+  const numWeekdays = weekdayDays.length;
+  const baseTarget = TARGET_NORMAL * numWeekdays;
+  const weekendTarget = weekendWorkedDays.reduce((sum, d) => sum + d.target, 0);
+
+  // Target tooltip — styled JSX
+  const targetTooltip = (
+    <Box sx={{ p: 0.5 }}>
+      <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 1 }}>Weekly Target Breakdown</Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, mb: 0.5 }}>
+        <span>Base target ({numWeekdays} day{numWeekdays !== 1 ? 's' : ''})</span>
+        <strong>{baseTarget}</strong>
+      </Box>
+      {longWeekdays > 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, mb: 0.5, color: '#ffb74d' }}>
+          <span>Long scripts ({longWeekdays} day{longWeekdays > 1 ? 's' : ''})</span>
+          <strong>−{longWeekdays}</strong>
+        </Box>
+      )}
+      {weekendWorkedDays.length > 0 && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, mb: 0.5, color: '#64b5f6' }}>
+          <span>Makeup days ({weekendWorkedDays.length})</span>
+          <strong>+{weekendTarget}</strong>
+        </Box>
+      )}
+      <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.2)', pt: 0.5, mt: 0.5, display: 'flex', justifyContent: 'space-between', gap: 3 }}>
+        <strong>Total target</strong>
+        <strong>{week.target}</strong>
+      </Box>
+    </Box>
+  );
+
+  // Bar tooltip — daily breakdown
+  const barTooltip = (
+    <Box sx={{ p: 0.5 }}>
+      <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 1 }}>Daily Breakdown</Box>
+      {weekdayDays.map(d => {
+        const hasLong = d.scripts.some(s => s.avgDurationMin > LONG_SCRIPT_THRESHOLD_MIN);
+        return (
+          <Box key={d.date} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+            <Box sx={{ width: 30, fontWeight: 600 }}>{DAY_NAMES[d.dayOfWeek]}</Box>
+            <Box sx={{ fontWeight: 700 }}>{d.scriptsCompleted}</Box>
+            <Box sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>/ {d.target}</Box>
+            {hasLong && <Box sx={{ fontSize: '0.6875rem', color: '#ffb74d' }}>long</Box>}
+            <Box sx={{ ml: 'auto' }}>{d.passed ? '✓' : '✗'}</Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+
+  // Deficit tooltip
+  const deficitTooltip = (
+    <Box sx={{ p: 0.5 }}>
+      {week.deficit > 0 ? (
+        <>
+          <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.5 }}>Behind Target</Box>
+          <Box>Completed <strong>{week.scriptsCompleted}</strong> of <strong>{week.target}</strong> Scripts</Box>
+          <Box sx={{ mt: 0.5, color: '#ef9a9a', fontWeight: 600 }}>Short by {week.deficit} script{week.deficit !== 1 ? 's' : ''}</Box>
+        </>
+      ) : week.deficit === 0 ? (
+        <Box sx={{ fontWeight: 600 }}>Exactly on target this week</Box>
+      ) : (
+        <>
+          <Box sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.5 }}>Ahead of Target</Box>
+          <Box>Completed <strong>{week.scriptsCompleted}</strong> of <strong>{week.target}</strong> Scripts</Box>
+          <Box sx={{ mt: 0.5, color: '#a5d6a7', fontWeight: 600 }}>+{Math.abs(week.deficit)} extra script{Math.abs(week.deficit) !== 1 ? 's' : ''}</Box>
+        </>
+      )}
+    </Box>
+  );
+
+  return (
+    <Box>
+      <Box
+        onClick={() => setExpanded(!expanded)}
+        sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, borderRadius: 1, px: 1 }}
+      >
+        <IconButton size="small" sx={{ p: 0 }}>
+          {expanded ? <KeyboardArrowUpIcon sx={{ fontSize: 16 }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />}
+        </IconButton>
+        <Box sx={{ minWidth: 140 }}>
+          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>Week {week.weekNumber}</Typography>
+          <Typography sx={{ fontSize: '0.6875rem', color: 'text.disabled' }}>{week.dateRange}</Typography>
+        </Box>
+        <Tooltip title={barTooltip} arrow>
+          <Box sx={{ flex: 1, maxWidth: 220 }}>
+            <LinearProgress
+              variant="determinate"
+              value={pct}
+              sx={{
+                height: 14, borderRadius: 7,
+                bgcolor: alpha(theme.palette.grey[300], 0.3),
+                '& .MuiLinearProgress-bar': { borderRadius: 7, bgcolor: pct >= 80 ? 'success.main' : pct >= 50 ? 'warning.main' : 'error.main' },
+              }}
+            />
+          </Box>
+        </Tooltip>
+        <Tooltip title={targetTooltip} arrow>
+          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, minWidth: 80, cursor: 'help' }}>
+            {week.scriptsCompleted}/{week.target} <Typography component="span" sx={{ fontSize: '0.75rem', fontWeight: 400, color: 'text.secondary' }}>Scripts</Typography>
+          </Typography>
+        </Tooltip>
+        <PassFailIcon passed={weekPassed} />
+        <Tooltip title={deficitTooltip} arrow>
+          <Box sx={{ cursor: 'help' }}><DeficitChip deficit={week.deficit} size="small" /></Box>
+        </Tooltip>
+      </Box>
+      <Collapse in={expanded}>
+        <Box sx={{ display: 'flex', gap: 1, px: 4, py: 1, flexWrap: 'wrap' }}>
+          {week.days.map(day => {
+            const weekend = day.dayOfWeek === 0 || day.dayOfWeek === 6;
+            const idleWeekend = weekend && day.scriptsCompleted === 0;
+            // Weekend worked days are treated as makeup days with pass/fail
+            return idleWeekend ? null : (
+              <Box
+                key={day.date}
+                onClick={(e) => { e.stopPropagation(); setPopoverAnchor(e.currentTarget); setPopoverDay(day); }}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  bgcolor: day.passed ? alpha(theme.palette.success.main, 0.08) : alpha(theme.palette.error.main, 0.08),
+                  border: '1px solid',
+                  borderColor: day.passed ? 'success.main' : 'error.main',
+                  '&:hover': {
+                    boxShadow: `0 0 0 2px ${day.passed ? theme.palette.success.main : theme.palette.error.main}`,
+                  },
+                }}
+              >
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>{DAY_NAMES[day.dayOfWeek]}</Typography>
+                <Typography sx={{ fontSize: '0.75rem' }}>{day.scriptsCompleted} script{day.scriptsCompleted !== 1 ? 's' : ''}</Typography>
+                <PassFailIcon passed={day.passed} />
+              </Box>
+            );
+          })}
+        </Box>
+      </Collapse>
+      <Popover
+        open={!!popoverAnchor}
+        anchorEl={popoverAnchor}
+        onClose={() => { setPopoverAnchor(null); setPopoverDay(null); }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        {popoverDay && <DayPopoverContent day={popoverDay} />}
+      </Popover>
+    </Box>
+  );
+}
+
+function ProgressBarsMonth({ month }: { month: MonthScriptKpi }) {
+  const [expanded, setExpanded] = useState(month.key === getCurrentMonthKey());
+  const isCurrent = month.key === getCurrentMonthKey();
+
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: 1, overflow: 'hidden' }}>
+      <Box
+        onClick={() => setExpanded(!expanded)}
+        sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1.5, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+      >
+        <IconButton size="small" sx={{ p: 0 }}>
+          {expanded ? <KeyboardArrowUpIcon sx={{ fontSize: 18 }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 18 }} />}
+        </IconButton>
+        <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+          {month.label}
+          {isCurrent && <Chip label="Current" size="small" color="primary" variant="outlined" sx={{ ml: 1, height: 20, fontSize: '0.6875rem' }} />}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {month.scriptsCompleted}/{month.target} Scripts
+        </Typography>
+        <PassFailIcon passed={month.scriptsCompleted >= month.target} />
+        <Box sx={{ ml: 'auto' }}><DeficitChip deficit={month.deficit} /></Box>
+      </Box>
+      <Collapse in={expanded}>
+        <Box sx={{ px: 1, pb: 2 }}>
+          {month.weeks.map(week => (
+            <ProgressWeekBar key={week.weekNumber} week={week} month={month} />
+          ))}
+        </Box>
+      </Collapse>
     </Paper>
   );
 }
@@ -639,7 +978,7 @@ function EditorCardWrapper({ editor, children }: { editor: EditorScriptKpi; chil
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 3, alignItems: 'center', flex: 1 }}>
-          <StatBox label="This Month" value={`${currentScripts}/${currentTarget}`} sub="scripts" />
+          <StatBox label="This Month" value={`${currentScripts}/${currentTarget}`} sub="Scripts" />
           <DeficitChip deficit={editor.currentMonth?.deficit ?? 0} />
         </Box>
 
@@ -668,6 +1007,8 @@ interface ScriptKpiTabProps {
 }
 
 export function ScriptKpiTab({ editorId }: ScriptKpiTabProps) {
+  const [subView, setSubView] = useState<SubView>('calendar');
+
   const videosQuery = useQuery({
     queryKey: ['videos'],
     queryFn: ({ signal }) => listVideos(signal),
@@ -709,13 +1050,26 @@ export function ScriptKpiTab({ editorId }: ScriptKpiTabProps) {
     );
   }
 
+  const MonthComponent = subView === 'calendar' ? MonthCalendar : ProgressBarsMonth;
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <ToggleTabs
+          value={subView}
+          onChange={setSubView}
+          size="small"
+          options={[
+            { value: 'calendar', label: 'Calendar' },
+            { value: 'progress', label: 'Progress Bars' },
+          ]}
+        />
+      </Box>
       {kpiStats.map(editor => (
         <EditorCardWrapper key={editor.editorId} editor={editor}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, p: 2, pt: 0 }}>
             {editor.months.map(month => (
-              <MonthCalendar key={month.key} month={month} />
+              <MonthComponent key={month.key} month={month} />
             ))}
           </Box>
         </EditorCardWrapper>
