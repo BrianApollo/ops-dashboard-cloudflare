@@ -70,13 +70,14 @@ interface LaunchProgressViewProps {
 // HELPERS
 // =============================================================================
 
-type StepStatus = 'done' | 'active' | 'pending';
+type StepStatus = 'done' | 'active' | 'pending' | 'error';
 
 function getStepStatuses(
   phase: LaunchPhase,
   stats: FbLaunchState['stats'] | null,
   campaignId?: string,
   adSetId?: string,
+  errorMessage?: string,
 ): {
   upload: { status: StepStatus; label: string };
   processing: { status: StepStatus; label: string };
@@ -87,20 +88,32 @@ function getStepStatuses(
   const phaseOrder: LaunchPhase[] = ['idle', 'checking', 'uploading', 'polling', 'creating_campaign', 'creating_ads', 'complete'];
   const idx = phaseOrder.indexOf(phase);
   const isFinal = phase === 'error' || phase === 'stopped' || phase === 'complete';
+  const isError = phase === 'error';
 
   const total = stats?.total || 0;
   const uploaded = (stats?.processing || 0) + (stats?.ready || 0) + (stats?.creatingAd || 0) + (stats?.done || 0);
   const processed = (stats?.ready || 0) + (stats?.creatingAd || 0) + (stats?.done || 0);
   const adsDone = stats?.done || 0;
 
+  // Detect which step failed based on error message prefix and state
+  const campaignFailed = isError && !campaignId && errorMessage?.startsWith('Campaign:');
+  const adSetFailed = isError && campaignId && !adSetId && errorMessage?.startsWith('AdSet:');
+
   // Determine Ad Set Status
-  // If we have an adSetId, it's done. 
-  // If we have campaignId but no adSetId, and phase is creating_ads (or later), it's active.
   const adSetStatus: StepStatus = adSetId
     ? 'done'
-    : (campaignId && (idx >= 5)) // creating_ads is index 5
-      ? 'active'
-      : 'pending';
+    : adSetFailed
+      ? 'error'
+      : (campaignId && (idx >= 5))
+        ? 'active'
+        : 'pending';
+
+  // Determine Campaign Status
+  const campaignStatus: StepStatus = campaignId
+    ? 'done'
+    : campaignFailed
+      ? 'error'
+      : (idx === 4 ? 'active' : (idx > 4 || (isFinal && !isError) ? 'done' : 'pending'));
 
   return {
     upload: {
@@ -112,15 +125,15 @@ function getStepStatuses(
       label: total > 0 ? `${processed}/${total}` : '',
     },
     campaign: {
-      status: campaignId ? 'done' : (idx === 4 ? 'active' : (idx > 4 || isFinal ? 'done' : 'pending')),
-      label: campaignId || (phase === 'creating_campaign' ? 'Creating...' : (idx > 4 || isFinal) ? 'Created' : ''),
+      status: campaignStatus,
+      label: campaignId || (campaignFailed ? 'Failed' : phase === 'creating_campaign' ? 'Creating...' : (idx > 4 || (isFinal && !isError)) ? 'Created' : ''),
     },
     adSet: {
       status: adSetStatus,
-      label: adSetId || (adSetStatus === 'active' ? 'Creating...' : ''),
+      label: adSetId || (adSetFailed ? 'Failed' : adSetStatus === 'active' ? 'Creating...' : ''),
     },
     ads: {
-      status: phase === 'complete' ? 'done' : idx === 5 ? 'active' : 'pending',
+      status: isError && !adSetId ? 'pending' : phase === 'complete' ? 'done' : idx === 5 ? 'active' : 'pending',
       label: total > 0 ? `${adsDone}/${total}` : '',
     },
   };
@@ -280,7 +293,8 @@ export function LaunchProgressView({
   const phase: LaunchPhase = progress?.phase || (launchResult?.success ? 'complete' : launchResult?.error ? 'error' : 'idle');
   const stats = progress?.stats || null;
   const mediaItems = buildMediaItems(selectedVideos, selectedImages, progress);
-  const stepStatuses = getStepStatuses(phase, stats, progress?.campaignId || undefined, progress?.adsetId || undefined);
+  const errorMessage = progress?.error || launchResult?.error;
+  const stepStatuses = getStepStatuses(phase, stats, progress?.campaignId || undefined, progress?.adsetId || undefined, errorMessage);
 
   const videoItems = sortMediaItems(mediaItems.filter(m => m.type === 'video'));
   const imageItems = sortMediaItems(mediaItems.filter(m => m.type === 'image'));
@@ -427,6 +441,36 @@ export function LaunchProgressView({
           </Box>
 
           {/* ============================================================= */}
+          {/* ERROR BANNER                                                  */}
+          {/* ============================================================= */}
+          {isFailed && errorMessage && (
+            <Box
+              sx={{
+                mx: 2.5,
+                my: 2,
+                p: 2,
+                bgcolor: 'error.50',
+                border: '1px solid',
+                borderColor: 'error.main',
+                borderRadius: 1,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1.5,
+              }}
+            >
+              <ErrorOutlineIcon sx={{ color: 'error.main', mt: 0.25, flexShrink: 0 }} />
+              <Box>
+                <Typography sx={{ ...textSm, fontWeight: 600, color: 'error.main', mb: 0.5 }}>
+                  Launch Failed
+                </Typography>
+                <Typography sx={{ ...textSm, color: 'error.dark', wordBreak: 'break-word' }}>
+                  {errorMessage}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          {/* ============================================================= */}
           {/* CANCEL BUTTON                                                 */}
           {/* ============================================================= */}
           {isLaunching && onCancel && (
@@ -453,15 +497,17 @@ function StepCard({ label, status, detail }: { label: string; status: StepStatus
         flex: 1,
         p: 1.5,
         border: '1px solid',
-        borderColor: status === 'done' ? 'success.main' : status === 'active' ? 'primary.main' : 'divider',
+        borderColor: status === 'done' ? 'success.main' : status === 'error' ? 'error.main' : status === 'active' ? 'primary.main' : 'divider',
         borderRadius: 1,
-        bgcolor: status === 'active' ? 'primary.50' : 'transparent',
+        bgcolor: status === 'active' ? 'primary.50' : status === 'error' ? 'error.50' : 'transparent',
         textAlign: 'center',
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mb: 0.25 }}>
         {status === 'done' ? (
           <CheckCircleIcon sx={{ fontSize: 14, color: 'success.main' }} />
+        ) : status === 'error' ? (
+          <ErrorOutlineIcon sx={{ fontSize: 14, color: 'error.main' }} />
         ) : status === 'active' ? (
           <AutorenewIcon
             sx={{
@@ -477,15 +523,15 @@ function StepCard({ label, status, detail }: { label: string; status: StepStatus
         <Typography
           sx={{
             ...textSm,
-            fontWeight: status === 'active' ? 600 : 500,
-            color: status === 'pending' ? 'text.disabled' : 'text.primary',
+            fontWeight: status === 'active' || status === 'error' ? 600 : 500,
+            color: status === 'pending' ? 'text.disabled' : status === 'error' ? 'error.main' : 'text.primary',
           }}
         >
           {label}
         </Typography>
       </Box>
       {detail && (
-        <Typography sx={{ ...textXs, color: status === 'done' ? 'success.main' : 'text.secondary' }}>
+        <Typography sx={{ ...textXs, color: status === 'done' ? 'success.main' : status === 'error' ? 'error.main' : 'text.secondary' }}>
           {detail}
         </Typography>
       )}
@@ -506,6 +552,7 @@ function MediaItemRow({ item, showVideoId, onRetry }: { item: MediaItemForDispla
       sx={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: 1,
         py: 0.5,
         px: 0.5,
@@ -598,6 +645,25 @@ function MediaItemRow({ item, showVideoId, onRetry }: { item: MediaItemForDispla
       >
         {item.adId || '\u2014'}
       </Typography>
+
+      {/* Error message row (below the main row) */}
+      {isFailed && item.error && (
+        <Typography
+          sx={{
+            ...textXs,
+            color: 'error.main',
+            gridColumn: '1 / -1',
+            pl: 4,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%',
+          }}
+          title={item.error}
+        >
+          {item.error}
+        </Typography>
+      )}
     </Box>
   );
 }
