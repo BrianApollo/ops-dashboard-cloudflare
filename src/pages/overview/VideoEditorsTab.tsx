@@ -31,6 +31,10 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useTheme, alpha } from '@mui/material/styles';
 import { listVideos } from '../../features/videos/data';
 import { provider } from '../../data/provider';
+import { ToggleTabs } from '../../ui/ToggleTabs';
+import { ScriptKpiTab } from './ScriptKpiTab';
+
+type EditorSubTab = 'view1' | 'view2';
 
 // =============================================================================
 // CONSTANTS
@@ -137,7 +141,7 @@ function computeEditorStats(
     if (EXCLUDED_EDITORS.has(video.editor.name)) continue;
 
     const parsed = parseVideoData(video.videoData);
-    const uploadDate = parsed?.firstUploadedAt ?? video.lastUploadAt;
+    const uploadDate = video.lastUploadAt ?? parsed?.firstUploadedAt;
     if (!uploadDate) continue;
 
     const eid = video.editor.id;
@@ -420,6 +424,8 @@ interface VideoEditorsTabProps {
 }
 
 export function VideoEditorsTab({ editorId }: VideoEditorsTabProps) {
+  const [subTab, setSubTab] = useState<EditorSubTab>('view1');
+
   const videosQuery = useQuery({
     queryKey: ['videos'],
     queryFn: ({ signal }) => listVideos(signal),
@@ -464,13 +470,27 @@ export function VideoEditorsTab({ editorId }: VideoEditorsTabProps) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {editorStats.map((editor) => (
-        <EditorCard
-          key={editor.editorId}
-          editor={editor}
-          defaultExpanded={!!editorId || editorStats.length === 1}
-        />
-      ))}
+      <ToggleTabs
+        value={subTab}
+        onChange={setSubTab}
+        size="small"
+        options={[
+          { value: 'view1', label: 'View 1' },
+          { value: 'view2', label: 'View 2' },
+        ]}
+      />
+
+      {subTab === 'view1' ? (
+        editorStats.map((editor) => (
+          <EditorCard
+            key={editor.editorId}
+            editor={editor}
+            defaultExpanded={!!editorId || editorStats.length === 1}
+          />
+        ))
+      ) : (
+        <ScriptKpiTab editorId={editorId} />
+      )}
     </Box>
   );
 }
