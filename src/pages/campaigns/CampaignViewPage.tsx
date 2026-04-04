@@ -417,7 +417,7 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
           <Divider />
           <Typography variant="caption" sx={sectionHeader}>Ad Set</Typography>
           {[
-            ['Ad Set ID', facebook.adSetId || 'N/A'],
+            ['Ad Set', facebook.adSet ? `${facebook.adSet.name} | ${facebook.adSet.id}` : (facebook as any).adSetId || 'N/A'],
             ['Targeting', config.geo.length > 0 ? config.geo.join(', ') : 'N/A'],
             ['Pixel', facebook.pixel?.name || facebook.pixel?.id || 'N/A'],
             ['Start Date', config.startDate || 'N/A'],
@@ -611,7 +611,7 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
             <Box sx={{ display: 'flex', gap: 1, ml: 1, flexWrap: 'wrap' }}>
               {[
                 facebook.campaign?.id && `Campaign: ${facebook.campaign.id}`,
-                facebook.adSetId && `Ad Set: ${facebook.adSetId}`,
+                (facebook.adSet?.id || (facebook as any).adSetId) && `Ad Set: ${facebook.adSet?.id || (facebook as any).adSetId}`,
               ].filter(Boolean).map((text, i) => (
                 <Chip key={i} label={text} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.6875rem', color: 'rgba(255,255,255,0.85)', borderColor: 'rgba(255,255,255,0.3)' }} />
               ))}
@@ -621,13 +621,13 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
         <Collapse in={showRefs}>
           <Divider />
           {[
-            ['Ad Account', facebook.adAccount?.name ? `${facebook.adAccount.name} (${facebook.adAccount.id})` : facebook.adAccount?.id],
-            ['Page', facebook.page?.name ? `${facebook.page.name} (${facebook.page.id})` : facebook.page?.id],
-            ['Pixel', facebook.pixel?.name ? `${facebook.pixel.name} (${facebook.pixel.id})` : facebook.pixel?.id],
-            ['Campaign', facebook.campaign ? `${facebook.campaign.name} | ${facebook.campaign.id}` : 'N/A'],
-            ['Ad Set ID', facebook.adSetId],
-            ['RedTrack', snapshot.redtrack ? `${snapshot.redtrack.campaignName || ''} | ${snapshot.redtrack.campaignId}`.replace(/^\s*\|\s*/, '') : 'N/A'],
-            ['Profile', facebook.profile?.name ? `${facebook.profile.name} (${facebook.profile.id})` : facebook.profile?.id],
+            ['Ad Account', facebook.adAccount?.name ? `${facebook.adAccount.name} || ${facebook.adAccount.id}` : facebook.adAccount?.id],
+            ['Page', facebook.page?.name ? `${facebook.page.name} || ${facebook.page.id}` : facebook.page?.id],
+            ['Pixel', facebook.pixel?.name ? `${facebook.pixel.name} || ${facebook.pixel.id}` : facebook.pixel?.id],
+            ['Campaign', facebook.campaign ? `${facebook.campaign.name} || ${facebook.campaign.id}` : 'N/A'],
+            ['Ad Set', facebook.adSet ? `${facebook.adSet.name} || ${facebook.adSet.id}` : (facebook as any).adSetId || 'N/A'],
+            ['RedTrack', snapshot.redtrack ? `${snapshot.redtrack.campaignName || ''} || ${snapshot.redtrack.campaignId}`.replace(/^\s*\|\|?\s*/, '') : 'N/A'],
+            ['Profile', facebook.profile?.name ? `${facebook.profile.name} || ${facebook.profile.id}` : facebook.profile?.id],
           ].map(([label, value], i) => (
             <Box key={label} sx={stripedRow(i)}>
               <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120, maxWidth: 120, flexShrink: 0 }}>{label}</Typography>

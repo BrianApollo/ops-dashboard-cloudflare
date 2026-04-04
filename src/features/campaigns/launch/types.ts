@@ -418,7 +418,7 @@ export interface LaunchSnapshot {
     pixel: { id: string; name: string };
     campaign: { id: string; name: string };
     profile: { id: string; name: string };
-    adSetId?: string;
+    adSet?: { id: string; name: string };
     adIds: string[];
   };
 

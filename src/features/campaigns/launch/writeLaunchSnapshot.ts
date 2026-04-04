@@ -209,7 +209,7 @@ export async function writeLaunchSnapshot({
         pixel: { id: draft.pixelId, name: draft.pixelName },
         campaign: { id: result.campaignId || '', name: draft.name || `Campaign ${campaignId}` },
         profile: { id: profile.id, name: profile.profileName },
-        adSetId: result.adsetId || undefined,
+        adSet: result.adsetId ? { id: result.adsetId, name: `${draft.name || 'Campaign'} - AdSet` } : undefined,
         adIds,
       },
 
