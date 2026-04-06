@@ -70,14 +70,14 @@ export { generateVideoName } from './generateVideoName';
 export {
   uploadVideoWithFolder,
   isUploadInProgress,
-  clearFolderCache,
-  deleteDriveFile,
+  deleteFile,
 } from './drive';
 export type {
   UploadResult,
   UploadProgress,
   VideoUploadOptions,
   VideoUploadResult,
+  VideoMetadata,
 } from './drive';
 
 // Permissions

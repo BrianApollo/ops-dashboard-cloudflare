@@ -36,6 +36,7 @@ const FIELD_CREATIVE_LINK = 'Creative Link';       // URL field for Drive link
 export const FIELD_USED_IN_CAMPAIGN = 'Used In Campaign'; // Text/link field
 const FIELD_NOTES = 'Notes';                       // Long text field
 const FIELD_SCROLLSTOPPER_NUMBER = 'Scrollstopper Number'; // Number field for SS2, SS3, etc.
+const FIELD_VIDEO_DATA = 'Video Data';                     // Long text field for metadata JSON
 
 // =============================================================================
 // READ-ONLY / COMPUTED FIELDS (NEVER write to these via API)
@@ -221,6 +222,11 @@ function mapAirtableToVideoAsset(
     ? fields[FIELD_SCROLLSTOPPER_NUMBER]
     : undefined;
 
+  // Video Data (metadata JSON)
+  const videoData = typeof fields[FIELD_VIDEO_DATA] === 'string'
+    ? fields[FIELD_VIDEO_DATA]
+    : undefined;
+
   return {
     id: record.id,
     name,
@@ -241,6 +247,7 @@ function mapAirtableToVideoAsset(
     usedInCampaign,
     scrollstopperNumber,
     parentDriveLink: product.driveFolderId ? `https://drive.google.com/drive/folders/${product.driveFolderId}` : undefined,
+    videoData,
   };
 }
 
@@ -253,6 +260,7 @@ function mapDomainToAirtableFields(
     editorId?: string;
     productId?: string;
     creativeLink?: string;
+    videoData?: string;
   }
 ): Record<string, unknown> {
   // Explicit whitelist of writable fields only
@@ -283,6 +291,9 @@ function mapDomainToAirtableFields(
   }
   if (patch.notes !== undefined) {
     fields[FIELD_NOTES] = patch.notes;
+  }
+  if (patch.videoData !== undefined) {
+    fields[FIELD_VIDEO_DATA] = patch.videoData;
   }
   // NOTE: lastUploadAt is a computed field (Last modified time) - NEVER write to it
 
@@ -415,6 +426,7 @@ export async function updateVideo(
     editorId?: string;
     productId?: string;
     creativeLink?: string;
+    videoData?: string;
   }
 ): Promise<void> {
   const fields = mapDomainToAirtableFields(patch);
@@ -778,23 +790,26 @@ export async function findVideoBySlot(
 }
 
 /**
- * Update a video record after successful Drive upload.
- * Sets Creative Link field and updates status.
+ * Update a video record after successful upload.
+ * Sets Creative Link, status, and video metadata.
  * NOTE: Last Upload At is a computed field (Last modified time) and auto-updates.
  *
  * @param videoId - The Airtable record ID
- * @param creativeLink - The Google Drive shareable link (Creative Link field)
+ * @param creativeLink - The R2 public URL (Creative Link field)
  * @param newStatus - The new status (typically 'review' after upload)
+ * @param videoData - Optional JSON string of video metadata (duration, resolution, etc.)
  */
 export async function updateVideoAfterUpload(
   videoId: string,
   creativeLink: string,
-  newStatus: VideoStatus
+  newStatus: VideoStatus,
+  videoData?: string
 ): Promise<void> {
   // Only write to writable fields - lastUploadAt is computed and auto-updates
   await updateVideo(videoId, {
     creativeLink,
     status: newStatus,
+    videoData,
   });
 }
 
