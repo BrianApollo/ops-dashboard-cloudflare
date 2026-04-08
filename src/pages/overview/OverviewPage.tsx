@@ -28,8 +28,9 @@ import { listVideos } from '../../features/videos/data';
 import { listImages } from '../../features/images/data';
 import { ToggleTabs } from '../../ui/ToggleTabs';
 import { VideoEditorsTab } from './VideoEditorsTab';
+import { ScriptsTab } from './ScriptsTab';
 
-type OverviewTab = 'overview' | 'editors';
+type OverviewTab = 'overview' | 'editors' | 'scripts';
 
 const cellSx = { py: 1.5, px: 1.5, fontSize: '0.875rem' };
 
@@ -143,6 +144,7 @@ export function OverviewPage() {
             options={[
               { value: 'overview', label: 'Overview' },
               { value: 'editors', label: 'Video Editors' },
+              { value: 'scripts', label: 'Scripts' },
             ]}
           />
         </Box>
@@ -203,8 +205,10 @@ export function OverviewPage() {
             </TableBody>
           </Table>
         </TableContainer>
-      ) : (
+      ) : activeTab === 'editors' ? (
         <VideoEditorsTab />
+      ) : (
+        <ScriptsTab />
       )}
     </Box>
   );
