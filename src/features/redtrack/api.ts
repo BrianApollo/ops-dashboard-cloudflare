@@ -448,6 +448,9 @@ export async function duplicateRedtrackCampaign(
   const tags = source.tags as string[] | undefined;
   const costModel = source.cost_model as string;
   const redirectType = (source.redirect_type as number) ?? 1;
+  const integrations = source.integrations as Record<string, unknown> | undefined;
+  const integrationPostback = source.integration_postback as Record<string, unknown> | undefined;
+  const revShare = source.rev_share as number | undefined;
 
   // Extract lander/offer from first stream
   const streams = source.streams as Array<{ stream?: { landings?: Array<{ id: string }>; offers?: Array<{ id: string }> } }> | undefined;
@@ -466,6 +469,9 @@ export async function duplicateRedtrackCampaign(
       cost_model: costModel,
       redirect_type: redirectType,
       ...(tags && { tags }),
+      ...(integrations && { integrations }),
+      ...(integrationPostback && { integration_postback: integrationPostback }),
+      ...(revShare !== undefined && { rev_share: revShare }),
     }
   );
 
