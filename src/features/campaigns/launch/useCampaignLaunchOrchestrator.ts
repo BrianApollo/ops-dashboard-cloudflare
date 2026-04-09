@@ -35,6 +35,7 @@ import { useLaunchSetupDefaults } from './useLaunchSetupDefaults';
 import { useLaunchMediaState } from './useLaunchMediaState';
 import { useLaunchValidation } from './useLaunchValidation';
 import { useLaunchOrchestrator } from './useLaunchOrchestrator';
+import { listAIVideosByProduct, type AIVideo } from '../../ai-videos/data';
 import type { FbLaunchState } from '../launch';
 import type {
   SelectableVideo,
@@ -185,6 +186,20 @@ export function useCampaignLaunchOrchestrator(
   }, [campaignsController.campaigns, campaignId]);
 
   const productId = campaign?.product.id ?? productIdParam;
+  const productName = campaign?.product.name;
+
+  // ---------------------------------------------------------------------------
+  // AI VIDEOS (fetched from separate "AI Videos" Airtable table)
+  // ---------------------------------------------------------------------------
+  const [aiVideos, setAiVideos] = useState<AIVideo[]>([]);
+  const aiVideosFetchRef = useRef(0);
+  useEffect(() => {
+    if (!productName) return;
+    const fetchId = ++aiVideosFetchRef.current;
+    listAIVideosByProduct(productName).then((result) => {
+      if (fetchId === aiVideosFetchRef.current) setAiVideos(result);
+    }).catch(() => { /* swallow — non-blocking */ });
+  }, [productName]);
 
   // ---------------------------------------------------------------------------
   // PROFILE SELECTION (kept here - needed before profile derivation)
@@ -242,15 +257,18 @@ export function useCampaignLaunchOrchestrator(
   // ---------------------------------------------------------------------------
   const baseVideos = useMemo(() => {
     if (!productId) return [];
-    return videosController.list.allRecords
+    const regular = videosController.list.allRecords
       .filter((v) => v.product.id === productId && ['available', 'review'].includes(v.status) && v.format !== 'youtube')
       .map((v) => ({
         id: v.id,
         name: v.name,
         creativeLink: v.creativeLink,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [videosController.list.allRecords, productId]);
+      }));
+    const ai = aiVideos
+      .filter((v) => v.status !== 'Used')
+      .map((v) => ({ id: v.id, name: v.name, creativeLink: v.creativeLink }));
+    return [...regular, ...ai].sort((a, b) => a.name.localeCompare(b.name));
+  }, [videosController.list.allRecords, productId, aiVideos]);
 
   // ---------------------------------------------------------------------------
   // PRELAUNCH UPLOADER
@@ -274,12 +292,38 @@ export function useCampaignLaunchOrchestrator(
   // ---------------------------------------------------------------------------
   // AVAILABLE MEDIA (delegated to extracted hook)
   // ---------------------------------------------------------------------------
-  const { availableVideos, availableImages } = useLaunchMediaState({
+  const { availableVideos: regularAvailableVideos, availableImages } = useLaunchMediaState({
     productId,
     videosController,
     imagesController,
     prelaunchUploader,
   });
+
+  // Merge AI videos (status !== 'Used') into the available videos list,
+  // applying the same library/upload state lookup used for regular videos.
+  const availableVideos = useMemo((): SelectableVideo[] => {
+    const aiSelectable: SelectableVideo[] = aiVideos
+      .filter((v) => v.status !== 'Used')
+      .map((v) => {
+        const libraryEntry = prelaunchUploader.libraryMap.get(v.name);
+        const uploadState = prelaunchUploader.uploadStates.get(v.name);
+        return {
+          id: v.id,
+          name: v.name,
+          status: v.status,
+          format: 'ai-video',
+          creativeLink: v.creativeLink,
+          productId: v.productId,
+          inLibrary: !!libraryEntry,
+          fbVideoId: libraryEntry?.fbVideoId || uploadState?.fbVideoId,
+          fbThumbnailUrl: libraryEntry?.thumbnailUrl || uploadState?.thumbnailUrl,
+          uploadStatus: uploadState?.status,
+          uploadError: uploadState?.error,
+        };
+      });
+    return [...regularAvailableVideos, ...aiSelectable]
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [regularAvailableVideos, aiVideos, prelaunchUploader.libraryMap, prelaunchUploader.uploadStates]);
 
   // ---------------------------------------------------------------------------
   // SELECTION STATE (delegated to extracted hook)
