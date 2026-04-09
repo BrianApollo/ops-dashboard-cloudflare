@@ -59,6 +59,7 @@ import { StatusPill, STATUS_LABELS, getEditorChipSx, getProductPillStyle } from 
 import { AddHooksDialog } from '../AddHooksDialog';
 import { RequestScrollstoppersDialog } from '../RequestScrollstoppersDialog';
 import { VideoDetailPanel } from '../../features/videos';
+import type { UploadProgress, VideoUploadResult } from '../../features/videos';
 import { useDetailPanel } from '../../features/products/useDetailPanel';
 import type { Script } from '../../features/scripts';
 import type { VideoAsset } from '../../features/videos';
@@ -107,6 +108,14 @@ interface ScriptsTabProps {
     editorIds: string[];
     count: number;
   }) => Promise<void>;
+  /** Upload handler for the embedded VideoDetailPanel — only when product is selected */
+  onVideoUpload?: (params: {
+    videoId: string;
+    file: File;
+    onProgress?: (progress: UploadProgress) => void;
+  }) => Promise<VideoUploadResult>;
+  /** Permission check for upload eligibility */
+  canUploadToVideo?: (video: VideoAsset) => boolean;
   // External navigation (from Videos tab)
   initialScriptIdToOpen?: string | null;
   onScriptOpened?: () => void;
@@ -136,6 +145,8 @@ export function ScriptsTab({
   onDeleteScript,
   isDeletingScript = false,
   onRequestScrollstoppers,
+  onVideoUpload,
+  canUploadToVideo,
   initialScriptIdToOpen,
   onScriptOpened,
   // selectedProductId,
@@ -214,6 +225,38 @@ export function ScriptsTab({
 
   // Video detail panel (uses shared hook)
   const videoDetail = useDetailPanel(videos);
+
+  // Upload state tracking — same pattern as VideosTab
+  const [uploadingVideoIds, setUploadingVideoIds] = useState<Set<string>>(new Set());
+
+  const startUpload = useCallback((videoId: string) => {
+    setUploadingVideoIds((prev) => new Set(prev).add(videoId));
+  }, []);
+
+  const endUpload = useCallback((videoId: string) => {
+    setUploadingVideoIds((prev) => {
+      const next = new Set(prev);
+      next.delete(videoId);
+      return next;
+    });
+  }, []);
+
+  const handleVideoUpload = useCallback(
+    async (
+      videoId: string,
+      file: File,
+      onProgress?: (progress: UploadProgress) => void
+    ) => {
+      if (!onVideoUpload) return;
+      startUpload(videoId);
+      try {
+        await onVideoUpload({ videoId, file, onProgress });
+      } finally {
+        endUpload(videoId);
+      }
+    },
+    [onVideoUpload, startUpload, endUpload]
+  );
 
   // List controller for filtering and search
   const list = useListController<ScriptItem, ScriptFilters>({
@@ -860,6 +903,9 @@ export function ScriptsTab({
         open={videoDetail.isOpen}
         video={videoDetail.detail}
         onClose={videoDetail.closeDetail}
+        onUpload={onVideoUpload ? handleVideoUpload : undefined}
+        isUploading={videoDetail.detail ? uploadingVideoIds.has(videoDetail.detail.id) : false}
+        canUpload={videoDetail.detail && canUploadToVideo ? canUploadToVideo(videoDetail.detail) : false}
         onStatusChange={onVideoStatusChange}
         onNotesChange={onVideoNotesChange}
         isUpdating={isUpdatingVideo}

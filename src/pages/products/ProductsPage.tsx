@@ -739,6 +739,8 @@ export function ProductsPage() {
             onDeleteScript={scriptsController.deleteScriptById}
             isDeletingScript={scriptsController.isDeletingScript}
             onRequestScrollstoppers={videosController.requestScrollstoppers}
+            onVideoUpload={productIdParam ? videosController.uploadCreative : undefined}
+            canUploadToVideo={productIdParam ? videosController.canUploadToVideo : undefined}
             selectedProductId={productIdParam ?? null}
             selectedProductName={selectedProduct?.name ?? null}
             authorOptions={scriptsController.authorOptions}
