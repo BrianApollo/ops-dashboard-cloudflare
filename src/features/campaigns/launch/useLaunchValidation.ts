@@ -42,9 +42,11 @@ export function useLaunchValidation({
   // ---------------------------------------------------------------------------
   const validationGroups = useMemo((): ValidationGroup[] => {
     const hasValidCreatives = selectedVideoIds.size > 0 || selectedImageIds.size > 0;
+    console.log('hasValidCreatives', hasValidCreatives);
 
     const selectedVideos = availableVideos.filter((v) => selectedVideoIds.has(v.id));
     const allVideosValid = selectedVideos.every((v) => ['review', 'available'].includes(v.status));
+    console.log('allVideosValid', allVideosValid);
 
     // Images don't have a status workflow like videos - they're always valid
     const allImagesValid = true;

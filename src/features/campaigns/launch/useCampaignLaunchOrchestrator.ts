@@ -307,10 +307,11 @@ export function useCampaignLaunchOrchestrator(
       .map((v) => {
         const libraryEntry = prelaunchUploader.libraryMap.get(v.name);
         const uploadState = prelaunchUploader.uploadStates.get(v.name);
+        const normalizedStatus = v.creativeLink ? 'available' : 'todo';
         return {
           id: v.id,
           name: v.name,
-          status: v.status,
+          status: normalizedStatus,
           format: 'ai-video',
           creativeLink: v.creativeLink,
           productId: v.productId,
@@ -456,10 +457,10 @@ export function useCampaignLaunchOrchestrator(
     if (defaults.adAccountId && !draft.adAccountId) updates.adAccountId = defaults.adAccountId;
     if (defaults.pixelId && !draft.pixelId) updates.pixelId = defaults.pixelId;
     if (defaults.pageId && !draft.pageId) updates.pageId = defaults.pageId;
-    
+
     // Only override CTA if currently at default 'Learn More'
     if (defaults.ctaOverride && draft.ctaOverride === 'Learn More') updates.ctaOverride = defaults.ctaOverride;
-    
+
     // Only override geo if empty
     if (defaults.geo && !draft.geo) updates.geo = defaults.geo;
 
