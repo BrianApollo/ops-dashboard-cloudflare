@@ -57,7 +57,8 @@ export function OpsLayout() {
   const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  const sidebarWidth = collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
+  const hideSidebar = location.pathname === '/videos';
+  const sidebarWidth = hideSidebar ? 0 : collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
 
   // Dynamic navigation items based on role
   const mainNavItems = [
@@ -85,6 +86,7 @@ export function OpsLayout() {
       }}
     >
       {/* Sidebar */}
+      {!hideSidebar && (
       <Box
         component="nav"
         sx={{
@@ -232,6 +234,7 @@ export function OpsLayout() {
           </Box>
         </Box>
       </Box>
+      )}
 
       {/* Main Content */}
       <Box

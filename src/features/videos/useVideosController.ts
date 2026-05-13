@@ -290,24 +290,24 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
           return !perms.canArchiveAll;
         },
       },
-      {
-        id: 'delete',
-        label: 'Delete',
-        variant: 'destructive',
-        requiresConfirmation: true,
-        confirmationMessage: 'This action cannot be undone. The selected videos will be permanently deleted.',
-        onExecute: async (videos) => {
-          await deleteVideos(videos.map((v) => v.id));
-          toast.success(`${videos.length} video${videos.length !== 1 ? 's' : ''} deleted`);
-          list.clearSelection();
-        },
-        // Disabled if user is editor OR if videos can't be deleted
-        disabled: (videos) => {
-          if (user.role === 'editor') return true;
-          const perms = getBulkPermissions(videos, user);
-          return !perms.canDeleteAll;
-        },
-      },
+      // {
+      //   id: 'delete',
+      //   label: 'Delete',
+      //   variant: 'destructive',
+      //   requiresConfirmation: true,
+      //   confirmationMessage: 'This action cannot be undone. The selected videos will be permanently deleted.',
+      //   onExecute: async (videos) => {
+      //     await deleteVideos(videos.map((v) => v.id));
+      //     toast.success(`${videos.length} video${videos.length !== 1 ? 's' : ''} deleted`);
+      //     list.clearSelection();
+      //   },
+      //   // Disabled if user is editor OR if videos can't be deleted
+      //   disabled: (videos) => {
+      //     if (user.role === 'editor') return true;
+      //     const perms = getBulkPermissions(videos, user);
+      //     return !perms.canDeleteAll;
+      //   },
+      // },
     ],
     onError: (actionId, error) => {
       toast.error(`Failed to ${actionId}: ${error.message}`);
