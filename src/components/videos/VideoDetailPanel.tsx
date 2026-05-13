@@ -265,8 +265,9 @@ export function VideoDetailPanel({
 
   // Show bottom button?
   const isEditor = user?.role?.toLowerCase() === 'video editor';
+  const isAssignedToUser = !!user && video?.editor?.id === user.id;
   const showUploadButton = isTodo && canUpload;
-  const showReplaceButton = isReview && !!onUpload;
+  const showReplaceButton = isReview && !!onUpload && (!isEditor || isAssignedToUser);
   const showReviewActions = isReview && !isEditor && !!onStatusChange;
   const showBottomButton = showUploadButton || showReplaceButton || showReviewActions;
 
