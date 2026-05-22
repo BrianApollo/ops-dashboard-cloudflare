@@ -32,6 +32,7 @@ const FIELD_TEXT_VERSION = 'Text Version'; // Single select: "Text" or "No Text"
 const FIELD_EDITOR = 'Editor';             // Linked record → Users
 const FIELD_PRODUCT = 'Product';           // Linked record → Products
 const FIELD_SCRIPT = 'Script';             // Linked record → Video Scripts
+const FIELD_ANGLE = 'Angle';               // Linked record → Angles
 const FIELD_CREATIVE_LINK = 'Creative Link';       // URL field for Drive link
 export const FIELD_USED_IN_CAMPAIGN = 'Used In Campaign'; // Text/link field
 const FIELD_NOTES = 'Notes';                       // Long text field
@@ -227,6 +228,10 @@ function mapAirtableToVideoAsset(
     ? fields[FIELD_VIDEO_DATA]
     : undefined;
 
+  // Angle (linked record → Angles, first ID only)
+  const angleIds = fields[FIELD_ANGLE] as string[] | undefined;
+  const angleId = angleIds?.[0];
+
   return {
     id: record.id,
     name,
@@ -248,6 +253,7 @@ function mapAirtableToVideoAsset(
     scrollstopperNumber,
     parentDriveLink: product.driveFolderId ? `https://drive.google.com/drive/folders/${product.driveFolderId}` : undefined,
     videoData,
+    angleId,
   };
 }
 
@@ -604,7 +610,8 @@ export async function createVideo(
   editorId: string,
   productId: string,
   scriptId: string,
-  scrollstopperNumber?: number
+  scrollstopperNumber?: number,
+  angleId?: string
 ): Promise<VideoAsset> {
   // Build fields object with Airtable field names
   const fields: Record<string, unknown> = {
@@ -620,6 +627,11 @@ export async function createVideo(
   // Only set scrollstopper number if provided (leave empty for original videos)
   if (scrollstopperNumber !== undefined) {
     fields[FIELD_SCROLLSTOPPER_NUMBER] = scrollstopperNumber;
+  }
+
+  // Link angle if provided
+  if (angleId) {
+    fields[FIELD_ANGLE] = [angleId];
   }
 
   const response = await airtableFetch(VIDEOS_TABLE, {
@@ -658,6 +670,8 @@ export interface CreateVideoInput {
   productId: string;
   scriptId: string;
   scrollstopperNumber?: number;
+  /** Optional linked Angle record ID. Written to the "Angle" field on Videos. */
+  angleId?: string;
 }
 
 export async function createVideoBatch(videos: CreateVideoInput[]): Promise<VideoAsset[]> {
@@ -678,6 +692,11 @@ export async function createVideoBatch(videos: CreateVideoInput[]): Promise<Vide
     // Only set scrollstopper number if provided (leave empty for original videos)
     if (v.scrollstopperNumber !== undefined) {
       fields[FIELD_SCROLLSTOPPER_NUMBER] = v.scrollstopperNumber;
+    }
+
+    // Link angle if provided
+    if (v.angleId) {
+      fields[FIELD_ANGLE] = [v.angleId];
     }
 
     return { fields };

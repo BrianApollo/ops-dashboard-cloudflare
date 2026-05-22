@@ -507,7 +507,7 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
    */
   const bulkAssignScriptsToEditor = useCallback(
     async (
-      scripts: Array<{ id: string; name: string; product: { id: string } }>,
+      scripts: Array<{ id: string; name: string; product: { id: string }; angleId?: string }>,
       editorId?: string
     ): Promise<{ created: number; skipped: number }> => {
       // Guard: filter out scripts already being assigned (prevent double-fire)
@@ -579,6 +579,7 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
                     editorId: editor.id,
                     productId: script.product.id,
                     scriptId: script.id,
+                    angleId: script.angleId,
                   });
                 }
               }
@@ -685,6 +686,7 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
 
         const productId = existingVideoForScript.product.id;
         const scriptName = existingVideoForScript.script.name;
+        const angleId = existingVideoForScript.angleId;
 
         const FORMATS: VideoFormat[] = ['vertical', 'square', 'youtube'];
         const TEXT_VERSIONS = [true, false];
@@ -731,6 +733,7 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
                   productId,
                   scriptId,
                   scrollstopperNumber: ssNumber,
+                  angleId,
                 });
               }
             }

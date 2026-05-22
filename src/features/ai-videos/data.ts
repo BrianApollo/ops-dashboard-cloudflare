@@ -18,6 +18,7 @@ const FIELD_CREATIVE_LINK = 'Creative Link';
 const FIELD_PRODUCT = 'Product';
 const FIELD_USED_IN_CAMPAIGN = 'Used In Campaign';
 const FIELD_VIDEO_DATA = 'Video Data';
+const FIELD_ANGLE = 'Angle'; // Linked record → Angles
 
 export interface AIVideo {
   id: string;
@@ -127,7 +128,8 @@ export async function createAIVideo(
   editorId: string,
   videoLink: string,
   productId: string,
-  videoData?: string
+  videoData?: string,
+  angleId?: string
 ): Promise<{ id: string; name: string }> {
   const fields: Record<string, unknown> = {
     [FIELD_VIDEO_NAME]: name,
@@ -139,6 +141,10 @@ export async function createAIVideo(
 
   if (videoData) {
     fields[FIELD_VIDEO_DATA] = videoData;
+  }
+
+  if (angleId) {
+    fields[FIELD_ANGLE] = [angleId];
   }
 
   const response = await airtableFetch(AI_VIDEOS_TABLE, {

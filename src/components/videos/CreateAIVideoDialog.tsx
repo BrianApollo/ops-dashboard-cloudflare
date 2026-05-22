@@ -28,6 +28,8 @@ interface CreateAIVideoDialogProps {
   open: boolean;
   onClose: () => void;
   editorOptions: FilterOption[];
+  /** Angle options for the selected product (active angles only). */
+  angleOptions: { value: string; label: string }[];
   productId: string;
   productName: string;
 }
@@ -36,11 +38,13 @@ export function CreateAIVideoDialog({
   open,
   onClose,
   editorOptions,
+  angleOptions,
   productId,
   productName,
 }: CreateAIVideoDialogProps) {
   const [name, setName] = useState('');
   const [editorId, setEditorId] = useState('');
+  const [angleId, setAngleId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +56,7 @@ export function CreateAIVideoDialog({
     if (open) {
       setName('');
       setEditorId('');
+      setAngleId('');
       setFile(null);
       setUploadProgress(0);
       setError(null);
@@ -90,7 +95,8 @@ export function CreateAIVideoDialog({
         editorId,
         result.url,
         productId,
-        result.metadata ? JSON.stringify(result.metadata) : undefined
+        result.metadata ? JSON.stringify(result.metadata) : undefined,
+        angleId || undefined
       );
       onClose();
     } catch (err) {
@@ -148,6 +154,34 @@ export function CreateAIVideoDialog({
                 {opt.label}
               </MenuItem>
             ))}
+          </Select>
+        </FormControl>
+
+        {/* Angle (optional, filtered by selected product) */}
+        <FormControl fullWidth size="small">
+          <InputLabel id="ai-video-angle-label">Angle</InputLabel>
+          <Select
+            labelId="ai-video-angle-label"
+            value={angleId}
+            label="Angle"
+            onChange={(e) => setAngleId(e.target.value)}
+            disabled={isSubmitting}
+            displayEmpty
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {angleOptions.length === 0 ? (
+              <MenuItem disabled value="__no_angles__">
+                No active angles for this product
+              </MenuItem>
+            ) : (
+              angleOptions.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))
+            )}
           </Select>
         </FormControl>
 

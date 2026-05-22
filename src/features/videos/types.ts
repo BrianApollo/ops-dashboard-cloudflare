@@ -48,6 +48,8 @@ export interface VideoAsset {
   parentDriveLink?: string;
   /** Video metadata JSON (duration, resolution, etc.) from upload */
   videoData?: string;
+  /** Linked Angle record ID (from "Angle" field on Videos table). */
+  angleId?: string;
 }
 
 export interface VideoFilters {

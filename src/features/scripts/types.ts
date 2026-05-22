@@ -76,6 +76,9 @@ export interface Script {
 
   /** Video completion percentage (Airtable formula field) */
   calculation?: number;
+
+  /** Linked Angle record ID (from "Angles" field on Video Scripts table). */
+  angleId?: string;
 }
 
 // =============================================================================

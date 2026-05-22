@@ -35,7 +35,8 @@ interface AddScriptDialogProps {
     productName: string,
     authorId: string,
     authorName: string,
-    content?: string
+    content?: string,
+    angleId?: string
   ) => Promise<Script>;
   onSubmitWithHooks?: (params: {
     productId: string;
@@ -44,11 +45,14 @@ interface AddScriptDialogProps {
     authorName: string;
     hooks: string[];
     body: string;
+    angleId?: string;
   }) => Promise<Script[]>;
   isSubmitting: boolean;
   productId: string;
   productName: string;
   authorOptions: { value: string; label: string }[];
+  /** Angle options for the selected product (active angles only). */
+  angleOptions: { value: string; label: string }[];
   nextScriptNumber: number;
 }
 
@@ -61,9 +65,11 @@ export function AddScriptDialog({
   productId,
   productName,
   authorOptions,
+  angleOptions,
   nextScriptNumber,
 }: AddScriptDialogProps) {
   const [selectedAuthorId, setSelectedAuthorId] = useState('');
+  const [selectedAngleId, setSelectedAngleId] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -126,6 +132,7 @@ export function AddScriptDialog({
           authorName: selectedAuthorName,
           hooks: validHooks,
           body: body.trim(),
+          angleId: selectedAngleId || undefined,
         });
       } else {
         await onSubmit(
@@ -133,7 +140,8 @@ export function AddScriptDialog({
           productName,
           selectedAuthorId,
           selectedAuthorName,
-          content.trim() || undefined
+          content.trim() || undefined,
+          selectedAngleId || undefined
         );
       }
 
@@ -147,6 +155,7 @@ export function AddScriptDialog({
 
   const resetForm = () => {
     setSelectedAuthorId('');
+    setSelectedAngleId('');
     setContent('');
     setError(null);
     setAddHooks(false);
@@ -253,6 +262,34 @@ export function AddScriptDialog({
               <MenuItem disabled>No authors available</MenuItem>
             ) : (
               authorOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))
+            )}
+          </Select>
+        </FormControl>
+
+        {/* Angle Select (optional, filtered by selected product) */}
+        <FormControl fullWidth>
+          <InputLabel id="angle-select-label">Angle</InputLabel>
+          <Select
+            labelId="angle-select-label"
+            value={selectedAngleId}
+            onChange={(e) => setSelectedAngleId(e.target.value)}
+            label="Angle"
+            disabled={isSubmitting}
+            displayEmpty
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {angleOptions.length === 0 ? (
+              <MenuItem disabled value="__no_angles__">
+                No active angles for this product
+              </MenuItem>
+            ) : (
+              angleOptions.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuItem>

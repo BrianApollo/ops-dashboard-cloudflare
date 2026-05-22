@@ -25,6 +25,7 @@ import { useAdPresetsController, getPrimaryTexts, getHeadlines, getDescriptions,
 import { useVideosController } from '../../features/videos/useVideosController';
 import { updateVideo, listVideosByProduct } from '../../features/videos/data';
 import { useAdvertorialsController, listAdvertorialsByProduct } from '../../features/advertorials';
+import { useAnglesController, listAnglesByProduct } from '../../features/angles';
 import { StatusCard } from '../../core/status';
 import { ProductSelector } from '../../components/products/ProductSelector';
 import { ProductCreationModal } from '../../components/products/ProductCreationModal';
@@ -40,6 +41,8 @@ import { ImagesTab } from '../../components/images/ImagesTab';
 import { CreateImagesDialog } from '../../components/images/CreateImagesDialog';
 import { AdvertorialsTab } from '../../components/advertorials/AdvertorialsTab';
 import { AddAdvertorialDialog } from '../../components/advertorials/AddAdvertorialDialog';
+import { AnglesTab } from '../../components/angles/AnglesTab';
+import { AddAngleDialog } from '../../components/angles/AddAngleDialog';
 import { SetupTab } from '../../components/setup/SetupTab';
 import type { WorkspaceTab, ProductInfo } from '../../components/products/composition/types';
 
@@ -79,6 +82,7 @@ export function ProductsPage() {
   const adPresetsController = useAdPresetsController({ initialFilters: { productId: productIdParam ?? null, status: [] }, enabled: backgroundReady });
   const videosController = useVideosController({ enabled: backgroundReady });
   const advertorialsController = useAdvertorialsController({ initialFilters: { productId: productIdParam ?? null }, enabled: backgroundReady });
+  const anglesController = useAnglesController({ initialFilters: { productId: productIdParam ?? null }, enabled: backgroundReady });
 
   // Product from route param only - transform to ProductInfo UI type
   const selectedProduct = useMemo((): ProductInfo | null => {
@@ -126,6 +130,7 @@ export function ProductsPage() {
     campaignsController.setProductFilter(productId);
     adPresetsController.setProductFilter(productId);
     advertorialsController.setProductFilter(productId);
+    anglesController.setProductFilter(productId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productIdParam]);
 
@@ -222,6 +227,24 @@ export function ProductsPage() {
       image_url: i.image_url,
     }));
   }, [filteredImages, productNameMap]);
+
+  const anglesData = useMemo(() => {
+    return anglesController.filteredAngles.map((a) => ({
+      id: a.id,
+      name: a.name,
+      productName: productNameMap[a.product.id] ?? 'Unknown',
+      isActive: a.isActive,
+    }));
+  }, [anglesController.filteredAngles, productNameMap]);
+
+  // Active-only angle options for the selected product (for AddScriptDialog)
+  const angleOptionsForProduct = useMemo(() => {
+    if (!productIdParam) return [];
+    return anglesController.angles
+      .filter((a) => a.product.id === productIdParam && a.isActive)
+      .map((a) => ({ value: a.id, label: a.name }))
+      .sort((x, y) => x.label.localeCompare(y.label));
+  }, [anglesController.angles, productIdParam]);
 
   const presetsData = useMemo(() => {
     return filteredPresets.map((p) => ({
@@ -339,6 +362,9 @@ export function ProductsPage() {
             });
             break;
           }
+          case 'angles':
+            mergeByProductId(['angles'], await listAnglesByProduct(productName));
+            break;
           case 'setup':
             await Promise.all([
               listAdPresetsByProduct(productName).then((fresh) =>
@@ -363,6 +389,7 @@ export function ProductsPage() {
             break;
           case 'images': await imagesController.refetch(); break;
           case 'advertorials': await advertorialsController.refetch(); break;
+          case 'angles': await anglesController.refetch(); break;
           case 'setup':
             await Promise.all([
               adPresetsController.refetch(),
@@ -384,7 +411,7 @@ export function ProductsPage() {
     const scripts = scriptIds
       .map(id => scriptsController.scripts.find(s => s.id === id))
       .filter((s): s is NonNullable<typeof s> => s !== undefined)
-      .map(s => ({ id: s.id, name: s.name, product: s.product }));
+      .map(s => ({ id: s.id, name: s.name, product: s.product, angleId: s.angleId }));
 
     if (scripts.length === 0) return;
 
@@ -410,6 +437,7 @@ export function ProductsPage() {
   const [addCampaignDialogOpen, setAddCampaignDialogOpen] = useState(false);
   const [addScriptDialogOpen, setAddScriptDialogOpen] = useState(false);
   const [addAdvertorialDialogOpen, setAddAdvertorialDialogOpen] = useState(false);
+  const [addAngleDialogOpen, setAddAngleDialogOpen] = useState(false);
   const [createImagesDialogOpen, setCreateImagesDialogOpen] = useState(false);
   const [createAIVideoDialogOpen, setCreateAIVideoDialogOpen] = useState(false);
   const [isApprovingImages, setIsApprovingImages] = useState(false);
@@ -602,6 +630,7 @@ export function ProductsPage() {
           onChange={setActiveTab}
           options={[
             { value: 'campaigns', label: 'Campaigns' },
+            { value: 'angles', label: 'Angles' },
             { value: 'scripts', label: 'Scripts' },
             { value: 'videos', label: 'Videos' },
             { value: 'images', label: 'Images' },
@@ -635,6 +664,18 @@ export function ProductsPage() {
               sx={{ textTransform: 'none' }}
             >
               Add Campaign
+            </Button>
+          )}
+          {activeTab === 'angles' && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setAddAngleDialogOpen(true)}
+              disabled={!productIdParam}
+              sx={{ textTransform: 'none' }}
+            >
+              Add Angle
             </Button>
           )}
           {activeTab === 'scripts' && (
@@ -717,6 +758,16 @@ export function ProductsPage() {
         {activeTab === 'campaigns' && (
           <CampaignsTab
             campaigns={campaignsData}
+          />
+        )}
+        {activeTab === 'angles' && (
+          <AnglesTab
+            angles={anglesData}
+            showProductColumn={showProductColumn}
+            onToggleActive={anglesController.toggleActive}
+            togglingIds={anglesController.togglingIds}
+            onDelete={anglesController.deleteAngleById}
+            isDeleting={anglesController.isDeleting}
           />
         )}
         {activeTab === 'scripts' && (
@@ -849,7 +900,23 @@ export function ProductsPage() {
           productId={productIdParam}
           productName={selectedProduct.name}
           authorOptions={scriptsController.authorOptions}
+          angleOptions={angleOptionsForProduct}
           nextScriptNumber={scriptsController.getNextScriptNumber(productIdParam)}
+        />
+      )}
+
+      {/* Add Angle Dialog */}
+      {productIdParam && selectedProduct && (
+        <AddAngleDialog
+          open={addAngleDialogOpen}
+          onClose={() => setAddAngleDialogOpen(false)}
+          onSubmit={async (name, productId) => {
+            await anglesController.createNewAngle(productId, name);
+            setAddAngleDialogOpen(false);
+          }}
+          isSubmitting={anglesController.isCreating}
+          productName={selectedProduct.name}
+          productId={productIdParam}
         />
       )}
 
@@ -876,6 +943,7 @@ export function ProductsPage() {
           setAiVideosNonce((n) => n + 1);
         }}
         editorOptions={videosController.editorOptions.filter((o): o is { value: string; label: string } => o.value !== null)}
+        angleOptions={angleOptionsForProduct}
         productId={productIdParam ?? ''}
         productName={selectedProduct?.name ?? ''}
       />

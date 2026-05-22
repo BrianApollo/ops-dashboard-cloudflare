@@ -113,7 +113,8 @@ export interface UseScriptsControllerResult {
     productName: string,
     authorId: string,
     authorName: string,
-    content?: string
+    content?: string,
+    angleId?: string
   ) => Promise<Script>;
   isCreating: boolean;
   updateContent: (scriptId: string, content: string) => Promise<void>;
@@ -133,6 +134,7 @@ export interface UseScriptsControllerResult {
     hooks: string[];
     body: string;
     existingScriptId?: string;
+    angleId?: string;
   }) => Promise<Script[]>;
   isCreatingHooks: boolean;
 
@@ -144,6 +146,7 @@ export interface UseScriptsControllerResult {
     authorName: string;
     hooks: string[];
     body: string;
+    angleId?: string;
   }) => Promise<Script[]>;
 
   // Delete
@@ -361,7 +364,8 @@ export function useScriptsController(
     productName: string,
     authorId: string,
     authorName: string,
-    content?: string
+    content?: string,
+    angleId?: string
   ): Promise<Script> => {
     // Get next script number (finds max existing number + 1)
     const scriptNumber = getNextScriptNumber(productId);
@@ -370,7 +374,7 @@ export function useScriptsController(
 
     setIsCreating(true);
     try {
-      const newScript = await createScript(productId, scriptName, authorId, scriptNumber, content);
+      const newScript = await createScript(productId, scriptName, authorId, scriptNumber, content, angleId);
       await scriptsQuery.refetch();
       return newScript;
     } finally {
@@ -461,6 +465,7 @@ export function useScriptsController(
     hooks: string[];
     body: string;
     existingScriptId?: string;
+    angleId?: string;
   }): Promise<Script[]> => {
     const {
       productId,
@@ -471,6 +476,7 @@ export function useScriptsController(
       hooks,
       body,
       existingScriptId,
+      angleId,
     } = params;
 
     setIsCreatingHooks(true);
@@ -500,7 +506,8 @@ export function useScriptsController(
             hooks[i],
             body,
             hookNumber,
-            baseScriptNumber
+            baseScriptNumber,
+            angleId
           );
           createdScripts.push(newScript);
         }
@@ -519,7 +526,8 @@ export function useScriptsController(
             hooks[i],
             body,
             hookNumber,
-            baseScriptNumber
+            baseScriptNumber,
+            angleId
           );
           createdScripts.push(newScript);
         }
@@ -543,8 +551,9 @@ export function useScriptsController(
     authorName: string;
     hooks: string[];
     body: string;
+    angleId?: string;
   }): Promise<Script[]> => {
-    const { productId, productName, authorId, authorName, hooks, body } = params;
+    const { productId, productName, authorId, authorName, hooks, body, angleId } = params;
 
     // Get the next script number
     const baseScriptNumber = getNextScriptNumber(productId);
@@ -558,6 +567,7 @@ export function useScriptsController(
       baseScriptNumber,
       hooks,
       body,
+      angleId,
       // No existingScriptId - creating all new scripts
     });
   }, [getNextScriptNumber, handleCreateHookVariants]);

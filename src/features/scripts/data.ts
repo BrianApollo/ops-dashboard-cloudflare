@@ -37,6 +37,9 @@ const FIELD_BODY = 'Body';
 const FIELD_HOOK_NUMBER = 'Hook Number';
 const FIELD_BASE_SCRIPT_NUMBER = 'Base Script Number';
 
+// Angle (linked record → Angles table)
+const FIELD_ANGLE = 'Angles';
+
 
 // =============================================================================
 // AIRTABLE TYPES
@@ -157,6 +160,10 @@ function mapAirtableToScript(
     ? fields[FIELD_BASE_SCRIPT_NUMBER]
     : undefined;
 
+  // Angle (linked record → Angles, first ID only)
+  const angleIds = fields[FIELD_ANGLE] as string[] | undefined;
+  const angleId = angleIds?.[0];
+
   return {
     id: record.id,
     name,
@@ -174,6 +181,7 @@ function mapAirtableToScript(
     hookNumber,
     baseScriptNumber,
     calculation: typeof fields['Calculation'] === 'number' ? fields['Calculation'] : undefined,
+    angleId,
   };
 }
 
@@ -267,7 +275,8 @@ export async function createScript(
   name: string,
   authorId: string,
   scriptNumber: number,
-  content?: string
+  content?: string,
+  angleId?: string
 ): Promise<Script> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
 
@@ -282,6 +291,11 @@ export async function createScript(
   // Add content if provided
   if (content?.trim()) {
     fields[FIELD_CONTENT] = content.trim();
+  }
+
+  // Link angle if provided
+  if (angleId) {
+    fields[FIELD_ANGLE] = [angleId];
   }
 
   const response = await airtableFetch(SCRIPTS_TABLE, {
@@ -343,7 +357,8 @@ export async function createHookScript(
   hook: string,
   body: string,
   hookNumber: number,
-  baseScriptNumber: number
+  baseScriptNumber: number,
+  angleId?: string
 ): Promise<Script> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
 
@@ -360,6 +375,10 @@ export async function createHookScript(
     [FIELD_HOOK_NUMBER]: hookNumber,
     [FIELD_BASE_SCRIPT_NUMBER]: baseScriptNumber,
   };
+
+  if (angleId) {
+    fields[FIELD_ANGLE] = [angleId];
+  }
 
   const response = await airtableFetch(SCRIPTS_TABLE, {
     method: 'POST',
