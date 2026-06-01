@@ -7,6 +7,8 @@ export interface Advertorial {
     link?: string;
     isChecked: boolean;
     createdAt: string;
+    /** Linked Angle record ID (from the "Angles" field). */
+    angleId?: string;
 }
 
 export interface AdvertorialFilters {

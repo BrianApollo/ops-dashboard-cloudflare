@@ -66,6 +66,8 @@ export interface AdPresetItem {
   cta: string;
   beneficiaryName: string;
   payerName: string;
+  /** Linked Angle record ID (optional). */
+  angleId?: string;
 }
 
 export interface ImageItem {

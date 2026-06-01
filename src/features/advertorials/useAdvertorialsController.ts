@@ -39,8 +39,8 @@ export function useAdvertorialsController({ initialFilters, enabled = true }: Us
         initialPageSize: 20,
     });
 
-    const createNewAdvertorial = async (name: string, productId: string, text?: string, link?: string) => {
-        await createAdvertorial(name, productId, text, link);
+    const createNewAdvertorial = async (name: string, productId: string, text?: string, link?: string, angleId?: string) => {
+        await createAdvertorial(name, productId, text, link, angleId);
         await refetch();
     };
 

@@ -246,6 +246,13 @@ export function ProductsPage() {
       .sort((x, y) => x.label.localeCompare(y.label));
   }, [anglesController.angles, productIdParam]);
 
+  // Angle id → name lookup (all angles, for display on linked records)
+  const anglesById = useMemo(() => {
+    const map: Record<string, string> = {};
+    anglesController.angles.forEach((a) => { map[a.id] = a.name; });
+    return map;
+  }, [anglesController.angles]);
+
   const presetsData = useMemo(() => {
     return filteredPresets.map((p) => ({
       id: p.id,
@@ -258,6 +265,7 @@ export function ProductsPage() {
       cta: p.callToAction ?? '',
       beneficiaryName: p.beneficiaryName ?? '',
       payerName: p.payerName ?? '',
+      angleId: p.angleId,
     }));
   }, [filteredPresets, productNameMap]);
 
@@ -847,6 +855,7 @@ export function ProductsPage() {
             controller={advertorialsController.list}
             onApprove={advertorialsController.approveAdvertorial}
             onUpdate={advertorialsController.updateAdvertorial}
+            anglesById={anglesById}
           />
         )}
         {activeTab === 'setup' && (
@@ -864,6 +873,8 @@ export function ProductsPage() {
             isUploading={productsController.isUploading}
             isDeleting={productsController.isDeleting}
             uploadProgress={productsController.uploadProgress}
+            angleOptions={angleOptionsForProduct}
+            anglesById={anglesById}
           />
         )}
       </Box>
@@ -925,13 +936,14 @@ export function ProductsPage() {
         <AddAdvertorialDialog
           open={addAdvertorialDialogOpen}
           onClose={() => setAddAdvertorialDialogOpen(false)}
-          onSubmit={async (name, productId, text, link) => {
-            await advertorialsController.createAdvertorial(name, productId, text, link);
+          onSubmit={async (name, productId, text, link, angleId) => {
+            await advertorialsController.createAdvertorial(name, productId, text, link, angleId);
             setAddAdvertorialDialogOpen(false);
           }}
           isSubmitting={advertorialsController.isLoading}
           productName={selectedProduct.name}
           productId={productIdParam}
+          angleOptions={angleOptionsForProduct}
         />
       )}
 

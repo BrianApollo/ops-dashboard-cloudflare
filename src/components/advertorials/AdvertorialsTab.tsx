@@ -14,6 +14,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import Chip from '@mui/material/Chip';
 import { EmptyState } from '../../core/state';
 import { ListPagination } from '../../core/list';
 import { tableHeaderCellSx, tableDataCellSx } from '../products/composition/styles';
@@ -26,9 +27,11 @@ interface AdvertorialsTabProps {
     controller: UseListControllerResult<Advertorial, AdvertorialFilters>;
     onApprove: (id: string) => Promise<void>;
     onUpdate: (id: string, fields: Partial<Advertorial>) => Promise<void>;
+    /** Map of angle id → name for resolving the pill label. */
+    anglesById: Record<string, string>;
 }
 
-export function AdvertorialsTab({ controller, onApprove, onUpdate }: AdvertorialsTabProps) {
+export function AdvertorialsTab({ controller, onApprove, onUpdate, anglesById }: AdvertorialsTabProps) {
     const { visibleRecords, pageIndex, totalPages, filteredCount, setPageIndex } = controller;
     const [selectedAdvertorial, setSelectedAdvertorial] = useState<Advertorial | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -89,6 +92,7 @@ export function AdvertorialsTab({ controller, onApprove, onUpdate }: Advertorial
                         <TableRow>
                             <TableCell sx={tableHeaderCellSx}>Advertorial Name</TableCell>
                             <TableCell sx={tableHeaderCellSx}>Product</TableCell>
+                            <TableCell sx={tableHeaderCellSx}>Angle</TableCell>
                             <TableCell sx={tableHeaderCellSx}>Advertorial Text</TableCell>
                             <TableCell sx={tableHeaderCellSx}>Final Advertorial Link</TableCell>
                             <TableCell sx={{ ...tableHeaderCellSx, width: 100, textAlign: 'center' }}>Approved</TableCell>
@@ -113,6 +117,18 @@ export function AdvertorialsTab({ controller, onApprove, onUpdate }: Advertorial
                                     <Typography variant="body2" color="text.secondary">
                                         {adv.productName}
                                     </Typography>
+                                </TableCell>
+                                <TableCell sx={tableDataCellSx}>
+                                    {adv.angleId && anglesById[adv.angleId] ? (
+                                        <Chip
+                                            label={anglesById[adv.angleId]}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.75rem', height: 22 }}
+                                        />
+                                    ) : (
+                                        <Typography variant="body2" color="text.disabled">—</Typography>
+                                    )}
                                 </TableCell>
                                 <TableCell sx={tableDataCellSx}>
                                     <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 300 }}>

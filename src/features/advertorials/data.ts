@@ -15,6 +15,7 @@ const FIELD_PRODUCT = 'Product'; // Linked record
 const FIELD_TEXT = 'Advertorial Text';
 const FIELD_LINK = 'Final Advertorial Link';
 const FIELD_CHECKED = 'Advertorial Checked';
+const FIELD_ANGLE = 'Angles'; // Linked record → Angles
 
 const FIELD_PRODUCT_NAME = 'Product Name';
 
@@ -45,6 +46,10 @@ function mapAirtableToAdvertorial(
     const link = typeof fields[FIELD_LINK] === 'string' ? fields[FIELD_LINK] : undefined;
     const isChecked = Boolean(fields[FIELD_CHECKED]);
 
+    // Angle (linked record → Angles, first ID only)
+    const angleIds = fields[FIELD_ANGLE] as string[] | undefined;
+    const angleId = angleIds?.[0];
+
     return {
         id: record.id,
         name,
@@ -54,6 +59,7 @@ function mapAirtableToAdvertorial(
         link,
         isChecked,
         createdAt: record.createdTime,
+        angleId,
     };
 }
 
@@ -129,7 +135,8 @@ export async function createAdvertorial(
     name: string,
     productId: string,
     text?: string,
-    link?: string
+    link?: string,
+    angleId?: string
 ): Promise<void> {
     const fields: Record<string, unknown> = {
         [FIELD_NAME]: name,
@@ -138,6 +145,7 @@ export async function createAdvertorial(
 
     if (text) fields[FIELD_TEXT] = text;
     if (link) fields[FIELD_LINK] = link;
+    if (angleId) fields[FIELD_ANGLE] = [angleId];
 
     const response = await airtableFetch(ADVERTORIALS_TABLE, {
         method: 'POST',

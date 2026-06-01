@@ -52,6 +52,7 @@ const FIELD_DESCRIPTION_5 = 'Description 5';
 const FIELD_CALL_TO_ACTION = 'Call to Action';
 const FIELD_BENEFICIARY_NAME = 'Beneficiary Name';
 const FIELD_PAYER_NAME = 'Payer Name';
+const FIELD_ANGLE = 'Angles'; // Linked record → Angles
 
 // Products table fields
 const FIELD_PRODUCT_NAME = 'Product Name';
@@ -148,6 +149,12 @@ function mapAirtableToAdPreset(
     // Compliance
     beneficiaryName: getString(FIELD_BENEFICIARY_NAME),
     payerName: getString(FIELD_PAYER_NAME),
+
+    // Angle (linked record → Angles, first ID only)
+    angleId: ((): string | undefined => {
+      const ids = fields[FIELD_ANGLE] as string[] | undefined;
+      return ids?.[0];
+    })(),
 
     createdAt: record.createdTime,
   };
@@ -261,6 +268,8 @@ export interface AdPresetUpdatePayload {
   callToAction?: string;
   beneficiaryName?: string;
   payerName?: string;
+  /** Linked Angle record ID. Empty string clears the field. */
+  angleId?: string;
 }
 
 /**
@@ -288,6 +297,7 @@ function mapPayloadToAirtableFields(payload: AdPresetUpdatePayload): Record<stri
   if (payload.callToAction !== undefined) fields[FIELD_CALL_TO_ACTION] = payload.callToAction;
   if (payload.beneficiaryName !== undefined) fields[FIELD_BENEFICIARY_NAME] = payload.beneficiaryName;
   if (payload.payerName !== undefined) fields[FIELD_PAYER_NAME] = payload.payerName;
+  if (payload.angleId !== undefined) fields[FIELD_ANGLE] = payload.angleId ? [payload.angleId] : [];
 
   return fields;
 }

@@ -17,6 +17,8 @@ export interface PresetDraft {
   cta: string;
   beneficiaryName: string;
   payerName: string;
+  /** Linked Angle record ID. Empty string = no angle. */
+  angleId: string;
 }
 
 interface UsePresetControllerOptions {
@@ -79,6 +81,7 @@ export function usePresetController({
       draft.cta !== originalDraft.cta ||
       draft.beneficiaryName !== originalDraft.beneficiaryName ||
       draft.payerName !== originalDraft.payerName ||
+      draft.angleId !== originalDraft.angleId ||
       !arraysEqual(draft.primaryTexts, originalDraft.primaryTexts) ||
       !arraysEqual(draft.headlines, originalDraft.headlines) ||
       !arraysEqual(draft.descriptions, originalDraft.descriptions)
@@ -95,6 +98,7 @@ export function usePresetController({
       cta: preset.cta,
       beneficiaryName: preset.beneficiaryName,
       payerName: preset.payerName,
+      angleId: preset.angleId ?? '',
     };
     setDraft(newDraft);
     if (storeAsOriginal) {
@@ -170,6 +174,7 @@ export function usePresetController({
       callToAction: draft.cta,
       beneficiaryName: draft.beneficiaryName,
       payerName: draft.payerName,
+      angleId: draft.angleId,
     };
 
     try {
@@ -199,6 +204,7 @@ export function usePresetController({
       cta: newPreset.callToAction ?? '',
       beneficiaryName: newPreset.beneficiaryName ?? '',
       payerName: newPreset.payerName ?? '',
+      angleId: newPreset.angleId,
     };
     // Expand and edit the new preset
     setExpandedPresetId(presetItem.id);

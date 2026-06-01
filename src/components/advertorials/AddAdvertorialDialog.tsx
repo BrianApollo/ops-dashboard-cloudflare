@@ -10,15 +10,21 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import { AppDialog } from '../../core/dialog';
 
 interface AddAdvertorialDialogProps {
     open: boolean;
     onClose: () => void;
-    onSubmit: (name: string, productId: string, text?: string, link?: string) => Promise<void>;
+    onSubmit: (name: string, productId: string, text?: string, link?: string, angleId?: string) => Promise<void>;
     isSubmitting: boolean;
     productId: string;
     productName: string;
+    /** Angle options for the selected product (active angles only). */
+    angleOptions: { value: string; label: string }[];
 }
 
 export function AddAdvertorialDialog({
@@ -28,10 +34,12 @@ export function AddAdvertorialDialog({
     isSubmitting,
     productId,
     productName,
+    angleOptions,
 }: AddAdvertorialDialogProps) {
     const [name, setName] = useState('');
     const [text, setText] = useState('');
     const [link, setLink] = useState('');
+    const [angleId, setAngleId] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     const canSubmit = name.trim().length > 0 && !isSubmitting;
@@ -44,7 +52,7 @@ export function AddAdvertorialDialog({
 
         setError(null);
         try {
-            await onSubmit(name.trim(), productId, text.trim() || undefined, link.trim() || undefined);
+            await onSubmit(name.trim(), productId, text.trim() || undefined, link.trim() || undefined, angleId || undefined);
             resetForm();
             onClose();
         } catch (err) {
@@ -56,6 +64,7 @@ export function AddAdvertorialDialog({
         setName('');
         setText('');
         setLink('');
+        setAngleId('');
         setError(null);
     };
 
@@ -132,6 +141,34 @@ export function AddAdvertorialDialog({
                     placeholder="Enter advertorial name..."
                     required
                 />
+
+                {/* Angle (optional, filtered by selected product) */}
+                <FormControl fullWidth>
+                    <InputLabel id="advertorial-angle-label">Angle</InputLabel>
+                    <Select
+                        labelId="advertorial-angle-label"
+                        value={angleId}
+                        onChange={(e) => setAngleId(e.target.value)}
+                        label="Angle"
+                        disabled={isSubmitting}
+                        displayEmpty
+                    >
+                        <MenuItem value="">
+                            <em>None</em>
+                        </MenuItem>
+                        {angleOptions.length === 0 ? (
+                            <MenuItem disabled value="__no_angles__">
+                                No active angles for this product
+                            </MenuItem>
+                        ) : (
+                            angleOptions.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))
+                        )}
+                    </Select>
+                </FormControl>
 
                 {/* Advertorial Text */}
                 <TextField

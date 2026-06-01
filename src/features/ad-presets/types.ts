@@ -76,6 +76,9 @@ export interface AdPreset {
   /** Payer name (required for political/issue ads) */
   payerName?: string;
 
+  /** Linked Angle record ID (from the "Angles" field). */
+  angleId?: string;
+
   // =========================================================================
   // METADATA
   // =========================================================================

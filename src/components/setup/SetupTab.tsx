@@ -13,6 +13,9 @@ import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import InputLabel from '@mui/material/InputLabel';
+import FormControl from '@mui/material/FormControl';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import LinearProgress from '@mui/material/LinearProgress';
 import Collapse from '@mui/material/Collapse';
@@ -54,6 +57,10 @@ interface SetupTabProps {
   isUploading: boolean;
   isDeleting: boolean;
   uploadProgress: number;
+  /** Active angles for the selected product (for the angle dropdown). */
+  angleOptions: { value: string; label: string }[];
+  /** Map of angle id → name (all angles, for resolving the pill label). */
+  anglesById: Record<string, string>;
 }
 
 export function SetupTab({
@@ -70,6 +77,8 @@ export function SetupTab({
   isUploading,
   isDeleting,
   uploadProgress,
+  angleOptions,
+  anglesById,
 }: SetupTabProps) {
   // Preset editing controller
   const presetController = usePresetController({
@@ -581,6 +590,14 @@ export function SetupTab({
                     </Box>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    {p.angleId && anglesById[p.angleId] && (
+                      <Chip
+                        label={anglesById[p.angleId]}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontSize: '0.75rem', height: 22 }}
+                      />
+                    )}
                     <IconButton
                       size="small"
                       onClick={(e) => {
@@ -635,6 +652,44 @@ export function SetupTab({
                               Edit
                             </Button>
                           )}
+                        </Box>
+
+                        {/* Angle (optional, filtered by selected product) */}
+                        <Box sx={{ mb: 3 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={formLabelSx}
+                          >
+                            Angle
+                          </Typography>
+                          <FormControl fullWidth size="small">
+                            <InputLabel id={`preset-${p.id}-angle-label`}>Angle</InputLabel>
+                            <Select
+                              labelId={`preset-${p.id}-angle-label`}
+                              value={presetController.draft.angleId}
+                              onChange={(e) => presetController.updateDraftField('angleId', e.target.value)}
+                              label="Angle"
+                              disabled={!presetController.isEditing || isSaving}
+                              displayEmpty
+                              sx={presetController.isEditing ? textFieldEditModeSx : textFieldViewModeSx}
+                            >
+                              <MenuItem value="">
+                                <em>None</em>
+                              </MenuItem>
+                              {angleOptions.length === 0 ? (
+                                <MenuItem disabled value="__no_angles__">
+                                  No active angles for this product
+                                </MenuItem>
+                              ) : (
+                                angleOptions.map((opt) => (
+                                  <MenuItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </MenuItem>
+                                ))
+                              )}
+                            </Select>
+                          </FormControl>
                         </Box>
 
                         {/* Row 1: Preset Name, Beneficiary, Payer */}
