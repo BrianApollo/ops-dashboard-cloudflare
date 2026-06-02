@@ -13,6 +13,7 @@ import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Chip from '@mui/material/Chip';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
@@ -49,6 +50,8 @@ interface ImagesTabProps {
   isDeleting?: boolean;
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  /** Map of angle id → name for resolving the pill label. */
+  anglesById: Record<string, string>;
 }
 
 export function ImagesTab({
@@ -60,6 +63,7 @@ export function ImagesTab({
   isDeleting = false,
   selectedIds: propsSelectedIds,
   onSelectionChange: propsOnSelectionChange,
+  anglesById,
 }: ImagesTabProps) {
   // Image detail panel (uses shared hook)
   const imageDetail = useDetailPanel(images);
@@ -270,6 +274,16 @@ export function ImagesTab({
                 <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
                   {img.name}
                 </Typography>
+                {img.angleId && anglesById[img.angleId] && (
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      label={anglesById[img.angleId]}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: '0.7rem', height: 20 }}
+                    />
+                  </Box>
+                )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
                   {showProductColumn && (
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1 }}>

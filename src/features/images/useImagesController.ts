@@ -362,8 +362,8 @@ export function useImagesController(
           mimeType,
         });
 
-        // Create Airtable record AFTER upload succeeds
-        await createImage(productId, result.finalFilename, result.url, imageNumber);
+        // Create Airtable record AFTER upload succeeds — carry the angle over from the temp image
+        await createImage(productId, result.finalFilename, result.url, imageNumber, image.angleId);
 
         // Delete temp image record AFTER Airtable write succeeds
         await deleteTempImage(id);

@@ -86,6 +86,8 @@ export interface ImageItem {
   usedInCampaigns: string[];
   createdAt?: string;
   image_url?: string;
+  /** Linked Angle record ID (optional). */
+  angleId?: string;
 }
 
 export interface ProductAssetInfo {

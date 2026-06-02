@@ -16,6 +16,8 @@ export type ImageGenerateModel = 'nanobanana-1' | 'nanobanana-2';
 export interface CreateImagesData {
     numberOfImages: number;
     advertorial: string;
+    /** Angle record ID from the selected advertorial. Empty string when none. */
+    angle: string;
     imageSize: string;
     outputFormat: string;
     model: ImageGenerateModel;
@@ -54,6 +56,7 @@ export function CreateImagesDialog({ open, onClose, onSubmit, advertorials }: Cr
         onSubmit({
             numberOfImages: parseInt(numberOfImages, 10),
             advertorial: selectedAdv?.text || '',
+            angle: selectedAdv?.angleId || '',
             imageSize,
             outputFormat,
             model,

@@ -37,6 +37,7 @@ const FIELD_FILE_SIZE = 'File Size';
 const FIELD_NOTES = 'Notes';
 const FIELD_USED_IN_CAMPAIGNS = 'Used In Campaigns';
 const FIELD_COUNT = 'Count'; // Added field
+const FIELD_ANGLE = 'Angles'; // Linked record → Angles
 
 // Products table fields
 const FIELD_PRODUCT_NAME = 'Product Name';
@@ -193,6 +194,10 @@ function mapAirtableToImage(
     ? (fields[FIELD_USED_IN_CAMPAIGNS] as string[])
     : [];
 
+  // Angle (linked record → Angles, first ID only)
+  const angleIds = fields[FIELD_ANGLE] as string[] | undefined;
+  const angleId = angleIds?.[0];
+
   return {
     id: record.id,
     name,
@@ -209,6 +214,7 @@ function mapAirtableToImage(
     createdAt: record.createdTime,
     image_drive_link: driveLink,
     count: typeof fields[FIELD_COUNT] === 'number' ? fields[FIELD_COUNT] : undefined,
+    angleId,
   };
 }
 
@@ -266,6 +272,10 @@ function mapTempAirtableToImage(
     }
   }
 
+  // Angle (linked record → Angles, first ID only)
+  const angleIds = fields[FIELD_ANGLE] as string[] | undefined;
+  const angleId = angleIds?.[0];
+
   return {
     id: record.id,
     name,
@@ -282,6 +292,7 @@ function mapTempAirtableToImage(
     createdAt: record.createdTime,
     image_drive_link: driveLink,
     image_url: driveLink,
+    angleId,
   };
 }
 
@@ -411,7 +422,8 @@ export async function createImage(
   productId: string,
   name: string,
   driveUrl: string,
-  count?: number // Added count
+  count?: number, // Added count
+  angleId?: string
 ): Promise<Image> {
   const productsMap = await fetchProducts();
 
@@ -421,6 +433,11 @@ export async function createImage(
     [FIELD_DRIVE_LINK]: driveUrl,
     [FIELD_COUNT]: count,
   };
+
+  // Link angle if provided
+  if (angleId) {
+    fields[FIELD_ANGLE] = [angleId];
+  }
 
   const response = await airtableFetch(IMAGES_TABLE, {
     method: 'POST',

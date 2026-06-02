@@ -225,6 +225,7 @@ export function ProductsPage() {
       usedInCampaigns: i.usedInCampaigns,
       createdAt: i.createdAt,
       image_url: i.image_url,
+      angleId: i.angleId,
     }));
   }, [filteredImages, productNameMap]);
 
@@ -848,6 +849,7 @@ export function ProductsPage() {
             isDeleting={isDeletingImages}
             selectedIds={selectedImageIds}
             onSelectionChange={setSelectedImageIds}
+            anglesById={anglesById}
           />
         )}
         {activeTab === 'advertorials' && (

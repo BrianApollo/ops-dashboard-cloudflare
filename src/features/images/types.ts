@@ -70,6 +70,9 @@ export interface Image {
   /** Temp Image URL */
   image_url?: string;
   count?: number;
+
+  /** Linked Angle record ID (from the "Angles" field on Images / Temp Images). */
+  angleId?: string;
 }
 
 // =============================================================================
