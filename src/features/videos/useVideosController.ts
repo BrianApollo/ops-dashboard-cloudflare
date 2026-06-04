@@ -315,13 +315,12 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
   });
 
   // Handler: Status card click
+  // Selecting a pill applies that status. Clicking the already-active pill is a
+  // no-op (it does NOT toggle back to "All") — the dedicated "All" pill is for that.
   const handleStatusCardClick = useCallback(
     (status: VideoStatus) => {
-      if (activeStatus === status) {
-        list.setFilters({ ...list.filters, status: [] });
-      } else {
-        list.setFilters({ ...list.filters, status: [status] });
-      }
+      if (activeStatus === status) return;
+      list.setFilters({ ...list.filters, status: [status] });
     },
     [activeStatus, list]
   );
