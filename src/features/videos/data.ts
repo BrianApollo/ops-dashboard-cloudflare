@@ -48,6 +48,8 @@ const FIELD_SCRIPT_CONTENT = 'Script Content (from Script)'; // Lookup field (re
 
 // Video Scripts table fields
 const FIELD_SCRIPT_NAME = 'Name';
+const FIELD_SCRIPT_VIDEOS = 'Videos';                // Linked → Videos (count = total variants)
+const FIELD_SCRIPT_PAST_TODO = 'Scripts Past To Do'; // Rollup: variants no longer To Do (done)
 
 // Table names
 const VIDEO_SCRIPTS_TABLE = 'Video Scripts';
@@ -355,6 +357,35 @@ async function fetchScripts(): Promise<Map<string, { id: string; name: string }>
   } while (offset);
   scriptsCache = list;
   return map;
+}
+
+/**
+ * Per-script upload counts straight from the Video Scripts table rollups.
+ * These count ALL of a script's videos (not any page-filtered subset):
+ *   total = number of linked Videos, done = "Scripts Past To Do" rollup.
+ * Returns a lookup keyed by Video Scripts record id.
+ */
+export async function getScriptCounts(
+  signal?: AbortSignal
+): Promise<Record<string, { done: number; total: number }>> {
+  const counts: Record<string, { done: number; total: number }> = {};
+  const params = `fields[]=${encodeURIComponent(FIELD_SCRIPT_PAST_TODO)}&fields[]=${encodeURIComponent(FIELD_SCRIPT_VIDEOS)}`;
+  let offset: string | undefined;
+  do {
+    const url = offset ? `${VIDEO_SCRIPTS_TABLE}?${params}&offset=${offset}` : `${VIDEO_SCRIPTS_TABLE}?${params}`;
+    const res = await airtableFetch(url, { signal });
+    const data: AirtableResponse = await res.json();
+    for (const rec of data.records) {
+      const doneRaw = rec.fields[FIELD_SCRIPT_PAST_TODO];
+      const videos = rec.fields[FIELD_SCRIPT_VIDEOS];
+      counts[rec.id] = {
+        done: typeof doneRaw === 'number' ? doneRaw : 0,
+        total: Array.isArray(videos) ? videos.length : 0,
+      };
+    }
+    offset = data.offset;
+  } while (offset && !signal?.aborted);
+  return counts;
 }
 
 // =============================================================================

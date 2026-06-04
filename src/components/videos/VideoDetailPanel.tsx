@@ -11,6 +11,8 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -77,6 +79,39 @@ interface VideoDetailPanelProps {
   isUpdating?: boolean;
   onViewScript?: (scriptId: string) => void;
   canUpload?: boolean;
+}
+
+/** Copy-to-clipboard button for the script text (top-right of the Script box). */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+  return (
+    <Tooltip title={copied ? 'Copied!' : 'Copy script'}>
+      <IconButton
+        size="small"
+        onClick={handleCopy}
+        sx={{
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          zIndex: 1,
+          color: copied ? 'success.main' : 'text.disabled',
+          bgcolor: 'background.paper',
+          '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+        }}
+      >
+        {copied ? <CheckIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
+      </IconButton>
+    </Tooltip>
+  );
 }
 
 // =============================================================================
@@ -315,10 +350,13 @@ export function VideoDetailPanel({
         <DetailPanelBody hasActions={showBottomButton}>
           {/* 1. Script Section */}
           <DetailSection label="Script">
-            <DetailContent
-              content={video.scriptContent}
-              placeholder="No script content available"
-            />
+            <Box sx={{ position: 'relative' }}>
+              {video.scriptContent && <CopyButton text={video.scriptContent} />}
+              <DetailContent
+                content={video.scriptContent}
+                placeholder="No script content available"
+              />
+            </Box>
             {onViewScript && video.script?.id && (
               <Button
                 variant="text"

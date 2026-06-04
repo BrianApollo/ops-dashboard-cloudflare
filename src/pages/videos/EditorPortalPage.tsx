@@ -5,7 +5,7 @@
  * All logic lives in useVideosController.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -23,6 +23,7 @@ import { AppDialog } from '../../core/dialog';
 import {
   ListToolbar,
   ListPagination,
+  RowsPerPageSelect,
 } from '../../core/list';
 import { EmptyState } from '../../core/state';
 import { BulkActionBar } from '../../core/bulk';
@@ -33,7 +34,8 @@ import ArchiveIcon from '@mui/icons-material/Archive';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
-import { StatusPill } from '../../ui';
+import LayersIcon from '@mui/icons-material/Layers';
+import { StatusPill, getStatusColors } from '../../ui';
 import {
   VideoDetailPanel,
   VideoTable,
@@ -42,12 +44,40 @@ import {
   defaultVideoColumns,
   STATUS_LABELS,
 } from '../../features/videos';
+import { ScriptGroupedTable } from '../../components/videos/ScriptGroupedTable';
+import { EditorToDoBanner } from './EditorToDoBanner';
+import { getScriptCounts } from '../../features/videos/data';
 import type { VideoAsset, VideoFormat, TextVersion } from '../../features/videos';
 import { VideoEditorsTab } from '../overview/VideoEditorsTab';
+import { useQuery } from '@tanstack/react-query';
+import { EditorMonthlyStats } from './EditorMonthlyStats';
+
+/**
+ * Solid-fill style for the currently selected status pill.
+ * Unselected pills keep their light tint, so the selected one clearly stands out.
+ */
+const solidFillSx = (accent: string) => ({
+  bgcolor: accent,
+  color: '#fff',
+  fontWeight: 700,
+  boxShadow: 'none',
+  '&:hover': { bgcolor: accent },
+});
 
 export function EditorPortalPage() {
   // Local UI state only
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [groupByScripts, setGroupByScripts] = useState(false);
+
+  // True per-script done/total counts (from the Video Scripts table rollups) for
+  // the grouped view's "x/y uploaded" chip. Counts ALL videos, not the filtered
+  // page. Only fetched while the grouped view is active.
+  const { data: scriptCounts } = useQuery({
+    queryKey: ['scriptCounts'],
+    queryFn: ({ signal }) => getScriptCounts(signal),
+    staleTime: 60_000,
+    enabled: groupByScripts,
+  });
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [scriptDialogOpen, setScriptDialogOpen] = useState(false);
   const [moreFiltersAnchor, setMoreFiltersAnchor] = useState<HTMLElement | null>(null);
@@ -90,6 +120,24 @@ export function EditorPortalPage() {
     canUploadToVideo,
     user, // Destructure user context to check role
   } = useVideosController();
+
+  // Editor whose monthly-stats card is shown: the selected editor in the filter,
+  // falling back to the logged-in user. Keeps the card visible (and per-editor)
+  // for ops/admins too, not just when an editor views their own data.
+  const statsEditorId = list.filters.editorId ?? user.userId;
+
+  // Default the status filter to "Todo" on first mount.
+  // This is page-local: the shared controller default is "all" (no status filter),
+  // which other consumers (campaign launch, products) rely on — so we don't touch it.
+  const hasSetDefaultStatus = useRef(false);
+  useEffect(() => {
+    if (!hasSetDefaultStatus.current) {
+      hasSetDefaultStatus.current = true;
+      if (list.filters.status.length === 0) {
+        list.setFilters({ ...list.filters, status: ['todo'] });
+      }
+    }
+  }, [list]);
 
   // Format and TextVersion filter handlers
   const handleFormatChange = useCallback(
@@ -246,51 +294,85 @@ export function EditorPortalPage() {
   }, [list.totalCount, list.searchTerm, list.filters, editorOptions, productOptions]);
 
   return (
-    <Box data-component="video-editor-page" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+    <Box data-component="video-editor-page" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Page Header */}
-      <Box component="header">
-        {/* Title row with Ops badge */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-            Video Editor Portal
-          </Typography>
+      <Box
+        component="header"
+        sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, alignSelf: 'stretch' }}>
+          <Box>
+            {/* Title row with Ops badge */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+              <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+                Video Editor Portal
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              Manage and track video production across all products
+            </Typography>
+          </Box>
+
+          {/* Status filter pills — sit directly under the title to fill the header */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+            <StatusPill
+              status="all"
+              label="All"
+              active={activeStatus === null}
+              onClick={() => list.setFilters({ ...list.filters, status: [] })}
+              sx={activeStatus === null ? solidFillSx('#475569') : undefined}
+            />
+            <StatusPill
+              status="todo"
+              label={STATUS_LABELS.todo}
+              active={activeStatus === 'todo'}
+              onClick={() => handleStatusCardClick('todo')}
+              sx={activeStatus === 'todo' ? solidFillSx(getStatusColors('todo').text) : undefined}
+            />
+            <StatusPill
+              status="review"
+              label={STATUS_LABELS.review}
+              active={activeStatus === 'review'}
+              onClick={() => handleStatusCardClick('review')}
+              sx={activeStatus === 'review' ? solidFillSx(getStatusColors('review').text) : undefined}
+            />
+            <StatusPill
+              status="available"
+              label={STATUS_LABELS.available}
+              active={activeStatus === 'available'}
+              onClick={() => handleStatusCardClick('available')}
+              sx={activeStatus === 'available' ? solidFillSx(getStatusColors('available').text) : undefined}
+            />
+            <StatusPill
+              status="used"
+              label={STATUS_LABELS.used}
+              active={activeStatus === 'used'}
+              onClick={() => handleStatusCardClick('used')}
+              sx={activeStatus === 'used' ? solidFillSx(getStatusColors('used').text) : undefined}
+            />
+          </Box>
+
+          {/* "Scripts left to do" backlog — personal to one editor, so only shown when a
+              specific editor is selected. Hidden on "All Editors" (where a personal count
+              would contradict the all-editors table). Pinned to the bottom of the space. */}
+          {list.filters.editorId && (
+            <Box sx={{ mt: 'auto' }}>
+              <EditorToDoBanner
+                editorId={list.filters.editorId}
+                onClick={() => list.setFilters({ ...list.filters, status: ['todo'] })}
+              />
+            </Box>
+          )}
         </Box>
-        <Typography variant="body2" color="text.secondary">
-          Manage and track video production across all products
-        </Typography>
+
+        {/* Monthly stats module (top-right) — shows the selected/logged-in editor's data */}
+        {statsEditorId && <EditorMonthlyStats editorId={statsEditorId} />}
       </Box>
 
       {/* Editor performance summary — shows only their own data */}
       {user.role === 'editor' && user.userId && (
         <VideoEditorsTab editorId={user.userId} />
       )}
-
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-        <StatusPill
-          status="todo"
-          label="Todo"
-          active={activeStatus === 'todo'}
-          onClick={() => handleStatusCardClick('todo')}
-        />
-        <StatusPill
-          status="review"
-          label="In Review"
-          active={activeStatus === 'review'}
-          onClick={() => handleStatusCardClick('review')}
-        />
-        <StatusPill
-          status="available"
-          label="Available"
-          active={activeStatus === 'available'}
-          onClick={() => handleStatusCardClick('available')}
-        />
-        <StatusPill
-          status="used"
-          label="Used"
-          active={activeStatus === 'used'}
-          onClick={() => handleStatusCardClick('used')}
-        />
-      </Box>
 
       {/* Toolbar Section */}
       <Paper component="section" variant="outlined" sx={{ overflow: 'hidden', px: 1.5, py: 0.25 }}>
@@ -338,6 +420,24 @@ export function EditorPortalPage() {
                       <FilterListIcon fontSize="small" />
                     </IconButton>
                   </Badge>
+                </Tooltip>
+
+                {/* Group by scripts toggle — folds variant rows into one row per script */}
+                <Tooltip title="Group by scripts">
+                  <Button
+                    size="small"
+                    onClick={() => setGroupByScripts((v) => !v)}
+                    startIcon={<LayersIcon fontSize="small" />}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: 1,
+                      color: groupByScripts ? 'primary.main' : 'text.secondary',
+                      bgcolor: groupByScripts ? 'primary.50' : 'grey.100',
+                      '&:hover': { bgcolor: groupByScripts ? 'primary.100' : 'grey.200' },
+                    }}
+                  >
+                    Group by scripts
+                  </Button>
                 </Tooltip>
 
                 {/* More Filters Popover */}
@@ -443,24 +543,33 @@ export function EditorPortalPage() {
             } : undefined}
           />
         ) : viewMode === 'table' ? (
-          <VideoTable
-            videos={list.visibleRecords}
-            columns={defaultVideoColumns}
-            onVideoClick={handleVideoClick}
-            selection={{
-              selected: list.selection,
-              isSelected: list.isSelected,
-              toggleSelection: list.toggleSelection,
-              selectAll: list.selectAll,
-              clearSelection: list.clearSelection,
-              hasSelection: list.hasSelection,
-            }}
-            sort={list.sort}
-            onSort={list.handleSort}
-            canUpload={canUploadToVideo}
-            onUpload={handleTableUpload}
-            uploadingIds={uploadingVideoIds}
-          />
+          groupByScripts ? (
+            <ScriptGroupedTable
+              videos={list.filteredRecords}
+              columns={defaultVideoColumns}
+              onVideoClick={handleVideoClick}
+              scriptCounts={scriptCounts}
+            />
+          ) : (
+            <VideoTable
+              videos={list.visibleRecords}
+              columns={defaultVideoColumns}
+              onVideoClick={handleVideoClick}
+              selection={{
+                selected: list.selection,
+                isSelected: list.isSelected,
+                toggleSelection: list.toggleSelection,
+                selectAll: list.selectAll,
+                clearSelection: list.clearSelection,
+                hasSelection: list.hasSelection,
+              }}
+              sort={list.sort}
+              onSort={list.handleSort}
+              canUpload={canUploadToVideo}
+              onUpload={handleTableUpload}
+              uploadingIds={uploadingVideoIds}
+            />
+          )
         ) : (
           <ScriptProductionGrid
             videos={list.allRecords}
@@ -475,8 +584,8 @@ export function EditorPortalPage() {
         )}
       </Box>
 
-      {/* Results Count & Pagination Footer (table view only - grid has its own pagination) */}
-      {viewMode === 'table' && (
+      {/* Results Count & Pagination Footer (flat table only — grid and grouped views paginate themselves) */}
+      {viewMode === 'table' && !groupByScripts && (
         <Box
           component="footer"
           sx={{
@@ -486,9 +595,20 @@ export function EditorPortalPage() {
             gap: 2,
           }}
         >
-          <Typography variant="body2" color="text.secondary">
-            Showing {list.filteredCount} of {list.totalCount} videos
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {list.filteredCount === 0
+                ? 'No videos'
+                : `Showing ${list.pageIndex * list.pageSize + 1}–${list.pageIndex * list.pageSize + list.visibleRecords.length} of ${list.filteredCount} videos`}
+            </Typography>
+            <RowsPerPageSelect
+              value={list.pageSize}
+              onChange={(n) => {
+                list.setPageIndex(0); // reset to first page so the slice stays valid
+                list.setPageSize(n);
+              }}
+            />
+          </Box>
           <ListPagination
             pageIndex={list.pageIndex}
             totalPages={list.totalPages}
