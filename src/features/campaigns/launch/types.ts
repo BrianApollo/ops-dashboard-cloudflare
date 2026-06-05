@@ -36,6 +36,8 @@ export interface SelectableVideo {
   fbThumbnailUrl?: string;
   uploadStatus?: string;
   uploadError?: string;
+  /** Linked Angle record ID (optional). */
+  angleId?: string;
 }
 
 export interface SelectableImage {
@@ -47,6 +49,8 @@ export interface SelectableImage {
   driveFileId?: string;
   image_drive_link?: string;
   productId: string;
+  /** Linked Angle record ID (optional). */
+  angleId?: string;
 }
 
 export interface UploadedMedia {

@@ -80,6 +80,7 @@ export function useLaunchMediaState({
           fbThumbnailUrl: libraryEntry?.thumbnailUrl || uploadState?.thumbnailUrl,
           uploadStatus: uploadState?.status,
           uploadError: uploadState?.error,
+          angleId: v.angleId,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -101,6 +102,7 @@ export function useLaunchMediaState({
         driveFileId: i.driveFileId,
         image_drive_link: i.image_drive_link,
         productId: i.product.id,
+        angleId: i.angleId,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [imagesController.images, productId]);

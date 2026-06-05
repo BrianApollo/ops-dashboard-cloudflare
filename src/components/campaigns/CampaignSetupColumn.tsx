@@ -30,28 +30,12 @@ import type { CampaignDraft, InfraOption } from '../../features/campaigns/launch
 import type { RedTrackCampaignDetails, CampaignOption } from '../../features/redtrack';
 
 // =============================================================================
-// AD PRESET TYPE (from ad-presets feature)
-// =============================================================================
-
-interface AdPresetOption {
-  id: string;
-  name: string;
-  primaryTexts: string[];
-  headlines: string[];
-  descriptions: string[];
-  callToAction: string;
-  beneficiaryName: string;
-  payerName: string;
-}
-
-// =============================================================================
 // PROPS
 // =============================================================================
 
 interface CampaignSetupColumnProps {
   draft: CampaignDraft;
   onDraftChange: (updates: Partial<CampaignDraft>) => void;
-  adPresets: AdPresetOption[];
   adAccounts: InfraOption[];
   pages: InfraOption[];
   pixels: InfraOption[];
@@ -80,7 +64,6 @@ interface CampaignSetupColumnProps {
 export function CampaignSetupColumn({
   draft,
   onDraftChange,
-  adPresets,
   adAccounts,
   pages,
   pixels,
@@ -95,9 +78,7 @@ export function CampaignSetupColumn({
 }: CampaignSetupColumnProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(draft.name);
-  const [presetExpanded, setPresetExpanded] = useState(false);
   const [urlExpanded, setUrlExpanded] = useState(false);
-  const selectedPreset = adPresets.find((p) => p.id === draft.adPresetId);
 
   const handleSaveName = () => {
     onDraftChange({ name: editedName });
@@ -339,78 +320,6 @@ export function CampaignSetupColumn({
           </FormField>
         </Box>
 
-        {/* Ad Preset */}
-        <Box sx={{ position: 'relative' }}>
-          {(() => {
-            const textsHaveLink = [...draft.primaryTexts, ...draft.headlines, ...draft.descriptions].some(t => t.includes('{{link}}'));
-            const presetHadLink = selectedPreset && [...selectedPreset.primaryTexts, ...selectedPreset.headlines, ...selectedPreset.descriptions].some(t => t.includes('{{link}}'));
-            if (textsHaveLink) {
-              return <Chip label="{{link}} not replaced" color="warning" size="small" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />;
-            }
-            if (draft.linkVariable && presetHadLink) {
-              return <Chip label="{{link}} replaced" color="success" size="small" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />;
-            }
-            return null;
-          })()}
-          <SectionHeader
-            title="Ad Preset"
-            expanded={presetExpanded}
-            onToggle={() => setPresetExpanded(!presetExpanded)}
-            hasContent={!!selectedPreset}
-            dotColor={
-              [...draft.primaryTexts, ...draft.headlines, ...draft.descriptions].some((t) =>
-                t.includes('{{link}}')
-              )
-                ? 'primary.main'
-                : 'success.main'
-            }
-          />
-          <Select
-            value={draft.adPresetId && adPresets.some((p) => p.id === draft.adPresetId) ? draft.adPresetId : ''}
-            onChange={(e) => onDraftChange({ adPresetId: e.target.value || null })}
-            size="small"
-            fullWidth
-            displayEmpty
-            sx={{ '& .MuiSelect-select': textSm }}
-          >
-            <MenuItem value="">Select a preset...</MenuItem>
-            {adPresets.map((preset) => (
-              <MenuItem key={preset.id} value={preset.id}>
-                {preset.name}
-              </MenuItem>
-            ))}
-          </Select>
-
-          <Collapse in={presetExpanded && !!selectedPreset}>
-            {selectedPreset && (
-              <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                <EditableCreativeSection
-                  draft={draft}
-                  onDraftChange={onDraftChange}
-                  preset={selectedPreset}
-                />
-              </Box>
-            )}
-          </Collapse>
-        </Box>
-
-        {/* Website URL */}
-        <Box sx={{ position: 'relative' }}>
-          {websiteUrlFromRedtrack && (
-            <Chip size="small" label="From Redtrack" color="info" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />
-          )}
-          <FormField label="Website URL" noMargin>
-            <TextField
-              value={draft.websiteUrl}
-              onChange={(e) => onDraftChange({ websiteUrl: e.target.value })}
-              size="small"
-              fullWidth
-              placeholder="https://example.com/landing"
-              sx={{ '& .MuiInputBase-input': textSm }}
-            />
-          </FormField>
-        </Box>
-
         {/* Tracking Parameters */}
         <Box sx={{ position: 'relative' }}>
           {websiteUrlFromRedtrack && draft.utms && (
@@ -569,102 +478,3 @@ function InfraSelect({ value, onChange, options, placeholder, disabled, error, l
   );
 }
 
-interface EditableCreativeSectionProps {
-  draft: CampaignDraft;
-  onDraftChange: (updates: Partial<CampaignDraft>) => void;
-  preset: AdPresetOption;
-}
-
-function EditableCreativeSection({ draft, onDraftChange, preset }: EditableCreativeSectionProps) {
-  const updateArray = (field: 'primaryTexts' | 'headlines' | 'descriptions', index: number, value: string) => {
-    const newArray = [...draft[field]];
-    newArray[index] = value;
-    onDraftChange({ [field]: newArray });
-  };
-
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {draft.primaryTexts.length > 0 && (
-        <EditableFieldGroup
-          label={`Primary Text (${draft.primaryTexts.length})`}
-          values={draft.primaryTexts}
-          onChange={(i, v) => updateArray('primaryTexts', i, v)}
-          multiline
-        />
-      )}
-      {draft.headlines.length > 0 && (
-        <EditableFieldGroup
-          label={`Headlines (${draft.headlines.length})`}
-          values={draft.headlines}
-          onChange={(i, v) => updateArray('headlines', i, v)}
-        />
-      )}
-      {draft.descriptions.length > 0 && (
-        <EditableFieldGroup
-          label={`Descriptions (${draft.descriptions.length})`}
-          values={draft.descriptions}
-          onChange={(i, v) => updateArray('descriptions', i, v)}
-        />
-      )}
-      {preset.callToAction && (
-        <Box>
-          <Typography sx={{ ...textSm, display: 'block', mb: 0.5, color: 'text.secondary' }}>
-            Call to Action
-          </Typography>
-          <Typography sx={textSm}>{preset.callToAction}</Typography>
-        </Box>
-      )}
-      {(preset.beneficiaryName || preset.payerName) && (
-        <Box>
-          <Typography sx={{ ...textSm, display: 'block', mb: 0.5, color: 'text.secondary' }}>
-            Compliance
-          </Typography>
-          {preset.beneficiaryName && (
-            <Typography sx={textSm}>Beneficiary: {preset.beneficiaryName}</Typography>
-          )}
-          {preset.payerName && (
-            <Typography sx={textSm}>Payer: {preset.payerName}</Typography>
-          )}
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-interface EditableFieldGroupProps {
-  label: string;
-  values: string[];
-  onChange: (index: number, value: string) => void;
-  multiline?: boolean;
-}
-
-function EditableFieldGroup({ label, values, onChange, multiline }: EditableFieldGroupProps) {
-  return (
-    <Box>
-      <Typography sx={{ ...textSm, display: 'block', mb: 0.5, color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      {values.map((v, i) => (
-        <Box key={i} sx={{ mb: 1 }}>
-          <TextField
-            value={v}
-            onChange={(e) => onChange(i, e.target.value)}
-            size="small"
-            fullWidth
-            multiline={multiline}
-            minRows={multiline ? 2 : 1}
-            placeholder={`Variation ${i + 1}`}
-            sx={{ '& .MuiInputBase-input': textSm }}
-            InputProps={{
-              startAdornment: (
-                <Typography sx={{ ...textSm, color: 'text.secondary', mr: 1, userSelect: 'none' }}>
-                  {i + 1}
-                </Typography>
-              ),
-            }}
-          />
-        </Box>
-      ))}
-    </Box>
-  );
-}

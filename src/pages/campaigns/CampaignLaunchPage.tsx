@@ -29,9 +29,12 @@ import ErrorIcon from '@mui/icons-material/Error';
 import SaveIcon from '@mui/icons-material/Save';
 // Controller - canonical location
 import { useCampaignLaunchOrchestrator } from '../../features/campaigns/launch/useCampaignLaunchOrchestrator';
+import { useAnglesController } from '../../features/angles';
+import { useAdvertorialsController } from '../../features/advertorials/useAdvertorialsController';
 // Components - canonical location
 import { CreativesColumn } from '../../components/campaigns/CreativesColumn';
 import { CampaignSetupColumn } from '../../components/campaigns/CampaignSetupColumn';
+import { AdsSettingsSection } from '../../components/campaigns/AdsSettingsSection';
 import { FinalCheckColumn } from '../../components/campaigns/FinalCheckColumn';
 // LaunchProgressView - canonical location
 import { LaunchProgressView } from '../../components/campaigns/LaunchProgressView';
@@ -53,6 +56,24 @@ export function CampaignLaunchPage() {
 
   // Controller owns all business logic
   const c = useCampaignLaunchOrchestrator(campaignId!, productIdParam);
+
+  // Angles (for labelling per-angle Ads Settings sections in the middle column)
+  const anglesController = useAnglesController();
+  const anglesById = useMemo(() => {
+    const map: Record<string, string> = {};
+    anglesController.angles.forEach((a) => { map[a.id] = a.name; });
+    return map;
+  }, [anglesController.angles]);
+
+  // Advertorials (for the per-angle Advertorial dropdown in Ads Settings).
+  // Filtered to the current product, projected to the minimal shape the section needs.
+  const advertorialsController = useAdvertorialsController();
+  const advertorialsForProduct = useMemo(() => {
+    if (!c.productId) return [];
+    return advertorialsController.advertorials
+      .filter((a) => a.productId === c.productId)
+      .map((a) => ({ id: a.id, name: a.name, link: a.link, angleId: a.angleId }));
+  }, [advertorialsController.advertorials, c.productId]);
 
   // UI-only state (not business logic)
   const [mediaCollapsed, setMediaCollapsed] = useState(false);
@@ -266,12 +287,11 @@ export function CampaignLaunchPage() {
             selectedNotInLibraryCount={c.selectedNotInLibraryCount}
           />
 
-          {/* CENTER: Campaign Setup */}
-          <Box sx={{ alignSelf: 'start', position: 'sticky', top: 24 }}>
+          {/* CENTER: Campaign Setup + Ads Settings (sibling sections) */}
+          <Box sx={{ alignSelf: 'start', position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 3 }}>
             <CampaignSetupColumn
               draft={c.draft}
               onDraftChange={c.updateDraft}
-              adPresets={c.productPresets}
               adAccounts={c.adAccounts}
               pages={c.pages}
               pixels={c.pixels}
@@ -283,6 +303,13 @@ export function CampaignLaunchPage() {
               pagesError={c.pagesError}
               pixelsLoading={c.pixelsLoading}
               pagesLoading={c.pagesLoading}
+            />
+            <AdsSettingsSection
+              selectedVideos={c.selectedVideosForPreview}
+              selectedImages={c.selectedImagesForPreview}
+              anglesById={anglesById}
+              adPresets={c.productPresets}
+              advertorials={advertorialsForProduct}
             />
           </Box>
 

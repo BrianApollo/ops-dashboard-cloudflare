@@ -58,6 +58,8 @@ interface AdPresetForLaunch {
   callToAction: string;
   beneficiaryName: string;
   payerName: string;
+  /** Linked Angle record ID — used to filter presets per Ads Settings section. */
+  angleId?: string;
 }
 
 export interface UseCampaignLaunchOrchestratorReturn {
@@ -371,6 +373,7 @@ export function useCampaignLaunchOrchestrator(
         callToAction: p.callToAction ?? '',
         beneficiaryName: p.beneficiaryName ?? '',
         payerName: p.payerName ?? '',
+        angleId: p.angleId,
       }));
   }, [adPresetsController.adPresets, productId]);
 
