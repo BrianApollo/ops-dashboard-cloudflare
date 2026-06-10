@@ -83,9 +83,9 @@ export interface RedTrackCampaignInfo {
   title: string;
   trackbackUrl?: string; // Full URL with UTM params
   status?: string;
-  // Extracted IDs from streams (if available)
-  landerId?: string;
-  offerId?: string;
+  // All lander/offer IDs extracted across every stream (deduped, order-preserving)
+  landerIds: string[];
+  offerIds: string[];
 }
 
 /**

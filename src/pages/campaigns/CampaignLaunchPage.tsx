@@ -34,7 +34,7 @@ import { useAdvertorialsController } from '../../features/advertorials/useAdvert
 // Components - canonical location
 import { CreativesColumn } from '../../components/campaigns/CreativesColumn';
 import { CampaignSetupColumn } from '../../components/campaigns/CampaignSetupColumn';
-import { AdsSettingsSection } from '../../components/campaigns/AdsSettingsSection';
+import { AdsSettingsSection, type AdsSettingsValidation } from '../../components/campaigns/AdsSettingsSection';
 import { FinalCheckColumn } from '../../components/campaigns/FinalCheckColumn';
 // LaunchProgressView - canonical location
 import { LaunchProgressView } from '../../components/campaigns/LaunchProgressView';
@@ -45,6 +45,20 @@ import { saveLaunchTemplate } from '../../features/campaigns/data';
 // =============================================================================
 
 type UIMode = 'pre-launch' | 'launching' | 'complete';
+
+/**
+ * Normalize a URL for loose equality: lowercase, drop protocol, leading
+ * `www.`, and any trailing slashes. Lets an advertorial link match a lander
+ * URL despite cosmetic differences (http vs https, trailing slash, www).
+ */
+function normalizeUrl(url: string): string {
+  return url
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+}
 
 // =============================================================================
 // MAIN COMPONENT
@@ -70,14 +84,78 @@ export function CampaignLaunchPage() {
   const advertorialsController = useAdvertorialsController();
   const advertorialsForProduct = useMemo(() => {
     if (!c.productId) return [];
+    // Show every advertorial for the product. Those whose link matches one of
+    // the campaign's RedTrack lander URLs are flagged (`matchesLander`) so the
+    // dropdown can highlight them, and carry the paired offer URL.
+    const landers = c.redtrackData?.landers ?? [];
+    const offers = c.redtrackData?.offers ?? [];
+    const landerUrls = new Set(landers.map((l) => normalizeUrl(l.url)).filter(Boolean));
+    // Pair lander → offer by index (the arrays are index-aligned). Keyed by
+    // normalized lander URL so a selected advertorial's link resolves to its
+    // paired offer URL.
+    const offerUrlByLanderUrl = new Map<string, string>();
+    landers.forEach((l, i) => {
+      const key = normalizeUrl(l.url);
+      const offerUrl = offers[i]?.url;
+      if (key && offerUrl) offerUrlByLanderUrl.set(key, offerUrl);
+    });
     return advertorialsController.advertorials
       .filter((a) => a.productId === c.productId)
-      .map((a) => ({ id: a.id, name: a.name, link: a.link, angleId: a.angleId }));
-  }, [advertorialsController.advertorials, c.productId]);
+      .map((a) => {
+        const matchesLander = !!a.link && landerUrls.has(normalizeUrl(a.link));
+        return {
+          id: a.id,
+          name: a.name,
+          link: a.link,
+          angleId: a.angleId,
+          matchesLander,
+          offerUrl: a.link ? offerUrlByLanderUrl.get(normalizeUrl(a.link)) : undefined,
+        };
+      });
+  }, [advertorialsController.advertorials, c.productId, c.redtrackData]);
 
   // UI-only state (not business logic)
   const [mediaCollapsed, setMediaCollapsed] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  // Per-angle Ads Settings validation, reported up from AdsSettingsSection.
+  // Folded into the launch validation below.
+  const [adsValidation, setAdsValidation] = useState<AdsSettingsValidation>({
+    sectionCount: 0,
+    allPresetsSelected: false,
+    allAdvertorialsSelected: false,
+    allLinksReplaced: false,
+  });
+
+  // Fold the per-angle Ads Settings state into the controller's validation.
+  // The orchestrator's draft-based "Ad preset" / "{{link}} replaced" checks are
+  // superseded by the per-angle sections, and an "Advertorial" check is added.
+  const validationGroups = useMemo(() => {
+    type Check = { id: string; label: string; group: string; passed: boolean };
+    return c.validationGroups.map((g) => {
+      if (g.name !== 'Assets') return g;
+      const checks: Check[] = (g.checks as Check[])
+        .map((chk): Check => {
+          if (chk.id === 'preset') return { ...chk, passed: adsValidation.allPresetsSelected };
+          if (chk.id === 'link-replaced') {
+            return { ...chk, label: 'Advertorial links replaced', passed: adsValidation.allLinksReplaced };
+          }
+          return chk;
+        })
+        .flatMap((chk): Check[] =>
+          // Insert the new "Advertorial" check right after the preset check.
+          chk.id === 'preset'
+            ? [chk, { id: 'advertorial', label: 'Advertorial', group: chk.group, passed: adsValidation.allAdvertorialsSelected }]
+            : [chk]
+        );
+      return { ...g, checks, allPassed: checks.every((chk) => chk.passed) };
+    });
+  }, [c.validationGroups, adsValidation]);
+
+  const allChecksPass = useMemo(
+    () => validationGroups.every((g) => g.allPassed),
+    [validationGroups]
+  );
 
   const handleSaveTemplate = async () => {
     if (!c.productId) return;
@@ -310,16 +388,17 @@ export function CampaignLaunchPage() {
               anglesById={anglesById}
               adPresets={c.productPresets}
               advertorials={advertorialsForProduct}
+              onValidationChange={setAdsValidation}
             />
           </Box>
 
           {/* RIGHT: Final Check - Simplified for pre-launch */}
           <Box sx={{ alignSelf: 'start', position: 'sticky', top: 24 }}>
             <FinalCheckColumn
-              validationGroups={c.validationGroups}
+              validationGroups={validationGroups}
               onLaunch={c.launch}
               isLaunching={c.isLaunching}
-              allChecksPass={c.allChecksPass}
+              allChecksPass={allChecksPass}
               selectedVideos={c.selectedVideosForPreview}
               selectedImages={c.selectedImagesForPreview}
               redtrackData={c.redtrackData}

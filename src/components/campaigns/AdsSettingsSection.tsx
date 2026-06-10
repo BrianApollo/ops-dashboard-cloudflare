@@ -9,19 +9,21 @@
  * with no angle. Selection is local-only state for now.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import TextField from '@mui/material/TextField';
 import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import TuneIcon from '@mui/icons-material/Tune';
 import LinkIcon from '@mui/icons-material/Link';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { textMd, textSm } from '../../theme/typography';
@@ -49,6 +51,28 @@ export interface AdsSettingsAdvertorialOption {
   link?: string;
   /** Linked angle id; undefined means the advertorial has no angle. */
   angleId?: string;
+  /** True when this advertorial's link matches one of the campaign's lander URLs. */
+  matchesLander?: boolean;
+  /**
+   * Offer URL paired (by index) with the RedTrack lander whose URL matches
+   * this advertorial's link. Undefined when there's no matching lander/offer.
+   */
+  offerUrl?: string;
+}
+
+/**
+ * Validation summary the section reports up to the launch page so its
+ * per-angle state can gate the campaign launch.
+ */
+export interface AdsSettingsValidation {
+  /** Number of ad-set sections (distinct angles + Default). */
+  sectionCount: number;
+  /** Every section has a preset selected (from its current options). */
+  allPresetsSelected: boolean;
+  /** Every section has an advertorial selected (from its current options). */
+  allAdvertorialsSelected: boolean;
+  /** Every section has had its advertorial link replaced (no `{{link}}` left). */
+  allLinksReplaced: boolean;
 }
 
 interface AdsSettingsSectionProps {
@@ -62,6 +86,8 @@ interface AdsSettingsSectionProps {
   adPresets: AdsSettingsPresetOption[];
   /** All advertorials for the current product. */
   advertorials: AdsSettingsAdvertorialOption[];
+  /** Reports the section's validation state up for launch gating. */
+  onValidationChange?: (validation: AdsSettingsValidation) => void;
 }
 
 const DEFAULT_SECTION_KEY = '__default__';
@@ -72,6 +98,7 @@ export function AdsSettingsSection({
   anglesById,
   adPresets,
   advertorials,
+  onValidationChange,
 }: AdsSettingsSectionProps) {
   // Per-angle selected preset id and advertorial id. Local state — not persisted.
   const [selectedPresetByAngle, setSelectedPresetByAngle] = useState<Record<string, string>>({});
@@ -112,12 +139,13 @@ export function AdsSettingsSection({
     return adPresets.filter((p) => p.angleId === sectionAngleId);
   };
 
-  /** Same filtering rule as presets, applied to advertorials. */
-  const advertorialsForSection = (sectionAngleId: string | null): AdsSettingsAdvertorialOption[] => {
-    if (sectionAngleId === null) {
-      return advertorials.filter((a) => !a.angleId);
-    }
-    return advertorials.filter((a) => a.angleId === sectionAngleId);
+  /**
+   * Every advertorial for the product is offered in each section's dropdown,
+   * regardless of the section's angle. Matched advertorials (link present in
+   * the campaign's lander list) are highlighted in the menu.
+   */
+  const advertorialsForSection = (_sectionAngleId: string | null): AdsSettingsAdvertorialOption[] => {
+    return advertorials;
   };
 
   const handleSelectPreset = (sectionKey: string, presetId: string) => {
@@ -133,26 +161,68 @@ export function AdsSettingsSection({
   };
 
   /**
-   * True only when every section has BOTH a preset and an advertorial
-   * selected, validated against the currently filtered options for that
-   * section (so a stale selection that's no longer available doesn't count).
+   * Per-angle validation summary, validated against the currently filtered
+   * options for each section (so a stale selection that's no longer available
+   * doesn't count). Drives both the "Replace Link" button and launch gating.
+   *
+   * - allPresetsSelected / allAdvertorialsSelected: every section has a valid
+   *   preset / advertorial selected.
+   * - allLinksReplaced: every section has been through "Replace Link" and has
+   *   no `{{link}}` placeholder left in its (replaced) preset copy.
    */
-  const allSectionsSelected = useMemo(() => {
-    if (sections.length === 0) return false;
-    return sections.every((s) => {
+  const validation = useMemo((): AdsSettingsValidation => {
+    const hasSections = sections.length > 0;
+    let allPresetsSelected = hasSections;
+    let allAdvertorialsSelected = hasSections;
+    let allLinksReplaced = hasSections;
+
+    for (const s of sections) {
       const presetOpts = presetsForSection(s.angleId);
       const advOpts = advertorialsForSection(s.angleId);
       const presetId = selectedPresetByAngle[s.key];
       const advId = selectedAdvertorialByAngle[s.key];
-      return (
-        !!presetId && presetOpts.some((p) => p.id === presetId) &&
-        !!advId && advOpts.some((a) => a.id === advId)
-      );
-    });
+
+      const presetOk = !!presetId && presetOpts.some((p) => p.id === presetId);
+      const advOk = !!advId && advOpts.some((a) => a.id === advId);
+      if (!presetOk) allPresetsSelected = false;
+      if (!advOk) allAdvertorialsSelected = false;
+
+      // A link counts as replaced only when the section has an override (the
+      // user ran "Replace Link") and no placeholder survives in it.
+      const override = replacedTextsByAngle[s.key];
+      const replacedOk =
+        !!override &&
+        ![...override.primaryTexts, ...override.headlines, ...override.descriptions]
+          .some((t) => t.includes('{{link}}'));
+      if (!replacedOk) allLinksReplaced = false;
+    }
+
+    return {
+      sectionCount: sections.length,
+      allPresetsSelected,
+      allAdvertorialsSelected,
+      allLinksReplaced,
+    };
     // presetsForSection/advertorialsForSection are stable closures over props,
     // so we depend on the underlying inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, selectedPresetByAngle, selectedAdvertorialByAngle, adPresets, advertorials]);
+  }, [sections, selectedPresetByAngle, selectedAdvertorialByAngle, replacedTextsByAngle, adPresets, advertorials]);
+
+  /** Both a preset and an advertorial chosen for every section. */
+  const allSectionsSelected = validation.allPresetsSelected && validation.allAdvertorialsSelected;
+
+  // Report validation up for launch gating. Depend on primitive fields so we
+  // only notify the parent when something actually changes (no render loop).
+  const onValidationChangeRef = useRef(onValidationChange);
+  onValidationChangeRef.current = onValidationChange;
+  useEffect(() => {
+    onValidationChangeRef.current?.(validation);
+  }, [
+    validation.sectionCount,
+    validation.allPresetsSelected,
+    validation.allAdvertorialsSelected,
+    validation.allLinksReplaced,
+  ]);
 
   /**
    * For each section, find the selected preset + advertorial, replace
@@ -238,6 +308,7 @@ export function AdsSettingsSection({
 
               const selectedAdvertorialId = selectedAdvertorialByAngle[s.key] ?? '';
               const safeAdvertorialValue = advertorialOptions.some((o) => o.id === selectedAdvertorialId) ? selectedAdvertorialId : '';
+              const selectedAdvertorial = advertorialOptions.find((o) => o.id === safeAdvertorialValue);
 
               const isExpanded = expandedSections[s.key] ?? false;
               const override = replacedTextsByAngle[s.key];
@@ -375,34 +446,74 @@ export function AdsSettingsSection({
                       </MenuItem>
                       {advertorialOptions.length === 0 ? (
                         <MenuItem disabled value="__no_advertorials__">
-                          {s.angleId === null
-                            ? 'No advertorials without an angle'
-                            : `No advertorials for ${s.name}`}
+                          No advertorials for this product
                         </MenuItem>
                       ) : (
-                        advertorialOptions.map((opt) => (
-                          <MenuItem key={opt.id} value={opt.id}>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' }}>
-                              <Typography sx={{ ...textSm, fontWeight: 500 }} noWrap>
-                                {opt.name}
-                              </Typography>
-                              {opt.link && (
-                                <Typography
-                                  sx={{
-                                    fontSize: '0.7rem',
-                                    color: 'text.secondary',
-                                  }}
-                                  noWrap
-                                >
-                                  {opt.link}
-                                </Typography>
+                        advertorialOptions.map((opt) => {
+                          // No matching UI in the Default (no-angle) section.
+                          const showMatched = s.angleId !== null && !!opt.matchesLander;
+                          return (
+                          <MenuItem
+                            key={opt.id}
+                            value={opt.id}
+                            sx={showMatched ? {
+                              bgcolor: 'success.light',
+                              '&:hover': { bgcolor: 'success.light' },
+                              '&.Mui-selected': { bgcolor: 'success.light' },
+                              '&.Mui-selected:hover': { bgcolor: 'success.light' },
+                            } : undefined}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, width: '100%' }}>
+                              {showMatched && (
+                                <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main', flexShrink: 0 }} />
                               )}
+                              <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                                  <Typography sx={{ ...textSm, fontWeight: 500 }} noWrap>
+                                    {opt.name}
+                                  </Typography>
+                                  {showMatched && (
+                                    <Chip
+                                      label="Matched"
+                                      color="success"
+                                      size="small"
+                                      sx={{ height: 18, fontSize: '0.65rem', flexShrink: 0 }}
+                                    />
+                                  )}
+                                </Box>
+                                {opt.link && (
+                                  <Typography
+                                    sx={{
+                                      fontSize: '0.7rem',
+                                      color: showMatched ? 'success.dark' : 'text.secondary',
+                                    }}
+                                    noWrap
+                                  >
+                                    {opt.link}
+                                  </Typography>
+                                )}
+                              </Box>
                             </Box>
                           </MenuItem>
-                        ))
+                          );
+                        })
                       )}
                     </Select>
                   </FormControl>
+
+                  {/* Paired offer link (read-only) — shown once the selected
+                      advertorial resolves to a lander with a paired offer. */}
+                  {selectedAdvertorial?.offerUrl && (
+                    <TextField
+                      label="Offer Link"
+                      value={selectedAdvertorial.offerUrl}
+                      size="small"
+                      fullWidth
+                      disabled
+                      InputProps={{ sx: textSm }}
+                      InputLabelProps={{ sx: textSm }}
+                    />
+                  )}
                 </Box>
               );
             })}

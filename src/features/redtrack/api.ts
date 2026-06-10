@@ -352,18 +352,25 @@ export async function fetchRedtrackCampaignById(
       `/campaigns/${campaignId}`
     );
 
-    // Extract lander/offer IDs from first stream if available
-    const firstStream = raw.streams?.[0]?.stream;
-    const landerId = firstStream?.landings?.[0]?.id;
-    const offerId = firstStream?.offers?.[0]?.id;
+    // Collect all lander/offer IDs across every stream (deduped, order-preserving)
+    const landerIds: string[] = [];
+    const offerIds: string[] = [];
+    for (const s of raw.streams ?? []) {
+      for (const lander of s.stream?.landings ?? []) {
+        if (lander?.id && !landerIds.includes(lander.id)) landerIds.push(lander.id);
+      }
+      for (const offer of s.stream?.offers ?? []) {
+        if (offer?.id && !offerIds.includes(offer.id)) offerIds.push(offer.id);
+      }
+    }
 
     return {
       id: raw._id,
       title: raw.name,
       trackbackUrl: raw.trackback_url,
       status: raw.status,
-      landerId,
-      offerId,
+      landerIds,
+      offerIds,
     };
   } catch (error) {
     console.error('Failed to fetch Redtrack campaign:', error);
@@ -570,7 +577,7 @@ export async function fetchRedtrackOffer(
 
 /**
  * Fetch full campaign details including landers and offers.
- * Chains API calls: campaign -> lander -> offer
+ * Chains API calls: campaign -> all landers + all offers (fetched in parallel)
  *
  * @param apiKey - Redtrack API key
  * @param campaignId - Hex string ID
@@ -585,23 +592,13 @@ export async function fetchRedtrackCampaignDetails(
     return null;
   }
 
-  // 2. Fetch lander if ID available
-  const landers: RedTrackLander[] = [];
-  if (campaign.landerId) {
-    const lander = await fetchRedtrackLander(apiKey, campaign.landerId);
-    if (lander) {
-      landers.push(lander);
-    }
-  }
-
-  // 3. Fetch offer if ID available
-  const offers: RedTrackOffer[] = [];
-  if (campaign.offerId) {
-    const offer = await fetchRedtrackOffer(apiKey, campaign.offerId);
-    if (offer) {
-      offers.push(offer);
-    }
-  }
+  // 2 & 3. Fetch every lander and offer by ID (in parallel), dropping any that fail.
+  const [landerResults, offerResults] = await Promise.all([
+    Promise.all(campaign.landerIds.map((id) => fetchRedtrackLander(apiKey, id))),
+    Promise.all(campaign.offerIds.map((id) => fetchRedtrackOffer(apiKey, id))),
+  ]);
+  const landers = landerResults.filter((l): l is RedTrackLander => l !== null);
+  const offers = offerResults.filter((o): o is RedTrackOffer => o !== null);
 
   // 4. Extract tracking parameters from trackback URL
   const trackingParams = extractTrackingParams(campaign.trackbackUrl);
