@@ -27,7 +27,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { textMd, textSm } from '../../theme/typography';
-import type { SelectableVideo, SelectableImage } from '../../features/campaigns/launch/types';
+import type { SelectableVideo, SelectableImage, AngleCreativeConfig } from '../../features/campaigns/launch/types';
 
 /** Preset shape needed by this component (id/name for the dropdown + full content for the collapse). */
 export interface AdsSettingsPresetOption {
@@ -88,6 +88,8 @@ interface AdsSettingsSectionProps {
   advertorials: AdsSettingsAdvertorialOption[];
   /** Reports the section's validation state up for launch gating. */
   onValidationChange?: (validation: AdsSettingsValidation) => void;
+  /** Reports the resolved per-angle creative config up for the launch payload. */
+  onConfigChange?: (configs: AngleCreativeConfig[]) => void;
 }
 
 const DEFAULT_SECTION_KEY = '__default__';
@@ -99,6 +101,7 @@ export function AdsSettingsSection({
   adPresets,
   advertorials,
   onValidationChange,
+  onConfigChange,
 }: AdsSettingsSectionProps) {
   // Per-angle selected preset id and advertorial id. Local state — not persisted.
   const [selectedPresetByAngle, setSelectedPresetByAngle] = useState<Record<string, string>>({});
@@ -223,6 +226,43 @@ export function AdsSettingsSection({
     validation.allAdvertorialsSelected,
     validation.allLinksReplaced,
   ]);
+
+  /**
+   * Resolved per-angle creative config for the launch payload — one entry per
+   * fully-selected section (preset chosen). Uses the `{{link}}`-replaced copy
+   * when available, falling back to the raw preset copy otherwise. The launch
+   * is gated on `allLinksReplaced`, so at launch time the replaced copy exists.
+   */
+  const angleConfigs = useMemo((): AngleCreativeConfig[] => {
+    const configs: AngleCreativeConfig[] = [];
+    for (const s of sections) {
+      const preset = presetsForSection(s.angleId).find((p) => p.id === selectedPresetByAngle[s.key]);
+      if (!preset) continue;
+      const adv = advertorialsForSection(s.angleId).find((a) => a.id === selectedAdvertorialByAngle[s.key]);
+      const override = replacedTextsByAngle[s.key];
+      configs.push({
+        angleId: s.angleId,
+        presetId: preset.id,
+        primaryTexts: override?.primaryTexts ?? preset.primaryTexts,
+        headlines: override?.headlines ?? preset.headlines,
+        descriptions: override?.descriptions ?? preset.descriptions,
+        callToAction: preset.callToAction,
+        beneficiaryName: preset.beneficiaryName,
+        payerName: preset.payerName,
+        landerUrl: adv?.link ?? '',
+      });
+    }
+    return configs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, selectedPresetByAngle, selectedAdvertorialByAngle, replacedTextsByAngle, adPresets, advertorials]);
+
+  // Report the resolved per-angle config up. angleConfigs is memoized, so this
+  // only fires when the underlying selections change (no render loop).
+  const onConfigChangeRef = useRef(onConfigChange);
+  onConfigChangeRef.current = onConfigChange;
+  useEffect(() => {
+    onConfigChangeRef.current?.(angleConfigs);
+  }, [angleConfigs]);
 
   /**
    * For each section, find the selected preset + advertorial, replace

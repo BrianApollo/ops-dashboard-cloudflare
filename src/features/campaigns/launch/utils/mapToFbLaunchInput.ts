@@ -9,6 +9,7 @@
 
 import type { FbLaunchInput, FbLaunchMediaInput, FbLaunchOptions } from '../fbLaunchRunner';
 import type { CampaignConfig, AdSetConfig, AdCreativeConfig } from '../fbLaunchApi';
+import type { AngleCreativeConfig } from '../types';
 
 // =============================================================================
 // INPUT TYPES (from controller)
@@ -19,6 +20,7 @@ export interface MapperVideoInput {
   name: string;
   creativeLink?: string; // Cloudflare URL
   fbVideoId?: string | null; // Pre-uploaded video ID from library check
+  angleId?: string; // Selects this media's per-angle creative
 }
 
 export interface MapperImageInput {
@@ -26,6 +28,7 @@ export interface MapperImageInput {
   name: string;
   thumbnailUrl?: string;
   image_drive_link?: string; // Cloudflare URL
+  angleId?: string; // Selects this media's per-angle creative
 }
 
 export interface MapperDraftInput {
@@ -72,6 +75,8 @@ export interface MapToFbLaunchInputParams {
   selectedPreset?: MapperAdPresetInput | null;
   reuseCreatives: boolean;
   launchStatusActive: boolean;
+  /** Per-angle creative configs from Ads Settings. Empty = use global copy. */
+  angleConfigs?: AngleCreativeConfig[];
   options?: Partial<FbLaunchOptions>;
 }
 
@@ -140,6 +145,7 @@ export function mapToFbLaunchInput(params: MapToFbLaunchInputParams): FbLaunchIn
     selectedPreset,
     reuseCreatives,
     launchStatusActive,
+    angleConfigs = [],
     options: customOptions,
   } = params;
 
@@ -222,6 +228,30 @@ export function mapToFbLaunchInput(params: MapToFbLaunchInputParams): FbLaunchIn
     status,
   };
 
+  // Build a per-angle creative from each Ads Settings config. The creative copy
+  // and destination link vary by angle; tracking (urlTags) and status stay
+  // global. Keyed by angle id (null = Default/no-angle group).
+  const creativeByAngle = new Map<string | null, AdCreativeConfig>();
+  for (const cfg of angleConfigs) {
+    creativeByAngle.set(cfg.angleId, {
+      websiteUrl: cfg.landerUrl || draft.websiteUrl || 'https://example.com',
+      urlTags: draft.utms || '',
+      callToAction: toFacebookCta(cfg.callToAction || draft.ctaOverride || 'SHOP_NOW'),
+      bodies: cfg.primaryTexts.length ? cfg.primaryTexts : primaryTexts,
+      titles: cfg.headlines.length ? cfg.headlines : headlines,
+      descriptions: cfg.descriptions.length ? cfg.descriptions : descriptions,
+      advantagePlusCreative: true,
+      beneficiaryName: cfg.beneficiaryName || selectedPreset?.beneficiaryName,
+      payerName: cfg.payerName || selectedPreset?.payerName,
+      status,
+    });
+  }
+
+  // Resolve a media item's creative from its angle, falling back to the global
+  // creative when its angle has no config.
+  const creativeForAngle = (angleId?: string): AdCreativeConfig =>
+    creativeByAngle.get(angleId ?? null) ?? adCreative;
+
   // Build media array
   const media: FbLaunchMediaInput[] = [];
 
@@ -235,6 +265,7 @@ export function mapToFbLaunchInput(params: MapToFbLaunchInputParams): FbLaunchIn
       url: video.creativeLink,
       fallbackUrl: video.creativeLink, // Same URL for fallback (Cloudflare is reliable)
       fbVideoId: video.fbVideoId || null, // Use pre-uploaded ID if available
+      creative: creativeForAngle(video.angleId),
     });
   }
 
@@ -248,6 +279,7 @@ export function mapToFbLaunchInput(params: MapToFbLaunchInputParams): FbLaunchIn
       name: image.name,
       url: imageUrl,
       fallbackUrl: imageUrl,
+      creative: creativeForAngle(image.angleId),
     });
   }
 

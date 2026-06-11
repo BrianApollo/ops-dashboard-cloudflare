@@ -118,6 +118,8 @@ export interface MediaItemForAd {
   fbVideoId?: string | null;
   thumbnailUrl?: string | null;
   url?: string;
+  /** Per-media creative override (per-angle copy + link). Falls back to the batch's adCreative. */
+  creative?: AdCreativeConfig;
 }
 
 // =============================================================================
@@ -492,9 +494,11 @@ export async function createAdsBatch(
   const adStatus = adCreative.status || 'PAUSED';
 
   const batchRequest = mediaItems.map(media => {
+    // Per-media creative (per-angle copy + link) when present, else the shared one.
+    const mediaCreative = media.creative ?? adCreative;
     const creative = media.type === 'video'
-      ? buildVideoCreative(pageId, media, adCreative)
-      : buildImageCreative(pageId, media, adCreative);
+      ? buildVideoCreative(pageId, media, mediaCreative)
+      : buildImageCreative(pageId, media, mediaCreative);
 
     return {
       method: 'POST',

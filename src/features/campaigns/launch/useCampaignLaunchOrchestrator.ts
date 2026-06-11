@@ -43,6 +43,7 @@ import type {
   CampaignDraft,
   InfraOption,
   ValidationGroup,
+  AngleCreativeConfig,
 } from './types';
 
 // =============================================================================
@@ -118,7 +119,7 @@ export interface UseCampaignLaunchOrchestratorReturn {
   selectedImagesForPreview: SelectableImage[];
 
   // Actions
-  launch: () => Promise<void>;
+  launch: (angleConfigs?: AngleCreativeConfig[]) => Promise<void>;
   retryItem: (name: string) => void;
 
   // Auto-save status

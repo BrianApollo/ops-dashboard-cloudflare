@@ -16,7 +16,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { FbLaunchState } from '.';
-import type { SelectableVideo, SelectableImage, CampaignDraft } from './types';
+import type { SelectableVideo, SelectableImage, CampaignDraft, AngleCreativeConfig } from './types';
 import { useRunLaunchPipeline } from './useRunLaunchPipeline';
 import type { MediaCounts } from './useRunLaunchPipeline';
 import { writeLaunchSnapshot } from './writeLaunchSnapshot';
@@ -82,7 +82,7 @@ export interface UseLaunchOrchestratorReturn {
   launchResult: LaunchResult | null;
   mediaCounts: MediaCounts;
   launchProgress: FbLaunchState | null;
-  launch: () => Promise<void>;
+  launch: (angleConfigs?: AngleCreativeConfig[]) => Promise<void>;
   retryItem: (name: string) => void;
 }
 
@@ -134,7 +134,7 @@ export function useLaunchOrchestrator({
   // ---------------------------------------------------------------------------
   // LAUNCH FUNCTION (lifecycle bridge)
   // ---------------------------------------------------------------------------
-  const launch = useCallback(async () => {
+  const launch = useCallback(async (angleConfigs: AngleCreativeConfig[] = []) => {
     // Get selected media
     const selectedVideos = availableVideos.filter((v) => selectedVideoIds.has(v.id));
     const selectedImages = availableImages.filter((i) => selectedImageIds.has(i.id));
@@ -166,6 +166,7 @@ export function useLaunchOrchestrator({
         reuseCreatives,
         launchStatusActive,
         redtrackTrackingParams,
+        angleConfigs,
       });
 
       // Final update with success status

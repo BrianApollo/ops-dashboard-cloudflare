@@ -55,6 +55,8 @@ export interface FbLaunchMediaInput {
   url: string;
   fallbackUrl?: string;
   fbVideoId?: string | null;
+  /** Per-media creative override (per-angle copy + link). Falls back to input.adCreative. */
+  creative?: AdCreativeConfig;
 }
 
 export interface FbLaunchMediaState extends FbLaunchMediaInput {

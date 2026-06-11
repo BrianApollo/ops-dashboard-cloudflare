@@ -20,6 +20,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useFbLaunchRunner, mapToFbLaunchInput } from '.';
 import type { FbLaunchState } from '.';
+import type { AngleCreativeConfig } from './types';
 
 // =============================================================================
 // TYPES
@@ -30,6 +31,8 @@ export interface VideoForLaunch {
   name: string;
   creativeLink?: string;
   fbVideoId?: string;
+  /** Linked Angle record ID — selects this media's per-angle creative. */
+  angleId?: string;
 }
 
 export interface ImageForLaunch {
@@ -37,6 +40,8 @@ export interface ImageForLaunch {
   name: string;
   thumbnailUrl?: string;
   image_drive_link?: string;
+  /** Linked Angle record ID — selects this media's per-angle creative. */
+  angleId?: string;
 }
 
 export interface DraftForLaunch {
@@ -87,6 +92,8 @@ export interface LaunchPipelineInput {
   reuseCreatives: boolean;
   launchStatusActive: boolean;
   redtrackTrackingParams: string | null;
+  /** Per-angle creative configs from Ads Settings (empty = use global copy). */
+  angleConfigs?: AngleCreativeConfig[];
 }
 
 export interface LaunchPipelineResult {
@@ -168,6 +175,7 @@ export function useRunLaunchPipeline(): UseRunLaunchPipelineReturn {
       reuseCreatives,
       launchStatusActive,
       redtrackTrackingParams,
+      angleConfigs,
     } = input;
 
     setValidationError(null);
@@ -247,12 +255,14 @@ export function useRunLaunchPipeline(): UseRunLaunchPipelineReturn {
           creativeLink: v.creativeLink,
           // Only pass fbVideoId if reuseCreatives is ON - otherwise force re-upload
           fbVideoId: reuseCreatives ? (v.fbVideoId || null) : null,
+          angleId: v.angleId,
         })),
         selectedImages: imagesWithUrls.map(i => ({
           id: i.id,
           name: i.name,
           thumbnailUrl: i.thumbnailUrl,
           image_drive_link: i.image_drive_link,
+          angleId: i.angleId,
         })),
         profile: {
           id: selectedProfile.id,
@@ -269,6 +279,7 @@ export function useRunLaunchPipeline(): UseRunLaunchPipelineReturn {
         } : null,
         reuseCreatives,
         launchStatusActive,
+        angleConfigs,
       });
 
       console.log('[useRunLaunchPipeline] Launching campaign:', {

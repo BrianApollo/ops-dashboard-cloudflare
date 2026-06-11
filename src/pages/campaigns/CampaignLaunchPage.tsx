@@ -39,6 +39,7 @@ import { FinalCheckColumn } from '../../components/campaigns/FinalCheckColumn';
 // LaunchProgressView - canonical location
 import { LaunchProgressView } from '../../components/campaigns/LaunchProgressView';
 import { saveLaunchTemplate } from '../../features/campaigns/data';
+import type { AngleCreativeConfig } from '../../features/campaigns/launch/types';
 
 // =============================================================================
 // UI MODE TYPE
@@ -126,6 +127,10 @@ export function CampaignLaunchPage() {
     allAdvertorialsSelected: false,
     allLinksReplaced: false,
   });
+
+  // Resolved per-angle creative config, reported up from AdsSettingsSection and
+  // passed into launch() so each ad's creative uses its angle's preset + lander.
+  const [adsAngleConfigs, setAdsAngleConfigs] = useState<AngleCreativeConfig[]>([]);
 
   // Fold the per-angle Ads Settings state into the controller's validation.
   // The orchestrator's draft-based "Ad preset" / "{{link}} replaced" checks are
@@ -389,6 +394,7 @@ export function CampaignLaunchPage() {
               adPresets={c.productPresets}
               advertorials={advertorialsForProduct}
               onValidationChange={setAdsValidation}
+              onConfigChange={setAdsAngleConfigs}
             />
           </Box>
 
@@ -396,7 +402,7 @@ export function CampaignLaunchPage() {
           <Box sx={{ alignSelf: 'start', position: 'sticky', top: 24 }}>
             <FinalCheckColumn
               validationGroups={validationGroups}
-              onLaunch={c.launch}
+              onLaunch={() => c.launch(adsAngleConfigs)}
               isLaunching={c.isLaunching}
               allChecksPass={allChecksPass}
               selectedVideos={c.selectedVideosForPreview}

@@ -53,6 +53,28 @@ export interface SelectableImage {
   angleId?: string;
 }
 
+/**
+ * Resolved per-angle creative config produced by the Ads Settings section and
+ * threaded into the launch. Each selected media item's ad creative is built
+ * from the config whose `angleId` matches the media's angle (or the `null`
+ * "Default" config for media with no angle).
+ */
+export interface AngleCreativeConfig {
+  /** null = Default (no-angle) group. */
+  angleId: string | null;
+  /** Selected ad preset id (for reference / snapshot). */
+  presetId: string;
+  /** Copy with `{{link}}` already replaced by the advertorial lander URL. */
+  primaryTexts: string[];
+  headlines: string[];
+  descriptions: string[];
+  callToAction: string;
+  beneficiaryName: string;
+  payerName: string;
+  /** Advertorial lander URL — becomes the creative's destination link. */
+  landerUrl: string;
+}
+
 export interface UploadedMedia {
   type: 'video' | 'image';
   localId: string;
