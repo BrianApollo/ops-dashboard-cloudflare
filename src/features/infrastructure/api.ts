@@ -156,6 +156,11 @@ interface FBPage {
   link?: string;
 }
 
+interface FBBusinessRef {
+  id: string;
+  name?: string;
+}
+
 interface FBAdAccount {
   id: string;
   name: string;
@@ -163,12 +168,14 @@ interface FBAdAccount {
   currency?: string;
   amount_spent?: string;
   timezone_name?: string;
+  business?: FBBusinessRef;
 }
 
 interface FBPixel {
   id: string;
   name: string;
   last_fired_time?: string;
+  owner_business?: FBBusinessRef;
 }
 
 interface FBSystemUser {
@@ -197,75 +204,40 @@ export async function getPages(token: string): Promise<FBPage[]> {
   return response.data || [];
 }
 
-export async function getBMAdAccounts(
-  token: string,
-  bmId: string
-): Promise<FBAdAccount[]> {
-  const fields = 'id,name,account_status,currency,amount_spent,timezone_name';
-
-  const [ownedResponse, clientResponse] = await Promise.all([
-    apiCall<{ data: FBAdAccount[] }>(
-      `/${bmId}/owned_ad_accounts`,
-      token,
-      { fields, limit: '100' }
-    ),
-    apiCall<{ data: FBAdAccount[] }>(
-      `/${bmId}/client_ad_accounts`,
-      token,
-      { fields, limit: '100' }
-    ).catch(() => ({ data: [] as FBAdAccount[] })),
-  ]);
-
-  const owned = ownedResponse.data || [];
-  const client = clientResponse.data || [];
-
-  // Deduplicate by account ID
-  const seen = new Set(owned.map(a => a.id));
-  const unique = [...owned];
-  for (const acc of client) {
-    if (!seen.has(acc.id)) {
-      unique.push(acc);
-      seen.add(acc.id);
-    }
-  }
-
-  return unique;
+/**
+ * Fetch every ad account the profile can access, in one user-scoped call.
+ *
+ * Unlike `/{bm}/owned_ad_accounts`, this only returns accounts the profile
+ * actually has a role on, so it never trips error (#270) on accounts the
+ * profile isn't admin of. The owning BM is read from the `business` field so
+ * the BM → ad account relationship is preserved.
+ */
+export async function getProfileAdAccounts(token: string): Promise<FBAdAccount[]> {
+  const response = await apiCall<{ data: FBAdAccount[] }>('/me/adaccounts', token, {
+    fields: 'id,name,account_status,currency,amount_spent,timezone_name,business{id,name}',
+    limit: '200',
+  });
+  return response.data || [];
 }
 
-
-export async function getBMPixels(
+/**
+ * Fetch the pixels attached to a single ad account.
+ *
+ * Pixels have no profile-level edge, so they're discovered through the
+ * accessible ad accounts instead of per-BM (which trips #270). The owning BM
+ * is read from `owner_business` to preserve the BM → pixel relationship.
+ */
+export async function getAdAccountPixels(
   token: string,
-  bmId: string
+  adAccountId: string
 ): Promise<FBPixel[]> {
-  const fields = 'id,name,last_fired_time';
-
-  const [ownedResponse, clientResponse] = await Promise.all([
-    apiCall<{ data: FBPixel[] }>(
-      `/${bmId}/owned_pixels`,
-      token,
-      { fields, limit: '100' }
-    ),
-    apiCall<{ data: FBPixel[] }>(
-      `/${bmId}/adspixels`,
-      token,
-      { fields, limit: '100' }
-    ).catch(() => ({ data: [] as FBPixel[] })),
-  ]);
-
-  const owned = ownedResponse.data || [];
-  const client = clientResponse.data || [];
-
-  // Deduplicate by pixel ID
-  const seen = new Set(owned.map(p => p.id));
-  const unique = [...owned];
-  for (const pixel of client) {
-    if (!seen.has(pixel.id)) {
-      unique.push(pixel);
-      seen.add(pixel.id);
-    }
-  }
-
-  return unique;
+  const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+  const response = await apiCall<{ data: FBPixel[] }>(
+    `/${accountId}/adspixels`,
+    token,
+    { fields: 'id,name,last_fired_time,owner_business{id,name}', limit: '100' }
+  ).catch(() => ({ data: [] as FBPixel[] }));
+  return response.data || [];
 }
 
 // =============================================================================

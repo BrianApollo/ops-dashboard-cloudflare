@@ -404,12 +404,15 @@ export function useInfrastructureActions(
       addLog(`Found ${fbBms.length} Business Manager(s)`, false, true);
       addLog(`Found ${fbPages.length} Page(s)`, false, true);
 
-      // Step 3: Process BMs
+      // FB numeric status code → label
       const statusMap: Record<number, string> = {
         1: 'ACTIVE', 2: 'DISABLED', 3: 'UNSETTLED', 7: 'PENDING_RISK_REVIEW',
         9: 'IN_GRACE_PERIOD', 100: 'PENDING_CLOSURE', 101: 'CLOSED',
       };
 
+      // Step 3: Process BMs (create/link records only). Children are fetched
+      // flat from the profile below — iterating each BM's owned_ad_accounts is
+      // what triggers (#270) on accounts the profile isn't admin of.
       for (const fbBm of fbBms) {
         try {
           addLog(`Processing BM: ${fbBm.name}`);
@@ -451,110 +454,139 @@ export function useInfrastructureActions(
           results.bms++;
 
           bmRecordIdMap[fbBm.id] = bmRecordId;
-
-          // Fetch children
-          addLog(`  Fetching Ad Accounts & Pixels...`);
-          let fbAdAccs: Awaited<ReturnType<typeof fbApi.getBMAdAccounts>> = [];
-          let fbPixels: Awaited<ReturnType<typeof fbApi.getBMPixels>> = [];
-
-          try {
-            [fbAdAccs, fbPixels] = await Promise.all([
-              fbApi.getBMAdAccounts(token, fbBm.id),
-              fbApi.getBMPixels(token, fbBm.id),
-            ]);
-            addLog(`  Found ${fbAdAccs.length} Ad Acc(s), ${fbPixels.length} Pixel(s)`);
-          } catch (e) {
-            addLog(`  Error fetching: ${e instanceof Error ? e.message : String(e)}`, true);
-            results.errors++;
-          }
-
-          // Process Ad Accounts
-          for (const fbAdAcc of fbAdAccs) {
-            try {
-              const adAccId = fbAdAcc.id.replace('act_', '');
-              const existing = data.adaccounts.find(a => a.adAccId === adAccId);
-              const status = statusMap[fbAdAcc.account_status] || 'Unknown';
-
-              if (existing) {
-                const fresh = await getInfraRecord('adaccounts', existing.id);
-                const currentLinked: string[] = Array.isArray(fresh.fields?.[FA.linkedBm])
-                  ? (fresh.fields[FA.linkedBm] as string[])
-                  : [];
-                const needsLink = bmRecordId && !currentLinked.includes(bmRecordId);
-
-                const updateFields: Record<string, unknown> = {
-                  [FA.adAccStatus]: status,
-                  [FA.currency]: fbAdAcc.currency,
-                  [FA.amountSpent]: parseFloat(fbAdAcc.amount_spent || '0') / 100,
-                  [FA.timezone]: fbAdAcc.timezone_name || '',
-                };
-
-                if (needsLink) {
-                  updateFields[FA.linkedBm] = [...currentLinked, bmRecordId];
-                }
-
-                await updateInfraRecord('adaccounts', existing.id, updateFields);
-              } else {
-                await createInfraRecord('adaccounts', {
-                  [FA.adAccId]: adAccId,
-                  [FA.adAccName]: fbAdAcc.name,
-                  [FA.adAccStatus]: status,
-                  [FA.currency]: fbAdAcc.currency,
-                  [FA.amountSpent]: parseFloat(fbAdAcc.amount_spent || '0') / 100,
-                  [FA.timezone]: fbAdAcc.timezone_name || '',
-                  [FA.linkedBm]: bmRecordId ? [bmRecordId] : [],
-                });
-                addLog(`    + Ad Acc: ${fbAdAcc.name} (created)`, false, true);
-              }
-              results.adAccounts++;
-            } catch (e) {
-              addLog(`    Error: ${e instanceof Error ? e.message : String(e)}`, true);
-              results.errors++;
-            }
-          }
-
-          // Process Pixels
-          for (const fbPixel of fbPixels) {
-            try {
-              const existing = data.pixels.find(p => p.pixelId === fbPixel.id);
-
-              if (existing) {
-                const fresh = await getInfraRecord('pixels', existing.id);
-                const currentLinked: string[] = Array.isArray(fresh.fields?.[FX.linkedBms])
-                  ? (fresh.fields[FX.linkedBms] as string[])
-                  : [];
-                const needsLink = bmRecordId && !currentLinked.includes(bmRecordId);
-
-                const updateFields: Record<string, unknown> = {
-                  [FX.lastFiredTime]: fbPixel.last_fired_time || null,
-                  [FX.available]: 'Yes',
-                };
-
-                if (needsLink) {
-                  updateFields[FX.linkedBms] = [...currentLinked, bmRecordId];
-                }
-
-                await updateInfraRecord('pixels', existing.id, updateFields);
-              } else {
-                await createInfraRecord('pixels', {
-                  [FX.pixelId]: fbPixel.id,
-                  [FX.pixelName]: fbPixel.name,
-                  [FX.lastFiredTime]: fbPixel.last_fired_time || null,
-                  [FX.available]: 'Yes',
-                  [FX.linkedBms]: bmRecordId ? [bmRecordId] : [],
-                  [FX.ownerBm]: bmRecordId ? [bmRecordId] : [],
-                });
-                addLog(`    + Pixel: ${fbPixel.name} (created)`, false, true);
-              }
-              results.pixels++;
-            } catch (e) {
-              addLog(`    Error: ${e instanceof Error ? e.message : String(e)}`, true);
-              results.errors++;
-            }
-          }
         } catch (e) {
           addLog(`  Error: ${e instanceof Error ? e.message : String(e)}`, true);
           results.errors++;
+        }
+      }
+
+      // Resolve a Facebook business id → local BM record id.
+      // Prefers BMs synced this run, falls back to any BM already in the DB.
+      const resolveBmRecordId = (fbBusinessId: string | undefined): string | null => {
+        if (!fbBusinessId) return null;
+        if (bmRecordIdMap[fbBusinessId]) return bmRecordIdMap[fbBusinessId];
+        const existing = data.bms.find(b => b.bmId === fbBusinessId);
+        return existing ? existing.id : null;
+      };
+
+      // Step 3b: Fetch Ad Accounts flat from the profile (/me/adaccounts).
+      // Returns only accounts the profile can access — no (#270) — and the
+      // owning BM comes from each account's `business` field.
+      addLog('');
+      addLog('Fetching Ad Accounts...');
+      let fbAdAccs: Awaited<ReturnType<typeof fbApi.getProfileAdAccounts>> = [];
+      try {
+        fbAdAccs = await fbApi.getProfileAdAccounts(token);
+        addLog(`Found ${fbAdAccs.length} Ad Account(s)`, false, true);
+      } catch (e) {
+        addLog(`Error fetching ad accounts: ${e instanceof Error ? e.message : String(e)}`, true);
+        results.errors++;
+      }
+
+      for (const fbAdAcc of fbAdAccs) {
+        try {
+          const adAccId = fbAdAcc.id.replace('act_', '');
+          const bmRecordId = resolveBmRecordId(fbAdAcc.business?.id);
+          const existing = data.adaccounts.find(a => a.adAccId === adAccId);
+          const status = statusMap[fbAdAcc.account_status] || 'Unknown';
+
+          if (existing) {
+            const fresh = await getInfraRecord('adaccounts', existing.id);
+            const currentLinked: string[] = Array.isArray(fresh.fields?.[FA.linkedBm])
+              ? (fresh.fields[FA.linkedBm] as string[])
+              : [];
+            const needsLink = !!bmRecordId && !currentLinked.includes(bmRecordId);
+
+            const updateFields: Record<string, unknown> = {
+              [FA.adAccStatus]: status,
+              [FA.currency]: fbAdAcc.currency,
+              [FA.amountSpent]: parseFloat(fbAdAcc.amount_spent || '0') / 100,
+              [FA.timezone]: fbAdAcc.timezone_name || '',
+            };
+
+            if (needsLink) {
+              updateFields[FA.linkedBm] = [...currentLinked, bmRecordId];
+            }
+
+            await updateInfraRecord('adaccounts', existing.id, updateFields);
+          } else {
+            await createInfraRecord('adaccounts', {
+              [FA.adAccId]: adAccId,
+              [FA.adAccName]: fbAdAcc.name,
+              [FA.adAccStatus]: status,
+              [FA.currency]: fbAdAcc.currency,
+              [FA.amountSpent]: parseFloat(fbAdAcc.amount_spent || '0') / 100,
+              [FA.timezone]: fbAdAcc.timezone_name || '',
+              [FA.linkedBm]: bmRecordId ? [bmRecordId] : [],
+            });
+            addLog(`  + Ad Acc: ${fbAdAcc.name} (created)`, false, true);
+          }
+          results.adAccounts++;
+        } catch (e) {
+          addLog(`  Error (${fbAdAcc.name}): ${e instanceof Error ? e.message : String(e)}`, true);
+          results.errors++;
+        }
+      }
+
+      // Step 3c: Fetch Pixels through the accessible ad accounts
+      // (/act_{id}/adspixels). Each pixel attaches to its owning BM via
+      // `owner_business`, falling back to the ad account's BM. Deduped by id.
+      addLog('');
+      addLog('Fetching Pixels...');
+      const processedPixels = new Set<string>();
+      for (const fbAdAcc of fbAdAccs) {
+        const adAccId = fbAdAcc.id.replace('act_', '');
+        let fbPixels: Awaited<ReturnType<typeof fbApi.getAdAccountPixels>> = [];
+        try {
+          fbPixels = await fbApi.getAdAccountPixels(token, adAccId);
+        } catch (e) {
+          addLog(`  Error fetching pixels for ${fbAdAcc.name}: ${e instanceof Error ? e.message : String(e)}`, true);
+          results.errors++;
+          continue;
+        }
+
+        for (const fbPixel of fbPixels) {
+          if (processedPixels.has(fbPixel.id)) continue;
+          processedPixels.add(fbPixel.id);
+
+          try {
+            const bmRecordId = resolveBmRecordId(fbPixel.owner_business?.id)
+              ?? resolveBmRecordId(fbAdAcc.business?.id);
+            const existing = data.pixels.find(p => p.pixelId === fbPixel.id);
+
+            if (existing) {
+              const fresh = await getInfraRecord('pixels', existing.id);
+              const currentLinked: string[] = Array.isArray(fresh.fields?.[FX.linkedBms])
+                ? (fresh.fields[FX.linkedBms] as string[])
+                : [];
+              const needsLink = !!bmRecordId && !currentLinked.includes(bmRecordId);
+
+              const updateFields: Record<string, unknown> = {
+                [FX.lastFiredTime]: fbPixel.last_fired_time || null,
+                [FX.available]: 'Yes',
+              };
+
+              if (needsLink) {
+                updateFields[FX.linkedBms] = [...currentLinked, bmRecordId];
+              }
+
+              await updateInfraRecord('pixels', existing.id, updateFields);
+            } else {
+              await createInfraRecord('pixels', {
+                [FX.pixelId]: fbPixel.id,
+                [FX.pixelName]: fbPixel.name,
+                [FX.lastFiredTime]: fbPixel.last_fired_time || null,
+                [FX.available]: 'Yes',
+                [FX.linkedBms]: bmRecordId ? [bmRecordId] : [],
+                [FX.ownerBm]: bmRecordId ? [bmRecordId] : [],
+              });
+              addLog(`  + Pixel: ${fbPixel.name} (created)`, false, true);
+            }
+            results.pixels++;
+          } catch (e) {
+            addLog(`  Error (${fbPixel.name}): ${e instanceof Error ? e.message : String(e)}`, true);
+            results.errors++;
+          }
         }
       }
 
