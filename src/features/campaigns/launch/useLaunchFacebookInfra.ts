@@ -59,6 +59,8 @@ export function useLaunchFacebookInfra({
       name: acc.name || `Account ${acc.account_id}`,
       externalId: acc.account_id,
       status: acc.account_status === 1 ? 'active' : 'unknown',
+      // Account's IANA timezone, used to interpret the launch start date/time
+      timezone: acc.timezone_name ?? null,
     }));
   }, [facebookAds.data?.adAccounts]);
 

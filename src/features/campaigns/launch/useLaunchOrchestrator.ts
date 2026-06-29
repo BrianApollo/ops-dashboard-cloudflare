@@ -20,6 +20,8 @@ import type { SelectableVideo, SelectableImage, CampaignDraft } from './types';
 import { useRunLaunchPipeline } from './useRunLaunchPipeline';
 import type { MediaCounts } from './useRunLaunchPipeline';
 import { writeLaunchSnapshot } from './writeLaunchSnapshot';
+import { updateVideosBatch, FIELD_USED_IN_CAMPAIGN } from '../../videos/data';
+import { updateImageUsage } from '../../images/data';
 
 // =============================================================================
 // TYPES
@@ -57,6 +59,8 @@ export { MediaCounts };
 interface InfraOptionForLookup {
   id: string;
   name: string;
+  /** IANA timezone of the ad account (e.g. "Asia/Bangkok"), when known */
+  timezone?: string | null;
 }
 
 export interface UseLaunchOrchestratorOptions {
@@ -142,6 +146,11 @@ export function useLaunchOrchestrator({
     // Get selected preset
     const selectedPreset = productPresets.find((p) => p.id === draft.adPresetId) || null;
 
+    // Resolve the target ad account's timezone so the start date/time is
+    // interpreted in the account's clock (falls back to GMT+7 in the mapper).
+    const adAccountTimezone =
+      adAccounts.find((a) => a.id === draft.adAccountId)?.timezone ?? null;
+
     // Initialize result for real-time updates
     setLaunchResult({ success: false });
 
@@ -166,6 +175,7 @@ export function useLaunchOrchestrator({
         reuseCreatives,
         launchStatusActive,
         redtrackTrackingParams,
+        adAccountTimezone,
       });
 
       // Final update with success status
@@ -251,6 +261,102 @@ export function useLaunchOrchestrator({
   }, [campaignId, draft, selectedProfile, availableVideos, availableImages, selectedVideoIds, selectedImageIds, productPresets, reuseCreatives, launchStatusActive, redtrackTrackingParams, pipeline, adAccounts, pixels, pages]);
 
   // ---------------------------------------------------------------------------
+  // RETRY SINGLE ITEM (with per-record Airtable update on success)
+  // ---------------------------------------------------------------------------
+  // When a retry succeeds we:
+  //  1. Update ONLY that media's own Airtable record:
+  //       - video → mark Status 'Used' and link the Airtable campaign
+  //       - image → link the Airtable campaign only
+  //     (all other media records are left untouched), and
+  //  2. Refresh the campaign-level launch snapshot from the current state, so
+  //     "Launched Data" / "Images Used" reflect the newly-succeeded item
+  //     (this does NOT re-touch the other media records).
+  const retryItem = useCallback((name: string) => {
+    pipeline.retryItem(name, async (item, state) => {
+      // --- 1. Update just the retried media's own record ---
+      try {
+        if (item.type === 'video') {
+          const record = availableVideos.find((v) => v.name === item.name);
+          if (record) {
+            await updateVideosBatch([{
+              id: record.id,
+              fields: { [FIELD_USED_IN_CAMPAIGN]: [campaignId], Status: 'Used' },
+            }]);
+          }
+        } else {
+          const record = availableImages.find((i) => i.name === item.name);
+          if (record) await updateImageUsage(record.id, campaignId);
+        }
+      } catch (err) {
+        console.error('[retryItem] Failed to update media record after successful retry:', err);
+      }
+
+      // --- 2. Refresh the campaign-level launch data from current state ---
+      if (!draft.adAccountId || !draft.pageId || !draft.pixelId || !selectedProfile) return;
+      try {
+        const selectedPreset = productPresets.find((p) => p.id === draft.adPresetId) || null;
+
+        // Derive the launched media sets from the runner state (mapping names → ids)
+        const videosWithUrls = state.media
+          .filter((m) => m.type === 'video')
+          .map((m) => {
+            const rec = availableVideos.find((v) => v.name === m.name);
+            return { id: rec?.id || m.name, name: m.name, creativeLink: rec?.creativeLink };
+          });
+        const imagesWithUrls = state.media
+          .filter((m) => m.type === 'image')
+          .map((m) => {
+            const rec = availableImages.find((i) => i.name === m.name);
+            return { id: rec?.id || m.name, name: m.name };
+          });
+
+        await writeLaunchSnapshot({
+          result: state,
+          campaignId,
+          draft: {
+            name: draft.name,
+            adAccountId: draft.adAccountId,
+            adAccountName: adAccounts.find((a) => a.id === draft.adAccountId)?.name || draft.adAccountId,
+            pageId: draft.pageId,
+            pageName: pages.find((p) => p.id === draft.pageId)?.name || draft.pageId,
+            pixelId: draft.pixelId,
+            pixelName: pixels.find((p) => p.id === draft.pixelId)?.name || draft.pixelId,
+            budget: draft.budget,
+            geo: draft.geo,
+            startDate: draft.startDate,
+            startTime: draft.startTime,
+            websiteUrl: draft.websiteUrl,
+            utms: draft.utms,
+            ctaOverride: draft.ctaOverride,
+            redtrackCampaignId: draft.redtrackCampaignId,
+            redtrackCampaignName: draft.redtrackCampaignName,
+          },
+          profile: {
+            id: selectedProfile.id,
+            profileName: selectedProfile.profileName,
+          },
+          preset: selectedPreset ? {
+            id: selectedPreset.id,
+            name: selectedPreset.name,
+            primaryTexts: draft.primaryTexts,
+            headlines: draft.headlines,
+            descriptions: draft.descriptions,
+            callToAction: selectedPreset.callToAction,
+          } : undefined,
+          videosWithUrls,
+          imagesWithUrls,
+          launchStatusActive,
+        }, { updateMediaRecords: false });
+      } catch (err) {
+        console.error('[retryItem] Failed to refresh campaign launch data after retry:', err);
+      }
+    });
+  }, [
+    pipeline, availableVideos, availableImages, campaignId, draft, selectedProfile,
+    productPresets, adAccounts, pages, pixels, launchStatusActive,
+  ]);
+
+  // ---------------------------------------------------------------------------
   // RETURN
   // ---------------------------------------------------------------------------
   return {
@@ -259,6 +365,6 @@ export function useLaunchOrchestrator({
     mediaCounts: pipeline.mediaCounts,
     launchProgress: pipeline.launchProgress,
     launch,
-    retryItem: pipeline.retryItem,
+    retryItem,
   };
 }

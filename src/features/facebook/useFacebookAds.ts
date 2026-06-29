@@ -27,6 +27,8 @@ export interface FacebookAdAccount {
     account_id: string;
     account_status: number;
     currency: string;
+    /** IANA timezone of the ad account, e.g. "Asia/Bangkok" */
+    timezone_name?: string;
 }
 
 export interface FacebookAdsData {
@@ -83,7 +85,7 @@ async function fetchUserInfo(token: string): Promise<FacebookUser> {
 /** GET /me/adaccounts - Fetch ad accounts */
 async function fetchAdAccounts(token: string): Promise<FacebookAdAccount[]> {
     const response = await fbFetch<{ data: FacebookAdAccount[] }>(
-        '/me/adaccounts?fields=id,name,account_id,account_status,currency',
+        '/me/adaccounts?fields=id,name,account_id,account_status,currency,timezone_name',
         token
     );
     return response.data || [];

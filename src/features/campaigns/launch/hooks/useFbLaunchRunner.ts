@@ -17,6 +17,7 @@ import {
   type FbLaunchController,
   type FbLaunchStats,
   type LaunchPhase,
+  type OnRetrySuccessCallback,
 } from '../fbLaunchRunner';
 
 // =============================================================================
@@ -54,8 +55,8 @@ export interface UseFbLaunchRunnerReturn {
   /** Retry all failed media items */
   retryFailed: () => void;
 
-  /** Retry a single media item by name */
-  retryItem: (name: string) => void;
+  /** Retry a single media item by name; onSuccess fires if it reaches 'done' */
+  retryItem: (name: string, onSuccess?: OnRetrySuccessCallback) => void;
 
   /** Reset state for a new launch */
   reset: () => void;
@@ -144,9 +145,9 @@ export function useFbLaunchRunner(): UseFbLaunchRunnerReturn {
     }
   }, []);
 
-  const retryItem = useCallback((name: string) => {
+  const retryItem = useCallback((name: string, onSuccess?: OnRetrySuccessCallback) => {
     if (controllerRef.current) {
-      controllerRef.current.retryItem(name);
+      controllerRef.current.retryItem(name, onSuccess);
     }
   }, []);
 

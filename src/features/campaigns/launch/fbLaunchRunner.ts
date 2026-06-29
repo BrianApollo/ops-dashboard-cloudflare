@@ -125,12 +125,17 @@ export interface FbLaunchState {
 
 export type OnProgressCallback = (state: FbLaunchState) => void;
 
+/** Fired after a single-item retry finishes successfully (item reached 'done').
+ * Receives the succeeded item plus the full current launch state, so callers can
+ * update that record and refresh the campaign-level launch snapshot. */
+export type OnRetrySuccessCallback = (item: FbLaunchMediaState, state: FbLaunchState) => void;
+
 export interface FbLaunchController {
   start: () => Promise<FbLaunchState>;
   stop: () => void;
   getState: () => FbLaunchState;
   retryFailed: () => void;
-  retryItem: (name: string) => void;
+  retryItem: (name: string, onSuccess?: OnRetrySuccessCallback) => void;
   runPhase: (phase: 'check' | 'upload' | 'campaign' | 'ads' | 'poll') => Promise<FbLaunchState>;
 }
 
@@ -817,7 +822,7 @@ export function createController(
     emitProgress();
   }
 
-  function retryItem(name: string): void {
+  function retryItem(name: string, onSuccess?: OnRetrySuccessCallback): void {
     const item = state.media.find(m => m.name === name);
     if (!item || item.state !== 'failed') return;
 
@@ -837,12 +842,19 @@ export function createController(
     emitProgress();
 
     // Run targeted retry for just this item — no full pipeline restart
-    retrySingleItem(item).catch(err => {
-      console.error('Retry failed:', err);
-      item.state = 'failed';
-      item.error = (err as Error).message;
-      emitProgress();
-    });
+    retrySingleItem(item)
+      .then(() => {
+        // Notify only when THIS item actually succeeded, so the caller can
+        // update just this media record (leaving the rest untouched) and
+        // refresh the campaign-level launch snapshot from the current state.
+        if (item.state === 'done') onSuccess?.(item, getState());
+      })
+      .catch(err => {
+        console.error('Retry failed:', err);
+        item.state = 'failed';
+        item.error = (err as Error).message;
+        emitProgress();
+      });
   }
 
   // ---------------------------------------------------------------------------
