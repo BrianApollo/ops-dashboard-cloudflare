@@ -86,6 +86,16 @@ export interface WriteLaunchSnapshotResult {
   error?: string;
 }
 
+export interface WriteLaunchSnapshotOptions {
+  /**
+   * When false, skips the bulk "mark videos as Used" Airtable batch update and
+   * only rebuilds + persists the campaign-level launch snapshot. Used by the
+   * single-item retry path, which updates just the retried media record itself.
+   * Defaults to true (full post-launch behavior).
+   */
+  updateMediaRecords?: boolean;
+}
+
 // =============================================================================
 // MAIN FUNCTION
 // =============================================================================
@@ -99,32 +109,36 @@ export async function writeLaunchSnapshot({
   videosWithUrls,
   imagesWithUrls,
   launchStatusActive,
-}: WriteLaunchSnapshotInput): Promise<WriteLaunchSnapshotResult> {
+}: WriteLaunchSnapshotInput, options: WriteLaunchSnapshotOptions = {}): Promise<WriteLaunchSnapshotResult> {
+  const { updateMediaRecords = true } = options;
   try {
     // -------------------------------------------------------------------------
     // 1. Update Video Records in Airtable (mark as "Used")
+    //    Skipped on the retry path — that flow updates only the retried record.
     // -------------------------------------------------------------------------
-    const succeededVideos = result.media
-      .filter(m => m.type === 'video' && m.state === 'done' && m.adId);
+    if (updateMediaRecords) {
+      const succeededVideos = result.media
+        .filter(m => m.type === 'video' && m.state === 'done' && m.adId);
 
-    if (succeededVideos.length > 0) {
-      // Map video names back to their Airtable IDs
-      const videoIdMap = new Map(videosWithUrls.map(v => [v.name, v.id]));
-      const videoUpdates = succeededVideos
-        .map(v => videoIdMap.get(v.name))
-        .filter((id): id is string => !!id)
-        .map(id => ({
-          id,
-          fields: {
-            [FIELD_USED_IN_CAMPAIGN]: [campaignId],
-            'Status': 'Used',
-          }
-        }));
+      if (succeededVideos.length > 0) {
+        // Map video names back to their Airtable IDs
+        const videoIdMap = new Map(videosWithUrls.map(v => [v.name, v.id]));
+        const videoUpdates = succeededVideos
+          .map(v => videoIdMap.get(v.name))
+          .filter((id): id is string => !!id)
+          .map(id => ({
+            id,
+            fields: {
+              [FIELD_USED_IN_CAMPAIGN]: [campaignId],
+              'Status': 'Used',
+            }
+          }));
 
-      if (videoUpdates.length > 0) {
-        console.log('[writeLaunchSnapshot] Updating Airtable video records...', { count: videoUpdates.length });
-        await updateVideosBatch(videoUpdates);
-        console.log('[writeLaunchSnapshot] Airtable video update successful');
+        if (videoUpdates.length > 0) {
+          console.log('[writeLaunchSnapshot] Updating Airtable video records...', { count: videoUpdates.length });
+          await updateVideosBatch(videoUpdates);
+          console.log('[writeLaunchSnapshot] Airtable video update successful');
+        }
       }
     }
 

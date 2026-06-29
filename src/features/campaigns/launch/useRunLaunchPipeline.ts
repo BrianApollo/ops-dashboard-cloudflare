@@ -20,6 +20,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useFbLaunchRunner, mapToFbLaunchInput } from '.';
 import type { FbLaunchState } from '.';
+import type { OnRetrySuccessCallback } from './fbLaunchRunner';
 
 // =============================================================================
 // TYPES
@@ -87,6 +88,8 @@ export interface LaunchPipelineInput {
   reuseCreatives: boolean;
   launchStatusActive: boolean;
   redtrackTrackingParams: string | null;
+  /** IANA timezone of the target ad account, used to interpret start date/time */
+  adAccountTimezone?: string | null;
 }
 
 export interface LaunchPipelineResult {
@@ -101,8 +104,8 @@ export interface LaunchPipelineResult {
 export interface UseRunLaunchPipelineReturn {
   /** Execute the launch pipeline */
   runLaunch: (input: LaunchPipelineInput) => Promise<LaunchPipelineResult>;
-  /** Retry a single media item by name */
-  retryItem: (name: string) => void;
+  /** Retry a single media item by name; onSuccess fires if it reaches 'done' */
+  retryItem: (name: string, onSuccess?: OnRetrySuccessCallback) => void;
   /** Whether launch is currently running */
   isLaunching: boolean;
   /** Current progress state from FB runner */
@@ -168,6 +171,7 @@ export function useRunLaunchPipeline(): UseRunLaunchPipelineReturn {
       reuseCreatives,
       launchStatusActive,
       redtrackTrackingParams,
+      adAccountTimezone,
     } = input;
 
     setValidationError(null);
@@ -269,6 +273,7 @@ export function useRunLaunchPipeline(): UseRunLaunchPipelineReturn {
         } : null,
         reuseCreatives,
         launchStatusActive,
+        adAccountTimezone,
       });
 
       console.log('[useRunLaunchPipeline] Launching campaign:', {

@@ -438,6 +438,23 @@ export async function createImage(
 }
 
 /**
+ * Assign a campaign to a single image record (links it via "Used In Campaigns").
+ * Used when a media item is (re)launched successfully and we want the image
+ * record to point back at the Airtable campaign it was used in.
+ *
+ * @param id - The image's Airtable record ID
+ * @param campaignId - The Airtable campaign record ID (NOT the Facebook campaign ID)
+ */
+export async function updateImageUsage(id: string, campaignId: string): Promise<void> {
+  await airtableFetch(`${IMAGES_TABLE}/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      fields: { [FIELD_USED_IN_CAMPAIGNS]: [campaignId] },
+    }),
+  });
+}
+
+/**
  * Delete a record from "Temp Images" table.
  */
 export async function deleteTempImage(id: string): Promise<void> {

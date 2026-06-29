@@ -72,6 +72,9 @@ export interface MapToFbLaunchInputParams {
   selectedPreset?: MapperAdPresetInput | null;
   reuseCreatives: boolean;
   launchStatusActive: boolean;
+  /** IANA timezone of the target ad account (e.g. "Asia/Bangkok"). Used to
+   * interpret the start date/time. Falls back to GMT+7 when omitted. */
+  adAccountTimezone?: string | null;
   options?: Partial<FbLaunchOptions>;
 }
 
@@ -89,19 +92,70 @@ function toFacebookCta(cta: string): string {
 }
 
 /**
- * Parse start time from date and time strings
- * Returns Unix timestamp in seconds, or null for immediate start
+ * Default timezone used when an ad account has no timezone of its own.
+ * Most accounts run on GMT+7 (Bangkok), so we fall back to that rather than
+ * silently using the operator's browser timezone.
  */
-function parseStartTime(startDate: string, startTime: string): number | null {
+export const DEFAULT_AD_ACCOUNT_TIMEZONE = 'Asia/Bangkok';
+
+/**
+ * Offset (in milliseconds) of an IANA timezone relative to UTC at a given instant.
+ * Computed via Intl so it stays correct across DST transitions.
+ */
+function getTimeZoneOffsetMs(timeZone: string, date: Date): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const parts = dtf.formatToParts(date);
+  const map: Record<string, number> = {};
+  for (const p of parts) {
+    if (p.type !== 'literal') map[p.type] = Number(p.value);
+  }
+
+  const asUtc = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
+  return asUtc - date.getTime();
+}
+
+/**
+ * Parse start time from date and time strings.
+ *
+ * The entered date/time is interpreted as a wall-clock time in the ad account's
+ * timezone (NOT the operator's browser timezone), so the campaign goes live when
+ * the operator expects in the account's own clock. Falls back to GMT+7 (Bangkok)
+ * when the account timezone is unknown.
+ *
+ * Returns Unix timestamp in seconds, or null for immediate start.
+ */
+function parseStartTime(
+  startDate: string,
+  startTime: string,
+  timeZone: string = DEFAULT_AD_ACCOUNT_TIMEZONE,
+): number | null {
   if (!startDate) return null;
 
   const timeStr = startTime || '00:00';
-  const dateTimeStr = `${startDate}T${timeStr}:00`;
-  const date = new Date(dateTimeStr);
+  // Interpret the wall-clock string as UTC first, then shift by the account's
+  // offset at that instant to recover the true absolute moment.
+  const asIfUtc = new Date(`${startDate}T${timeStr}:00Z`);
+  if (isNaN(asIfUtc.getTime())) return null;
 
-  if (isNaN(date.getTime())) return null;
+  let offsetMs: number;
+  try {
+    offsetMs = getTimeZoneOffsetMs(timeZone, asIfUtc);
+  } catch {
+    // Invalid timezone string → fall back to GMT+7.
+    offsetMs = getTimeZoneOffsetMs(DEFAULT_AD_ACCOUNT_TIMEZONE, asIfUtc);
+  }
 
-  return Math.floor(date.getTime() / 1000);
+  return Math.floor((asIfUtc.getTime() - offsetMs) / 1000);
 }
 
 /**
@@ -140,6 +194,7 @@ export function mapToFbLaunchInput(params: MapToFbLaunchInputParams): FbLaunchIn
     selectedPreset,
     reuseCreatives,
     launchStatusActive,
+    adAccountTimezone,
     options: customOptions,
   } = params;
 
@@ -172,7 +227,7 @@ export function mapToFbLaunchInput(params: MapToFbLaunchInputParams): FbLaunchIn
 
   // Build ad set config
   const geoTargets = parseGeoTargets(draft.geo);
-  const startTime = parseStartTime(draft.startDate, draft.startTime);
+  const startTime = parseStartTime(draft.startDate, draft.startTime, adAccountTimezone ?? undefined);
 
   const adSet: AdSetConfig = {
     name: `${draft.name || 'Campaign'} - AdSet`,
