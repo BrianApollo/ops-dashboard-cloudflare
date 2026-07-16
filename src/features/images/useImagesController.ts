@@ -17,11 +17,12 @@ import type {
   ImageType,
   ImageFilters,
 } from './types';
-import { listImages, createImage, deleteTempImage } from './data';
+import { listImages, createImage, deleteTempImage, deleteImage as deleteImageRecord } from './data';
 import { STATUS_LABELS as GLOBAL_STATUS_LABELS } from '../../constants';
 import { sortByNameDesc } from '../../utils';
 import { uploadImageToStorage } from './storage';
 import { deleteCloudflareImage, extractImageIdFromUrl } from '../../core/storage/cloudflare/images';
+import { deleteFile } from '../../core/storage/cloudflare';
 
 // =============================================================================
 // CONSTANTS
@@ -115,6 +116,8 @@ export interface UseImagesControllerResult {
     productDriveFolderId: string
   ) => Promise<void>;
   deleteNewImages: (imageIds: string[]) => Promise<void>;
+  /** Permanently delete a main "Images" record and its R2 object. */
+  deleteImage: (id: string) => Promise<void>;
   isUploading: boolean;
   isDeleting: boolean;
   uploadProgress: { current: number; total: number } | null;
@@ -423,6 +426,37 @@ export function useImagesController(
   }, [images, imagesQuery]);
 
   // ---------------------------------------------------------------------------
+  // DELETE IMAGE HANDLER (main "Images" table + R2 object)
+  // ---------------------------------------------------------------------------
+
+  const handleDeleteImage = useCallback(async (id: string): Promise<void> => {
+    const image = images.find((i) => i.id === id);
+
+    setIsDeleting(true);
+    try {
+      // Delete the R2 object first (best effort — a stale record is worse than
+      // a stale file, so we don't block the Airtable delete on this).
+      const url = image?.image_drive_link || image?.image_url;
+      if (url) {
+        try {
+          const key = decodeURIComponent(new URL(url).pathname.replace(/^\/+/, ''));
+          await deleteFile(key);
+        } catch (err) {
+          console.warn(`[deleteImage] R2 delete failed for ${url}:`, err);
+        }
+      }
+
+      // Delete the Airtable record
+      await deleteImageRecord(id);
+
+      // Refresh the list
+      await imagesQuery.refetch();
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [images, imagesQuery]);
+
+  // ---------------------------------------------------------------------------
   // FILTER HANDLERS
   // ---------------------------------------------------------------------------
 
@@ -502,6 +536,7 @@ export function useImagesController(
     uploadImages: handleUploadImages,
     approveImages: handleApproveImages,
     deleteNewImages: handleDeleteNewImages,
+    deleteImage: handleDeleteImage,
     isUploading,
     isDeleting,
     uploadProgress,

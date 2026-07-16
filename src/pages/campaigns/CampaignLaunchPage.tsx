@@ -368,6 +368,8 @@ export function CampaignLaunchPage() {
             canCheckLibrary={!!c.draft.adAccountId && !!c.selectedProfile}
             videosNotInLibraryCount={c.videosNotInLibraryCount}
             selectedNotInLibraryCount={c.selectedNotInLibraryCount}
+            anglesById={anglesById}
+            onDeleteImage={c.deleteImage}
           />
 
           {/* CENTER: Campaign Setup + Ads Settings (sibling sections) */}

@@ -89,6 +89,8 @@ export interface UseCampaignLaunchOrchestratorReturn {
   selectRandomImages: (count: number) => void;
   unselectAllVideos: () => void;
   unselectAllImages: () => void;
+  /** Permanently delete an image (record + R2 file) from the media list. */
+  deleteImage: (id: string) => Promise<void>;
   reuseCreatives: boolean;
   toggleReuseCreatives: () => void;
   launchStatusActive: boolean;
@@ -359,6 +361,24 @@ export function useCampaignLaunchOrchestrator(
   initCallbacksRef.current.setLaunchStatusActive = setLaunchStatusActive;
 
   // ---------------------------------------------------------------------------
+  // DELETE IMAGE (record + R2 object)
+  // ---------------------------------------------------------------------------
+  const deleteImage = useCallback(async (id: string) => {
+    const image = availableImages.find((i) => i.id === id);
+    const label = image?.name || 'this image';
+    if (!window.confirm(`Delete ${label}? This permanently removes the record and the file from storage.`)) {
+      return;
+    }
+    // Drop it from the current selection before it disappears from the list
+    if (selectedImageIds.has(id)) toggleImage(id);
+    try {
+      await imagesController.deleteImage(id);
+    } catch (err) {
+      alert(`Failed to delete image: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [availableImages, selectedImageIds, toggleImage, imagesController]);
+
+  // ---------------------------------------------------------------------------
   // PRODUCT PRESETS
   // ---------------------------------------------------------------------------
   const productPresets = useMemo((): AdPresetForLaunch[] => {
@@ -566,6 +586,7 @@ export function useCampaignLaunchOrchestrator(
     selectRandomImages,
     unselectAllVideos,
     unselectAllImages,
+    deleteImage,
     reuseCreatives,
     toggleReuseCreatives,
     launchStatusActive,

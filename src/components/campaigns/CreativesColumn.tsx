@@ -20,6 +20,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import ImageIcon from '@mui/icons-material/Image';
+import CloseIcon from '@mui/icons-material/Close';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -64,6 +65,10 @@ interface CreativesColumnProps {
   canCheckLibrary?: boolean;
   videosNotInLibraryCount?: number;
   selectedNotInLibraryCount?: number;
+  /** Map of angleId → angle name, used to label groups when grouping by angle. */
+  anglesById?: Record<string, string>;
+  /** Permanently delete an image (record + R2 file). Shows a ✕ per image row. */
+  onDeleteImage?: (id: string) => void;
 }
 
 export function CreativesColumn({
@@ -85,9 +90,15 @@ export function CreativesColumn({
   canCheckLibrary = false,
   videosNotInLibraryCount = 0,
   selectedNotInLibraryCount = 0,
+  anglesById = {},
+  onDeleteImage,
 }: CreativesColumnProps) {
   const [activeTab, setActiveTab] = useState<CreativeTab>('videos');
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [groupByAngle, setGroupByAngle] = useState(false);
+
+  // Only offer angle grouping when at least one media item has an angle assigned.
+  const hasAngles = videos.some((v) => !!v.angleId) || images.some((i) => !!i.angleId);
 
   const handleQuickSelect = (count: number) => {
     if (activeTab === 'videos' && onSelectRandomVideos) {
@@ -307,6 +318,35 @@ export function CreativesColumn({
         </Box>
       </Box>
 
+      {/* Group by angle toggle */}
+      {hasAngles && (
+        <Box
+          sx={{
+            px: 2,
+            py: 0.5,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={groupByAngle}
+                onChange={() => setGroupByAngle((v) => !v)}
+                size="small"
+                sx={{ py: 0 }}
+              />
+            }
+            label={
+              <Typography variant="caption" color="text.secondary">
+                Group by angle
+              </Typography>
+            }
+            sx={{ m: 0 }}
+          />
+        </Box>
+      )}
+
       {/* Reuse Creatives Option */}
       {onToggleReuseCreatives && (
         <Box
@@ -342,6 +382,8 @@ export function CreativesColumn({
             videos={videos}
             selectedIds={selectedVideoIds}
             onToggle={onToggleVideo}
+            groupByAngle={groupByAngle}
+            anglesById={anglesById}
           />
         )}
         {activeTab === 'images' && (
@@ -349,10 +391,75 @@ export function CreativesColumn({
             images={images}
             selectedIds={selectedImageIds}
             onToggle={onToggleImage}
+            groupByAngle={groupByAngle}
+            anglesById={anglesById}
+            onDelete={onDeleteImage}
           />
         )}
       </Box>
     </Paper>
+  );
+}
+
+// =============================================================================
+// ANGLE GROUPING HELPERS
+// =============================================================================
+
+const DEFAULT_GROUP_KEY = '__default__';
+
+interface MediaGroup<T> {
+  key: string;
+  label: string;
+  items: T[];
+}
+
+/**
+ * Group media by their angle. Items whose angle is missing or unresolved fall
+ * into a single "Default" group, which is always rendered last.
+ */
+function groupByAngleId<T extends { angleId?: string }>(
+  items: T[],
+  anglesById: Record<string, string>,
+): MediaGroup<T>[] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = item.angleId && anglesById[item.angleId] ? item.angleId : DEFAULT_GROUP_KEY;
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  }
+
+  const named = [...groups.entries()]
+    .filter(([key]) => key !== DEFAULT_GROUP_KEY)
+    .map(([key, groupItems]) => ({ key, label: anglesById[key], items: groupItems }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const defaultItems = groups.get(DEFAULT_GROUP_KEY);
+  if (defaultItems) {
+    named.push({ key: DEFAULT_GROUP_KEY, label: 'Default', items: defaultItems });
+  }
+
+  return named;
+}
+
+function GroupHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5, mb: 0.5, px: 0.5, '&:first-of-type': { mt: 0 } }}>
+      <Typography
+        sx={{
+          ...textSm,
+          fontWeight: 700,
+          color: 'text.secondary',
+          textTransform: 'uppercase',
+          letterSpacing: 0.4,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </Typography>
+      <Chip label={count} size="small" sx={{ height: 16, fontSize: '0.6rem' }} />
+      <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
+    </Box>
   );
 }
 
@@ -364,133 +471,181 @@ interface VideosListProps {
   videos: SelectableVideo[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
+  groupByAngle?: boolean;
+  anglesById?: Record<string, string>;
 }
 
-function VideosList({ videos, selectedIds, onToggle }: VideosListProps) {
+function VideosList({ videos, selectedIds, onToggle, groupByAngle = false, anglesById = {} }: VideosListProps) {
   if (videos.length === 0) {
     return <EmptyState variant="filter" />;
+  }
+
+  if (groupByAngle) {
+    const groups = groupByAngleId(videos, anglesById);
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        {groups.map((group) => (
+          <Box key={group.key}>
+            <GroupHeader label={group.label} count={group.items.length} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {group.items.map((video) => (
+                <VideoRow key={video.id} video={video} selected={selectedIds.has(video.id)} onToggle={onToggle} />
+              ))}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    );
   }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
       {videos.map((video) => (
-        <Box
-          key={video.id}
-          onClick={() => onToggle(video.id)}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 1.5,
-            py: 1,
-            borderRadius: 1,
-            border: selectedIds.has(video.id) ? '2px solid' : '1px solid',
-            borderColor: selectedIds.has(video.id) ? 'primary.main' : 'divider',
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-            '&:hover': {
-              borderColor: 'primary.main',
-            },
-          }}
-        >
-          <Checkbox
-            checked={selectedIds.has(video.id)}
-            size="small"
-            sx={{ p: 0 }}
-          />
-          <Typography
-            sx={{
-              ...textSm,
-              flex: 1,
-              minWidth: 0,
-              fontWeight: 500,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {video.name}
-          </Typography>
-          {/* Upload Status Pills */}
-          {video.uploadStatus === 'queued' && (
-            <Chip
-              label="Queued"
-              size="small"
-              sx={{
-                height: 18,
-                fontSize: '0.65rem',
-                bgcolor: '#e0e7ff',
-                color: '#3730a3',
-                fontWeight: 500,
-                mr: 0.5,
-              }}
-            />
-          )}
-          {video.uploadStatus === 'uploading' && (
-            <Chip
-              label="Uploading..."
-              size="small"
-              icon={<CircularProgress size={10} sx={{ color: '#1d4ed8 !important' }} />}
-              sx={{
-                height: 18,
-                fontSize: '0.65rem',
-                bgcolor: '#dbeafe',
-                color: '#1d4ed8',
-                fontWeight: 500,
-                mr: 0.5,
-                '& .MuiChip-icon': { ml: 0.5 },
-              }}
-            />
-          )}
-          {video.uploadStatus === 'processing' && (
-            <Chip
-              label="Processing..."
-              size="small"
-              icon={<CircularProgress size={10} sx={{ color: '#c2410c !important' }} />}
-              sx={{
-                height: 18,
-                fontSize: '0.65rem',
-                bgcolor: '#ffedd5',
-                color: '#c2410c',
-                fontWeight: 500,
-                mr: 0.5,
-                '& .MuiChip-icon': { ml: 0.5 },
-              }}
-            />
-          )}
-          {video.uploadStatus === 'failed' && (
-            <Tooltip title={video.uploadError || 'Upload failed'}>
-              <Chip
-                label="Failed"
-                size="small"
-                sx={{
-                  height: 18,
-                  fontSize: '0.65rem',
-                  bgcolor: '#fee2e2',
-                  color: '#b91c1c',
-                  fontWeight: 500,
-                  mr: 0.5,
-                }}
-              />
-            </Tooltip>
-          )}
-          {(video.inLibrary || video.uploadStatus === 'ready') && (
-            <Chip
-              label="In Library"
-              size="small"
-              sx={{
-                height: 18,
-                fontSize: '0.65rem',
-                bgcolor: '#d1fae5',
-                color: '#065f46',
-                fontWeight: 500,
-                mr: 0.5,
-              }}
-            />
-          )}
-          <StatusPill status={video.status} />
-        </Box>
+        <VideoRow key={video.id} video={video} selected={selectedIds.has(video.id)} onToggle={onToggle} />
       ))}
+    </Box>
+  );
+}
+
+function VideoHoverPreview({ video }: { video: SelectableVideo }) {
+  // No source → nothing to preview. Still show an icon placeholder for alignment.
+  const trigger = video.fbThumbnailUrl ? (
+    <Box
+      component="img"
+      src={video.fbThumbnailUrl}
+      alt={video.name}
+      sx={{ width: 32, height: 32, borderRadius: 0.5, objectFit: 'cover', cursor: video.creativeLink ? 'zoom-in' : 'default', flexShrink: 0 }}
+    />
+  ) : (
+    <Box
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: 0.5,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'action.hover',
+        cursor: video.creativeLink ? 'zoom-in' : 'default',
+        flexShrink: 0,
+      }}
+    >
+      <VideoLibraryIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+    </Box>
+  );
+
+  if (!video.creativeLink) return trigger;
+
+  return (
+    <Tooltip
+      placement="right"
+      arrow
+      enterDelay={300}
+      slotProps={{
+        tooltip: {
+          sx: {
+            bgcolor: 'background.paper',
+            p: 0.5,
+            maxWidth: 'none',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            '& .MuiTooltip-arrow': { color: 'background.paper' },
+          },
+        },
+      }}
+      title={
+        <Box
+          component="video"
+          src={video.creativeLink}
+          poster={video.fbThumbnailUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          sx={{ width: 280, height: 280, objectFit: 'cover', borderRadius: 1, display: 'block', bgcolor: 'black' }}
+        />
+      }
+    >
+      {trigger}
+    </Tooltip>
+  );
+}
+
+function VideoRow({ video, selected, onToggle }: { video: SelectableVideo; selected: boolean; onToggle: (id: string) => void }) {
+  return (
+    <Box
+      onClick={() => onToggle(video.id)}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 1.5,
+        py: 1,
+        borderRadius: 1,
+        border: selected ? '2px solid' : '1px solid',
+        borderColor: selected ? 'primary.main' : 'divider',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        '&:hover': {
+          borderColor: 'primary.main',
+        },
+      }}
+    >
+      <Checkbox checked={selected} size="small" sx={{ p: 0 }} />
+      <VideoHoverPreview video={video} />
+      <Typography
+        sx={{
+          ...textSm,
+          flex: 1,
+          minWidth: 0,
+          fontWeight: 500,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {video.name}
+      </Typography>
+      {/* Upload Status Pills */}
+      {video.uploadStatus === 'queued' && (
+        <Chip
+          label="Queued"
+          size="small"
+          sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#e0e7ff', color: '#3730a3', fontWeight: 500, mr: 0.5 }}
+        />
+      )}
+      {video.uploadStatus === 'uploading' && (
+        <Chip
+          label="Uploading..."
+          size="small"
+          icon={<CircularProgress size={10} sx={{ color: '#1d4ed8 !important' }} />}
+          sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#dbeafe', color: '#1d4ed8', fontWeight: 500, mr: 0.5, '& .MuiChip-icon': { ml: 0.5 } }}
+        />
+      )}
+      {video.uploadStatus === 'processing' && (
+        <Chip
+          label="Processing..."
+          size="small"
+          icon={<CircularProgress size={10} sx={{ color: '#c2410c !important' }} />}
+          sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#ffedd5', color: '#c2410c', fontWeight: 500, mr: 0.5, '& .MuiChip-icon': { ml: 0.5 } }}
+        />
+      )}
+      {video.uploadStatus === 'failed' && (
+        <Tooltip title={video.uploadError || 'Upload failed'}>
+          <Chip
+            label="Failed"
+            size="small"
+            sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#fee2e2', color: '#b91c1c', fontWeight: 500, mr: 0.5 }}
+          />
+        </Tooltip>
+      )}
+      {(video.inLibrary || video.uploadStatus === 'ready') && (
+        <Chip
+          label="In Library"
+          size="small"
+          sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#d1fae5', color: '#065f46', fontWeight: 500, mr: 0.5 }}
+        />
+      )}
+      <StatusPill status={video.status} />
     </Box>
   );
 }
@@ -499,100 +654,122 @@ interface ImagesListProps {
   images: SelectableImage[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
+  groupByAngle?: boolean;
+  anglesById?: Record<string, string>;
+  onDelete?: (id: string) => void;
 }
 
-function ImagesList({ images, selectedIds, onToggle }: ImagesListProps) {
+function ImagesList({ images, selectedIds, onToggle, groupByAngle = false, anglesById = {}, onDelete }: ImagesListProps) {
   if (images.length === 0) {
     return <EmptyState variant="filter" />;
+  }
+
+  if (groupByAngle) {
+    const groups = groupByAngleId(images, anglesById);
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        {groups.map((group) => (
+          <Box key={group.key}>
+            <GroupHeader label={group.label} count={group.items.length} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {group.items.map((image) => (
+                <ImageRow key={image.id} image={image} selected={selectedIds.has(image.id)} onToggle={onToggle} onDelete={onDelete} />
+              ))}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    );
   }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
       {images.map((image) => (
-        <Box
-          key={image.id}
-          onClick={() => onToggle(image.id)}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 1.5,
-            py: 1,
-            borderRadius: 1,
-            border: selectedIds.has(image.id) ? '2px solid' : '1px solid',
-            borderColor: selectedIds.has(image.id) ? 'primary.main' : 'divider',
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-            '&:hover': {
-              borderColor: 'primary.main',
+        <ImageRow key={image.id} image={image} selected={selectedIds.has(image.id)} onToggle={onToggle} onDelete={onDelete} />
+      ))}
+    </Box>
+  );
+}
+
+function ImageRow({ image, selected, onToggle, onDelete }: { image: SelectableImage; selected: boolean; onToggle: (id: string) => void; onDelete?: (id: string) => void }) {
+  return (
+    <Box
+      onClick={() => onToggle(image.id)}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 1.5,
+        py: 1,
+        borderRadius: 1,
+        border: selected ? '2px solid' : '1px solid',
+        borderColor: selected ? 'primary.main' : 'divider',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        '&:hover': {
+          borderColor: 'primary.main',
+        },
+      }}
+    >
+      <Checkbox checked={selected} size="small" sx={{ p: 0 }} />
+      {image.thumbnailUrl && (
+        <Tooltip
+          title={
+            <Box
+              component="img"
+              src={image.thumbnailUrl}
+              alt={image.name}
+              sx={{ width: 280, height: 280, objectFit: 'cover', borderRadius: 1, display: 'block' }}
+            />
+          }
+          placement="right"
+          arrow
+          slotProps={{
+            tooltip: {
+              sx: {
+                bgcolor: 'background.paper',
+                p: 0.5,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                '& .MuiTooltip-arrow': { color: 'background.paper' },
+              },
             },
           }}
         >
-          <Checkbox
-            checked={selectedIds.has(image.id)}
-            size="small"
-            sx={{ p: 0 }}
+          <Box
+            component="img"
+            src={image.thumbnailUrl}
+            alt={image.name}
+            sx={{ width: 32, height: 32, borderRadius: 0.5, objectFit: 'cover', cursor: 'zoom-in' }}
           />
-          {image.thumbnailUrl && (
-            <Tooltip
-              title={
-                <Box
-                  component="img"
-                  src={image.thumbnailUrl}
-                  alt={image.name}
-                  sx={{
-                    width: 280,
-                    height: 280,
-                    objectFit: 'cover',
-                    borderRadius: 1,
-                    display: 'block',
-                  }}
-                />
-              }
-              placement="right"
-              arrow
-              slotProps={{
-                tooltip: {
-                  sx: {
-                    bgcolor: 'background.paper',
-                    p: 0.5,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-                    '& .MuiTooltip-arrow': {
-                      color: 'background.paper',
-                    },
-                  },
-                },
-              }}
-            >
-              <Box
-                component="img"
-                src={image.thumbnailUrl}
-                alt={image.name}
-                sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 0.5,
-                  objectFit: 'cover',
-                  cursor: 'zoom-in',
-                }}
-              />
-            </Tooltip>
-          )}
-          <Typography
-            sx={{
-              ...textSm,
-              flex: 1,
-              minWidth: 0,
-              fontWeight: 500,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+        </Tooltip>
+      )}
+      <Typography
+        sx={{
+          ...textSm,
+          flex: 1,
+          minWidth: 0,
+          fontWeight: 500,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {image.name}
+      </Typography>
+      {onDelete && (
+        <Tooltip title="Delete image (record + file)">
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(image.id);
             }}
+            sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
           >
-            {image.name}
-          </Typography>
-        </Box>
-      ))}
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      )}
     </Box>
   );
 }

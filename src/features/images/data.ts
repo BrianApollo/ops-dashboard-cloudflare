@@ -462,3 +462,12 @@ export async function deleteTempImage(id: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+/**
+ * Delete a record from the main "Images" table.
+ */
+export async function deleteImage(id: string): Promise<void> {
+  await airtableFetch(`${IMAGES_TABLE}/${id}`, {
+    method: 'DELETE',
+  });
+}
