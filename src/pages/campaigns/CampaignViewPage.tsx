@@ -1318,7 +1318,6 @@ function ManageTab({ campaign, fbData, accessToken, adAccountId }: ManageTabProp
                         alert('No template ad found in this ad set');
                       }
                     }}
-                    disabled={adSetAds.length === 0}
                   >
                     Add Ads
                   </Button>

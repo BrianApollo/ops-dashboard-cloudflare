@@ -7,7 +7,7 @@
  * - Uses createAdsBatch for batch ad creation with retry
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -122,6 +122,12 @@ export function AddAdsModal({
   const [showUsedVideos, setShowUsedVideos] = useState(false);
   const [createAIVideoOpen, setCreateAIVideoOpen] = useState(false);
 
+  // Selected videos that still need uploading (not already in the FB library
+  // and not already uploaded/ready). Drives the "Upload Selected" button.
+  const selectedVideosToUpload = [...flow.availableVideos, ...flow.usedVideos].filter(
+    (v) => flow.selectedVideoIds.has(v.id) && !v.inLibrary && v.uploadStatus !== 'ready',
+  );
+
   // ---------------------------------------------------------------------------
   // LOADING / ERROR STATES
   // ---------------------------------------------------------------------------
@@ -233,6 +239,33 @@ export function AddAdsModal({
               >
                 Used Videos
               </Button>
+              <Tooltip
+                title={
+                  selectedVideosToUpload.length === 0
+                    ? 'Select videos that are not yet in the library to upload'
+                    : `Upload ${selectedVideosToUpload.length} selected video(s) to Facebook`
+                }
+              >
+                <span>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<CloudUploadIcon />}
+                    onClick={() =>
+                      flow.uploader.uploadVideos(selectedVideosToUpload.map((v) => v.name))
+                    }
+                    disabled={
+                      flow.uploader.isUploading ||
+                      flow.uploader.isChecking ||
+                      selectedVideosToUpload.length === 0
+                    }
+                  >
+                    {flow.uploader.isUploading
+                      ? 'Uploading…'
+                      : `Upload Selected${selectedVideosToUpload.length > 0 ? ` (${selectedVideosToUpload.length})` : ''}`}
+                  </Button>
+                </span>
+              </Tooltip>
               <Button
                 size="small"
                 variant="outlined"
