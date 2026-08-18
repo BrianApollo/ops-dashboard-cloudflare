@@ -347,7 +347,10 @@ export function ScriptsTab({
         />
         <Box sx={{ flex: 1 }} />
         <TextField
-          size="small"
+          size="small"  
+          type="search"
+          name="scripts-search"
+          autoComplete="off"
           placeholder="Search scripts..."
           value={list.searchTerm}
           onChange={(e) => list.setSearchTerm(e.target.value)}
@@ -358,6 +361,13 @@ export function ScriptsTab({
                   <SearchIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
                 </InputAdornment>
               ),
+            },
+            htmlInput: {
+              autoComplete: 'off',
+              // prevent browser password managers from treating this lone
+              // text field as a username/email and autofilling it on focus
+              'data-lpignore': 'true',
+              'data-form-type': 'other',
             },
           }}
           sx={{

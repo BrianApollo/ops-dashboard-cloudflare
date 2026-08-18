@@ -115,19 +115,23 @@ export default {
       }
     }
 
-    // GET /rule-logs — recent execution logs from D1
+    // GET /rule-logs — recent execution logs from D1 (empty if DB is unbound)
     if (url.pathname === '/rule-logs' && request.method === 'GET') {
       try {
         await ensureRuleLogTable(env.DB);
         const limit = parseInt(url.searchParams.get('limit') || '50', 10);
         const logs = await queryRecentLogs(env.DB, limit);
-        return jsonResponse({ logs });
+        return jsonResponse({ logs, d1Enabled: Boolean(env.DB) });
       } catch (err) {
         return jsonResponse({ error: errorMessage(err) }, 500);
       }
     }
 
     // GET / — health check
-    return jsonResponse({ name: 'ops-scheduled-executor', status: 'ok' });
+    return jsonResponse({
+      name: 'ops-scheduled-executor',
+      status: 'ok',
+      d1Enabled: Boolean(env.DB),
+    });
   },
 };

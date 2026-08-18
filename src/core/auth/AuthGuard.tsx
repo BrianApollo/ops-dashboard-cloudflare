@@ -1,7 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { CircularProgress, Box } from '@mui/material';
-import ForbiddenPage from '../../_unbound/ForbiddenPage';
 export function RequireAuth() {
     const { user, isLoading } = useAuth();
     const location = useLocation();
@@ -19,9 +18,11 @@ export function RequireAuth() {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    // Block access to /ops routes for Video Editor role
+    // Video editors have no access to /ops routes. The sidebar hides those links
+    // for them; this guards direct-URL access by sending them to their portal
+    // instead of showing a 403 page.
     if (user.role === 'video editor' && location.pathname.startsWith('/ops')) {
-        return <ForbiddenPage />;
+        return <Navigate to="/videos" replace />;
     }
 
     return <Outlet />;

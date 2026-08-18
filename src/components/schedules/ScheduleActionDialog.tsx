@@ -15,6 +15,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
+import FormHelperText from '@mui/material/FormHelperText';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 
@@ -40,6 +41,28 @@ interface ScheduleActionDialogProps {
 }
 
 // =============================================================================
+// HELPERS
+// =============================================================================
+
+/** Scheduled actions always fire just after midnight GMT+7. */
+const EXECUTION_TIME = '00:01';
+
+/** Format an ISO date (YYYY-MM-DD) as "August 15", plus the day before it. */
+function exampleDates(isoDate: string): { selected: string; previous: string } {
+  const fallback = { selected: 'August 15', previous: 'August 14' };
+  if (!isoDate) return fallback;
+
+  const selected = new Date(`${isoDate}T00:00:00Z`);
+  if (isNaN(selected.getTime())) return fallback;
+
+  const previous = new Date(selected.getTime() - 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+  return { selected: fmt(selected), previous: fmt(previous) };
+}
+
+// =============================================================================
 // COMPONENT
 // =============================================================================
 
@@ -52,6 +75,7 @@ export function ScheduleActionDialog({
 }: ScheduleActionDialogProps) {
   const [form, setForm] = useState<ScheduleFormState>(defaultScheduleFormState());
   const [error, setError] = useState<string | null>(null);
+  const example = exampleDates(form.scheduledAt);
 
   // Initialize form when dialog opens
   useEffect(() => {
@@ -187,16 +211,37 @@ export function ScheduleActionDialog({
         )}
 
         {/* Scheduled At */}
-        <TextField
-          label="Scheduled For (midnight GMT+7)"
-          value={form.scheduledAt}
-          onChange={(e) => setForm((prev) => ({ ...prev, scheduledAt: e.target.value }))}
-          size="small"
-          fullWidth
-          type="date"
-          slotProps={{ inputLabel: { shrink: true } }}
-          helperText="Executes at midnight GMT+7 on this date"
-        />
+        <Box>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+            <TextField
+              label="Scheduled For (midnight GMT+7)"
+              value={form.scheduledAt}
+              onChange={(e) => setForm((prev) => ({ ...prev, scheduledAt: e.target.value }))}
+              size="small"
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              label="Time (GMT+7)"
+              value={EXECUTION_TIME}
+              size="small"
+              type="time"
+              slotProps={{ inputLabel: { shrink: true }, input: { readOnly: true } }}
+              sx={{ width: 130 }}
+            />
+          </Box>
+          <FormHelperText component="div" sx={{ mx: 1.75, mt: 0.75 }}>
+            <Box component="span" sx={{ display: 'block' }}>
+              The selected date is when the change takes effect. It will run at 12:01 AM (GMT+7) at
+              the start of that date.
+            </Box>
+            <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
+              Example: Selecting {example.selected} means the change takes effect just after midnight
+              at the end of {example.previous} / start of {example.selected}.
+            </Box>
+          </FormHelperText>
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

@@ -57,16 +57,18 @@ export function OpsLayout() {
   const { user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  const hideSidebar = location.pathname === '/videos';
-  const sidebarWidth = hideSidebar ? 0 : collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
+  const sidebarWidth = collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
 
-  // Dynamic navigation items based on role
+  // Dynamic navigation items based on role.
+  // Role is normalized to lowercase at login (see functions/api/auth/login.ts),
+  // so compare against the lowercase 'video editor'.
+  const isVideoEditor = user?.role === 'video editor';
   const mainNavItems = [
-    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/overview', label: 'Overview', icon: DashboardIcon }] : []),
-    ...(user?.role !== 'Video Editor' ? [{ to: '/ops', label: 'Products', icon: InventoryIcon }] : []),
-    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/manage', label: 'Manage', icon: TuneIcon }] : []),
-    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/schedules', label: 'Schedules', icon: ScheduleIcon }] : []),
-    ...(user?.role !== 'Video Editor' ? [{ to: '/ops/rules', label: 'Rules', icon: GavelIcon }] : []),
+    ...(!isVideoEditor ? [{ to: '/ops/overview', label: 'Overview', icon: DashboardIcon }] : []),
+    ...(!isVideoEditor ? [{ to: '/ops', label: 'Products', icon: InventoryIcon }] : []),
+    ...(!isVideoEditor ? [{ to: '/ops/manage', label: 'Manage', icon: TuneIcon }] : []),
+    ...(!isVideoEditor ? [{ to: '/ops/schedules', label: 'Schedules', icon: ScheduleIcon }] : []),
+    ...(!isVideoEditor ? [{ to: '/ops/rules', label: 'Rules', icon: GavelIcon }] : []),
   ];
 
   // Check if a nav item is active
@@ -86,7 +88,6 @@ export function OpsLayout() {
       }}
     >
       {/* Sidebar */}
-      {!hideSidebar && (
       <Box
         component="nav"
         sx={{
@@ -207,7 +208,7 @@ export function OpsLayout() {
             ))}
 
             {secondaryNavItems
-              .filter(() => user?.role !== 'Video Editor')
+              .filter(() => !isVideoEditor)
               .map((item) => (
                 <NavItem
                   key={item.to}
@@ -234,7 +235,6 @@ export function OpsLayout() {
           </Box>
         </Box>
       </Box>
-      )}
 
       {/* Main Content */}
       <Box

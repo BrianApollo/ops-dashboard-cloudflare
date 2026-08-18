@@ -1,6 +1,9 @@
 /**
  * D1 client for rule execution logging.
  * Auto-creates the table on first run.
+ *
+ * The DB binding is OPTIONAL — when it is absent every function here is a
+ * no-op and Airtable remains the only log destination.
  */
 
 import type { RuleExecutionLog } from './rule-types';
@@ -9,7 +12,9 @@ import type { RuleExecutionLog } from './rule-types';
 // TABLE SETUP
 // =============================================================================
 
-export async function ensureRuleLogTable(db: D1Database): Promise<void> {
+export async function ensureRuleLogTable(db?: D1Database): Promise<void> {
+  if (!db) return;
+
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS rule_execution_logs (
@@ -48,9 +53,11 @@ export async function ensureRuleLogTable(db: D1Database): Promise<void> {
 // =============================================================================
 
 export async function insertRuleExecutionLog(
-  db: D1Database,
+  db: D1Database | undefined,
   log: RuleExecutionLog,
 ): Promise<void> {
+  if (!db) return;
+
   await db
     .prepare(
       `INSERT INTO rule_execution_logs
@@ -78,9 +85,11 @@ export async function insertRuleExecutionLog(
 // =============================================================================
 
 export async function queryRecentLogs(
-  db: D1Database,
+  db: D1Database | undefined,
   limit = 50,
 ): Promise<RuleExecutionLog[]> {
+  if (!db) return [];
+
   const result = await db
     .prepare(
       `SELECT id, rule_id, rule_name, executed_at,

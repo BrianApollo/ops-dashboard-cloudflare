@@ -4,6 +4,7 @@
  */
 
 import type { Env, ScheduleRecord, ProfileRecord, MasterProfileRecord } from './types';
+import { scheduleToday } from './types';
 import type { ScalingRuleRecord } from './rule-types';
 
 const AIRTABLE_BASE_URL = 'https://api.airtable.com/v0';
@@ -54,10 +55,18 @@ export async function getMasterProfileToken(env: Env): Promise<string> {
     throw new Error('No master profile configured');
   }
 
-  const linkedProfileIds = masterData.records[0].fields['Profile Record'];
-  if (!linkedProfileIds?.length) {
-    throw new Error('Master profile has no linked profile');
+  // Airtable seeds new tables with blank rows and returns them in view order, so
+  // records[0] is often empty. Take the first row that is actually configured.
+  const master = masterData.records.find(
+    (record) => record.fields['Profile Record']?.length,
+  );
+  if (!master) {
+    throw new Error(
+      `Master profile has no linked profile (checked ${masterData.records.length} record(s))`,
+    );
   }
+
+  const linkedProfileIds = master.fields['Profile Record']!;
 
   // 2. Fetch the actual profile record to get the token
   const profileData = (await airtableRequest(
@@ -80,9 +89,10 @@ export async function getMasterProfileToken(env: Env): Promise<string> {
 
 /**
  * Fetch all pending scheduled actions where Scheduled At <= today.
+ * "Today" is the GMT+7 date, matching how users pick dates in the UI.
  */
 export async function fetchPendingActions(env: Env): Promise<ScheduleRecord[]> {
-  const today = new Date().toISOString().split('T')[0];
+  const today = scheduleToday();
   const formula = encodeURIComponent(
     `AND({Status} = 'Pending', IS_BEFORE({Scheduled At}, DATEADD('${today}', 1, 'days')))`,
   );

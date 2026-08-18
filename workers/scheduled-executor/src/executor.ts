@@ -5,6 +5,7 @@
  */
 
 import type { Env, ScheduleRecord } from './types';
+import { scheduleToday } from './types';
 import { getMasterProfileToken, fetchPendingActions, updateScheduleRecord } from './airtable';
 import { updateCampaignBudget, updateCampaignStatus } from './facebook';
 
@@ -102,7 +103,7 @@ async function executeAction(
     console.log(`[executor] Action ${id}: FB API result:`, JSON.stringify(result));
 
     // Write result back to Airtable
-    const today = new Date().toISOString().split('T')[0];
+    const today = scheduleToday();
     await safeUpdate(env, id, {
       Status: result.success ? 'Success' : 'Failed',
       'Executed At': today,
@@ -116,7 +117,7 @@ async function executeAction(
 
     await safeUpdate(env, id, {
       Status: 'Failed',
-      'Executed At': new Date().toISOString().split('T')[0],
+      'Executed At': scheduleToday(),
       Response: JSON.stringify({ error: errorMessage }),
     });
 

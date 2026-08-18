@@ -15,6 +15,8 @@ import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
 import Collapse from '@mui/material/Collapse';
 import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
+import LinkIcon from '@mui/icons-material/Link';
 import SettingsIcon from '@mui/icons-material/Settings';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
@@ -107,6 +109,33 @@ export function CampaignSetupColumn({
   const handleCancelName = () => {
     setEditedName(draft.name);
     setIsEditingName(false);
+  };
+
+  /**
+   * Manual {{link}} replacement - the fallback path when no Redtrack campaign
+   * is selected, since there is no lander URL to auto-populate from.
+   * Uses whatever is in the Website URL field.
+   *
+   * Handles both passes: the initial {{link}} substitution, and re-pointing copy
+   * that already carries a previously inserted URL at the new Website URL.
+   */
+  const handleManualLinkReplace = () => {
+    const url = draft.websiteUrl.trim();
+    if (!url) return;
+    const previousUrl = (draft.linkVariable ?? '').trim();
+    const replace = (arr: string[]) =>
+      arr.map((t) => {
+        const withLink = t.replaceAll('{{link}}', url);
+        return previousUrl && previousUrl !== url
+          ? withLink.replaceAll(previousUrl, url)
+          : withLink;
+      });
+    onDraftChange({
+      linkVariable: url,
+      primaryTexts: replace(draft.primaryTexts),
+      headlines: replace(draft.headlines),
+      descriptions: replace(draft.descriptions),
+    });
   };
 
   return (
@@ -342,15 +371,61 @@ export function CampaignSetupColumn({
         {/* Ad Preset */}
         <Box sx={{ position: 'relative' }}>
           {(() => {
-            const textsHaveLink = [...draft.primaryTexts, ...draft.headlines, ...draft.descriptions].some(t => t.includes('{{link}}'));
+            const allTexts = [...draft.primaryTexts, ...draft.headlines, ...draft.descriptions];
+            const linkCount = allTexts.reduce((n, t) => n + (t.match(/\{\{link\}\}/g)?.length ?? 0), 0);
             const presetHadLink = selectedPreset && [...selectedPreset.primaryTexts, ...selectedPreset.headlines, ...selectedPreset.descriptions].some(t => t.includes('{{link}}'));
-            if (textsHaveLink) {
-              return <Chip label="{{link}} not replaced" color="warning" size="small" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />;
-            }
-            if (draft.linkVariable && presetHadLink) {
-              return <Chip label="{{link}} replaced" color="success" size="small" sx={{ position: 'absolute', top: 0, right: 0, height: 18, ...textXs }} />;
-            }
-            return null;
+
+            const manualUrl = draft.websiteUrl.trim();
+            const previousUrl = (draft.linkVariable ?? '').trim();
+
+            // Copy already carries a URL we inserted, but the Website URL has since
+            // changed - the ads would point at the old destination.
+            const linkOutdated =
+              !!previousUrl &&
+              previousUrl !== manualUrl &&
+              allTexts.some((t) => t.includes(previousUrl));
+
+            const chip = linkCount > 0
+              ? <Chip label="{{link}} not replaced" color="warning" size="small" sx={{ height: 18, ...textXs }} />
+              : linkOutdated
+                ? <Chip label="Link outdated" color="warning" size="small" sx={{ height: 18, ...textXs }} />
+                : draft.linkVariable && presetHadLink
+                  ? <Chip label="{{link}} replaced" color="success" size="small" sx={{ height: 18, ...textXs }} />
+                  : null;
+
+            // Without a Redtrack campaign there is no lander URL to auto-populate
+            // from, so offer a one-click replace using the Website URL field.
+            const showManual = !draft.redtrackCampaignId && (linkCount > 0 || linkOutdated);
+            if (!chip && !showManual) return null;
+
+            return (
+              <Box sx={{ position: 'absolute', top: 0, right: 0, zIndex: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                {chip}
+                {showManual && (
+                  <Tooltip
+                    title={
+                      !manualUrl
+                        ? 'Enter a Website URL first'
+                        : linkCount > 0
+                          ? `Replace with ${manualUrl}`
+                          : `Update ad copy to ${manualUrl}`
+                    }
+                  >
+                    <span>
+                      <Chip
+                        size="small"
+                        label={linkCount > 0 ? 'Replace {{link}}' : 'Update link'}
+                        icon={<LinkIcon sx={{ fontSize: '0.75rem !important' }} />}
+                        onClick={handleManualLinkReplace}
+                        disabled={!manualUrl}
+                        color="primary"
+                        sx={{ height: 18, fontSize: '0.6875rem', cursor: 'pointer' }}
+                      />
+                    </span>
+                  </Tooltip>
+                )}
+              </Box>
+            );
           })()}
           <SectionHeader
             title="Ad Preset"

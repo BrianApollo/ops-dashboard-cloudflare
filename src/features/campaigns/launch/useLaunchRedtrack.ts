@@ -61,12 +61,14 @@ export function useLaunchRedtrack({
 
   // When Redtrack campaign changes, allow auto-populate to overwrite
   useEffect(() => {
-    if (redtrackCampaignId && redtrackCampaignId !== lastRedtrackCampaignId.current) {
-      // Redtrack campaign changed - reset to allow auto-populate
-      setWebsiteUrlFromRedtrack(true); // Mark as "from redtrack" so it can be overwritten
-      lastAppliedLanderUrl.current = null; // Reset so new URL will be applied
-      lastRedtrackCampaignId.current = redtrackCampaignId;
-    }
+    if (redtrackCampaignId === lastRedtrackCampaignId.current) return;
+
+    lastRedtrackCampaignId.current = redtrackCampaignId;
+    lastAppliedLanderUrl.current = null; // Reset so the new URL will be applied
+
+    // Empty ID means "No Campaign Selected" - manual mode, so the operator owns
+    // the URL and UTMs and nothing should overwrite them.
+    setWebsiteUrlFromRedtrack(!!redtrackCampaignId);
   }, [redtrackCampaignId, setWebsiteUrlFromRedtrack]);
 
   // Auto-populate websiteUrl and utms when Redtrack data becomes available

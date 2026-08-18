@@ -1,6 +1,6 @@
 /**
- * Dual logger: writes rule execution results to both Airtable and D1.
- * Neither failure should crash execution.
+ * Dual logger: writes rule execution results to Airtable and — when the
+ * optional DB binding is present — D1. Neither failure should crash execution.
  */
 
 import type { Env } from './types';

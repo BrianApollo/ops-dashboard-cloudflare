@@ -20,6 +20,17 @@ import type { CampaignOption } from '../../features/redtrack';
 import { createAutocompleteFilter } from '../../utils';
 
 // =============================================================================
+// SENTINEL OPTION
+// =============================================================================
+
+/**
+ * Explicit "no campaign" choice. Selecting it clears both the ID and the name,
+ * which puts the launcher in manual mode: nothing is auto-populated from
+ * Redtrack and {{link}} has to be replaced by hand.
+ */
+const NO_CAMPAIGN_OPTION: CampaignOption = { id: '', name: 'No Campaign Selected' };
+
+// =============================================================================
 // PROPS
 // =============================================================================
 
@@ -76,9 +87,19 @@ export function RedtrackCampaignSelector({
 
   const handleSelect = () => {
     if (!selectedCampaign) return;
-    onSelect(selectedCampaign.id, selectedCampaign.name);
+    // The sentinel clears the name too - an empty name means "nothing selected"
+    onSelect(selectedCampaign.id, selectedCampaign.id ? selectedCampaign.name : '');
     setIsEditing(false);
   };
+
+  // Keep "No Campaign Selected" pinned to the top regardless of the search text
+  const filterOptions = useMemo(() => {
+    const filterCampaigns = createAutocompleteFilter((c: CampaignOption) => c.name);
+    return (options: CampaignOption[], state: { inputValue: string }) => [
+      NO_CAMPAIGN_OPTION,
+      ...filterCampaigns(options.filter((o) => o.id !== ''), state),
+    ];
+  }, []);
 
   // ==========================================================================
   // EDITING MODE
@@ -90,10 +111,10 @@ export function RedtrackCampaignSelector({
         <Autocomplete
           value={selectedCampaign}
           onChange={(_, newValue) => setSelectedCampaign(newValue)}
-          options={campaigns}
+          options={[NO_CAMPAIGN_OPTION, ...campaigns]}
           getOptionLabel={(option) => option.name}
           isOptionEqualToValue={(option, val) => option.id === val.id}
-          filterOptions={createAutocompleteFilter((c: CampaignOption) => c.name)}
+          filterOptions={filterOptions}
           loading={campaignsLoading}
           size="small"
           fullWidth
@@ -120,17 +141,31 @@ export function RedtrackCampaignSelector({
           )}
           renderOption={(props, option) => {
             const { key, ...rest } = props;
+            const isNone = option.id === '';
             return (
               <Box
                 component="li"
-                key={option.id}
+                key={option.id || 'none'}
                 {...rest}
-                sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start !important' }}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start !important',
+                  ...(isNone && { borderBottom: '1px solid', borderColor: 'divider' }),
+                }}
               >
-                <Typography sx={textSm}>{option.name}</Typography>
-                <Typography sx={{ ...textXs, color: 'text.secondary' }}>
-                  {option.id}
+                <Typography sx={{ ...textSm, ...(isNone && { fontStyle: 'italic', color: 'text.secondary' }) }}>
+                  {option.name}
                 </Typography>
+                {isNone ? (
+                  <Typography sx={{ ...textXs, color: 'text.secondary' }}>
+                    Replace {'{{link}}'} manually
+                  </Typography>
+                ) : (
+                  <Typography sx={{ ...textXs, color: 'text.secondary' }}>
+                    {option.id}
+                  </Typography>
+                )}
               </Box>
             );
           }}
