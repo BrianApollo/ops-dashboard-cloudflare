@@ -26,6 +26,8 @@ interface ProfileFieldProps {
   value: unknown;
   onChange: (value: unknown) => void;
   dirty: boolean;
+  /** Airtable record id -> display name, for linked-record chips. */
+  linkedNames?: Record<string, string>;
 }
 
 /** Airtable date values come back as ISO strings; <input type="date"> wants YYYY-MM-DD. */
@@ -40,7 +42,7 @@ function formatDateTime(value: unknown): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
 }
 
-export function ProfileField({ def, value, onChange, dirty }: ProfileFieldProps) {
+export function ProfileField({ def, value, onChange, dirty, linkedNames }: ProfileFieldProps) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -103,9 +105,12 @@ export function ProfileField({ def, value, onChange, dirty }: ProfileFieldProps)
               None linked
             </Typography>
           ) : (
-            items.map((item) => (
-              <Chip key={String(item)} size="small" label={String(item)} variant="outlined" />
-            ))
+            items.map((item) => {
+              const id = String(item);
+              return (
+                <Chip key={id} size="small" label={linkedNames?.[id] ?? id} variant="outlined" />
+              );
+            })
           )}
         </Box>
       </Box>

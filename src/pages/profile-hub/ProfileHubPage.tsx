@@ -48,6 +48,7 @@ import {
   createHubProfile,
   deleteHubProfile,
   checkProfileToken,
+  fetchLinkedNames,
 } from '../../features/profile-hub/data';
 import {
   PROFILE_GROUPS,
@@ -98,6 +99,7 @@ export function ProfileHubPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const [linkedNames, setLinkedNames] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<StatusFilter>('all');
   const [tokenChecking, setTokenChecking] = useState(false);
@@ -120,6 +122,11 @@ export function ProfileHubPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Linked BM / Page names. Non-blocking: chips fall back to record IDs.
+  useEffect(() => {
+    fetchLinkedNames().then(setLinkedNames).catch(() => {});
+  }, []);
 
   const selected = useMemo(
     () => profiles.find((p) => p.id === selectedId) ?? null,
@@ -471,8 +478,17 @@ export function ProfileHubPage() {
               >
                 {PROFILE_GROUPS.map((group) => {
                   const accent = GROUP_ACCENTS[group.accent];
+                  const full = group.span === 'full';
                   return (
-                    <Paper key={group.key} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                    <Paper
+                      key={group.key}
+                      variant="outlined"
+                      sx={{
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        gridColumn: full ? '1 / -1' : 'auto',
+                      }}
+                    >
                       <Box
                         sx={{
                           px: 2,
@@ -509,7 +525,9 @@ export function ProfileHubPage() {
                         sx={{
                           p: 2,
                           display: 'grid',
-                          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                          gridTemplateColumns: full
+                            ? { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }
+                            : { xs: '1fr', sm: '1fr 1fr' },
                           gap: 2,
                         }}
                       >
@@ -519,6 +537,7 @@ export function ProfileHubPage() {
                               def={def}
                               value={draft[def.name]}
                               dirty={dirtyFields.has(def.name)}
+                              linkedNames={linkedNames}
                               onChange={(value) => setDraft((d) => ({ ...d, [def.name]: value }))}
                             />
                           </Box>

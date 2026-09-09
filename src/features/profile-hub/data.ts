@@ -8,6 +8,7 @@
 
 import { airtableFetch } from '../../core/data/airtable-client';
 import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import { listBMs, listPages } from '../infrastructure/data';
 import type { HubProfile } from './types';
 import { EDITABLE_FIELDS } from './types';
 
@@ -71,6 +72,24 @@ export async function createHubProfile(
 
 export async function deleteHubProfile(recordId: string): Promise<void> {
   await airtableFetch(`${TABLE}/${recordId}`, { method: 'DELETE' });
+}
+
+// =============================================================================
+// LINKED RECORD NAMES
+// =============================================================================
+
+/**
+ * Airtable returns linked fields as record IDs. Build an id -> name map so the
+ * Linked Assets card can show real names. Reuses the existing infrastructure
+ * list helpers rather than re-querying those tables here.
+ */
+export async function fetchLinkedNames(): Promise<Record<string, string>> {
+  const [bms, pages] = await Promise.all([listBMs(), listPages()]);
+
+  const names: Record<string, string> = {};
+  for (const bm of bms) names[bm.id] = bm.bmName || bm.bmId;
+  for (const page of pages) names[page.id] = page.pageName || page.pageId;
+  return names;
 }
 
 // =============================================================================

@@ -39,6 +39,8 @@ export interface ProfileGroupDef {
   subtitle: string;
   /** Accent colour key — see GROUP_ACCENTS in the page. */
   accent: 'slate' | 'blue' | 'violet' | 'amber' | 'teal' | 'rose';
+  /** 'full' spans both columns of the page grid. Defaults to half width. */
+  span?: 'full';
   fields: ProfileFieldDef[];
 }
 
@@ -53,6 +55,7 @@ export interface HubProfile {
 // =============================================================================
 
 export const PROFILE_GROUPS: ProfileGroupDef[] = [
+  // ---- Row 1: Identity | Token & Sync ----
   {
     key: 'identity',
     title: 'Identity',
@@ -62,51 +65,7 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
       { name: 'Profile Name', label: 'Profile Name', kind: 'text', required: true },
       { name: 'Profile Status', label: 'Status', kind: 'status', required: true },
       { name: 'Profile ID', label: 'AdsPower Profile ID', kind: 'text', required: true, hint: 'ID from AdsPower' },
-      { name: 'UID', label: 'UID', kind: 'text' },
       { name: 'Hidden', label: 'Hidden from pickers', kind: 'checkbox' },
-    ],
-  },
-  {
-    key: 'facebook',
-    title: 'Facebook Account',
-    subtitle: 'Login + 2FA for the Facebook profile itself',
-    accent: 'blue',
-    fields: [
-      { name: 'Profile FB Password', label: 'Facebook Password', kind: 'secret', required: true },
-      { name: 'Profile 2FA', label: '2FA Secret', kind: 'secret', required: true, hint: 'TOTP key' },
-      { name: 'Profile Link', label: 'Facebook Profile Link', kind: 'url', wide: true },
-    ],
-  },
-  {
-    key: 'email',
-    title: 'Account Email',
-    subtitle: 'The inbox the Facebook account is registered to',
-    accent: 'violet',
-    fields: [
-      { name: 'Profile Email', label: 'Email', kind: 'email', required: true },
-      { name: 'Profile Email Password', label: 'Email Password', kind: 'secret', required: true },
-    ],
-  },
-  {
-    key: 'security',
-    title: 'Recovery Email',
-    subtitle: 'Backup inbox used for recovery / security checks',
-    accent: 'violet',
-    fields: [
-      { name: 'Profile Security Email', label: 'Security Email', kind: 'email' },
-      { name: 'Security Email Password', label: 'Security Email Password', kind: 'secret' },
-    ],
-  },
-  {
-    key: 'persona',
-    title: 'Persona Details',
-    subtitle: 'The details the account was registered with',
-    accent: 'teal',
-    fields: [
-      { name: 'Profile Birth Date', label: 'Birth Date', kind: 'date' },
-      { name: 'Profile Gender', label: 'Gender', kind: 'text' },
-      { name: 'Profile Location', label: 'Location', kind: 'text' },
-      { name: 'Proxy', label: 'Proxy', kind: 'text', wide: true, hint: 'Proxy assigned in AdsPower' },
     ],
   },
   {
@@ -122,11 +81,55 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
       { name: 'Profile Review Date', label: 'Next Review Date', kind: 'date' },
     ],
   },
+
+  // ---- Row 2: one wide card — the account itself + who it claims to be ----
+  {
+    key: 'account',
+    title: 'Facebook Account & Persona Details',
+    subtitle: 'Login, 2FA and the details the account was registered with',
+    accent: 'blue',
+    span: 'full',
+    fields: [
+      { name: 'Profile FB Password', label: 'Facebook Password', kind: 'secret', required: true },
+      { name: 'Profile 2FA', label: '2FA Secret', kind: 'secret', required: true, hint: 'TOTP key' },
+      { name: 'UID', label: 'Facebook UID', kind: 'text' },
+      { name: 'Profile Link', label: 'Facebook Profile Link', kind: 'url' },
+      { name: 'Profile Birth Date', label: 'Birth Date', kind: 'date' },
+      { name: 'Profile Gender', label: 'Gender', kind: 'text' },
+      { name: 'Profile Location', label: 'Location', kind: 'text' },
+      { name: 'Proxy', label: 'Proxy', kind: 'text', hint: 'Proxy assigned in AdsPower' },
+    ],
+  },
+
+  // ---- Row 3: Email 1 | Backup Email ----
+  {
+    key: 'email',
+    title: 'Email 1',
+    subtitle: 'The inbox the Facebook account is registered to',
+    accent: 'violet',
+    fields: [
+      { name: 'Profile Email', label: 'Email', kind: 'email', required: true },
+      { name: 'Profile Email Password', label: 'Email Password', kind: 'secret', required: true },
+    ],
+  },
+  {
+    key: 'security',
+    title: 'Backup Email',
+    subtitle: 'Backup inbox used for recovery / security checks',
+    accent: 'teal',
+    fields: [
+      { name: 'Profile Security Email', label: 'Email', kind: 'email' },
+      { name: 'Security Email Password', label: 'Email Password', kind: 'secret' },
+    ],
+  },
+
+  // ---- The rest ----
   {
     key: 'assets',
     title: 'Linked Assets',
     subtitle: 'Managed on the Infrastructure page — shown here for reference',
     accent: 'rose',
+    span: 'full',
     fields: [
       { name: 'Linked BM', label: 'Business Managers', kind: 'links', readOnly: true, wide: true },
       { name: 'Linked Pages', label: 'Pages', kind: 'links', readOnly: true, wide: true },
