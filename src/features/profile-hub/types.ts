@@ -44,6 +44,9 @@ export interface ProfileGroupDef {
   fields: ProfileFieldDef[];
 }
 
+/** Statuses offered in the Status dropdown, and the order the list groups by. */
+export const PROFILE_STATUSES = ['Active', 'Inactive', 'Banned', 'Restricted'] as const;
+
 /** A profile as edited in the UI: record id + raw Airtable field values. */
 export interface HubProfile {
   id: string;
@@ -63,9 +66,7 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
     accent: 'slate',
     fields: [
       { name: 'Profile Name', label: 'Profile Name', kind: 'text', required: true },
-      { name: 'Profile Status', label: 'Status', kind: 'status', required: true },
       { name: 'Profile ID', label: 'AdsPower Profile ID', kind: 'text', required: true, hint: 'ID from AdsPower' },
-      { name: 'Hidden', label: 'Hidden from pickers', kind: 'checkbox' },
     ],
   },
   {
@@ -76,7 +77,6 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
     fields: [
       { name: 'Permanent Token', label: 'Permanent Token', kind: 'secret', wide: true },
       { name: 'Permanent Token End Date', label: 'Token Expiry', kind: 'date' },
-      { name: 'Token Valid', label: 'Token Valid', kind: 'checkbox' },
       { name: 'Last Sync', label: 'Last Sync', kind: 'datetime', readOnly: true },
       { name: 'Profile Review Date', label: 'Next Review Date', kind: 'date' },
     ],
@@ -90,6 +90,9 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
     accent: 'blue',
     span: 'full',
     fields: [
+      // Same Airtable field as the "Email 1" card — shown here too because it is
+      // half of the Facebook login pair. Editing it in either place is the same edit.
+      { name: 'Profile Email', label: 'Facebook Email', kind: 'email', required: true },
       { name: 'Profile FB Password', label: 'Facebook Password', kind: 'secret', required: true },
       { name: 'Profile 2FA', label: '2FA Secret', kind: 'secret', required: true, hint: 'TOTP key' },
       { name: 'UID', label: 'Facebook UID', kind: 'text' },
@@ -138,13 +141,36 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
   },
 ];
 
+/**
+ * Fields edited outside the group grid — in the summary bar (Status, Hidden)
+ * and on the Token & Sync header (Token Valid, set by the Facebook check).
+ * They still have to be writable, so they belong in EDITABLE_FIELDS.
+ */
+export const HEADER_FIELDS: ProfileFieldDef[] = [
+  { name: 'Profile Status', label: 'Status', kind: 'status', required: true },
+  { name: 'Hidden', label: 'Hidden from pickers', kind: 'checkbox' },
+  { name: 'Token Valid', label: 'Token Valid', kind: 'checkbox' },
+];
+
+/** Dedupe by Airtable field name — a field may appear on more than one card. */
+function byName(defs: ProfileFieldDef[]): ProfileFieldDef[] {
+  const seen = new Map<string, ProfileFieldDef>();
+  for (const def of defs) if (!seen.has(def.name)) seen.set(def.name, def);
+  return [...seen.values()];
+}
+
+const ALL_FIELDS: ProfileFieldDef[] = [
+  ...PROFILE_GROUPS.flatMap((g) => g.fields),
+  ...HEADER_FIELDS,
+];
+
 /** Every editable field name, flattened. */
-export const EDITABLE_FIELDS: ProfileFieldDef[] = PROFILE_GROUPS.flatMap((g) =>
-  g.fields.filter((f) => !f.readOnly),
+export const EDITABLE_FIELDS: ProfileFieldDef[] = byName(
+  ALL_FIELDS.filter((f) => !f.readOnly),
 );
 
-export const REQUIRED_FIELDS: ProfileFieldDef[] = PROFILE_GROUPS.flatMap((g) =>
-  g.fields.filter((f) => f.required),
+export const REQUIRED_FIELDS: ProfileFieldDef[] = byName(
+  ALL_FIELDS.filter((f) => f.required),
 );
 
 /**

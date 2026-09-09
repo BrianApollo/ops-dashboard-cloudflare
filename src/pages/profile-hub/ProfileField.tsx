@@ -19,7 +19,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
-import type { ProfileFieldDef } from '../../features/profile-hub/types';
+import { PROFILE_STATUSES, type ProfileFieldDef } from '../../features/profile-hub/types';
 
 interface ProfileFieldProps {
   def: ProfileFieldDef;
@@ -143,7 +143,7 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames }: Profi
         onChange={(e) => onChange(e.target.value)}
         sx={dirty ? { '& .MuiOutlinedInput-root': { bgcolor: 'warning.light' } } : undefined}
       >
-        {['Active', 'Inactive', 'Banned', 'Restricted'].map((option) => (
+        {PROFILE_STATUSES.map((option) => (
           <MenuItem key={option} value={option}>
             {option}
           </MenuItem>

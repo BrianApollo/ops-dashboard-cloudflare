@@ -17,6 +17,9 @@ import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import Paper from '@mui/material/Paper';
 import Chip from '@mui/material/Chip';
+import MenuItem from '@mui/material/MenuItem';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -52,6 +55,7 @@ import {
 } from '../../features/profile-hub/data';
 import {
   PROFILE_GROUPS,
+  PROFILE_STATUSES,
   completeness,
   missingFields,
   type HubProfile,
@@ -71,6 +75,14 @@ const GROUP_ACCENTS: Record<ProfileGroupDef['accent'], string> = {
   amber: '#d97706',
   teal: '#0d9488',
   rose: '#e11d48',
+};
+
+/** Dot colour for each status section header in the list. */
+const STATUS_DOT: Record<string, string> = {
+  Active: 'success.main',
+  Inactive: 'text.disabled',
+  Banned: 'error.main',
+  Restricted: 'warning.main',
 };
 
 type StatusFilter = 'all' | 'active' | 'incomplete';
@@ -170,6 +182,29 @@ export function ProfileHubPage() {
         String(a.fields['Profile Name'] ?? '').localeCompare(String(b.fields['Profile Name'] ?? '')),
       );
   }, [profiles, search, tab]);
+
+  /**
+   * Split the filtered list into status sections, in PROFILE_STATUSES order.
+   * Anything with an unrecognised/blank status falls into "No Status" last.
+   */
+  const sections = useMemo(() => {
+    const buckets = new Map<string, HubProfile[]>();
+    for (const profile of filtered) {
+      const status = String(profile.fields['Profile Status'] ?? '').trim() || 'No Status';
+      const list = buckets.get(status);
+      if (list) list.push(profile);
+      else buckets.set(status, [profile]);
+    }
+
+    const order = [...PROFILE_STATUSES, 'No Status'] as readonly string[];
+    return [...buckets.entries()]
+      .sort(([a], [b]) => {
+        const ai = order.indexOf(a);
+        const bi = order.indexOf(b);
+        return (ai === -1 ? order.length : ai) - (bi === -1 ? order.length : bi);
+      })
+      .map(([status, items]) => ({ status, items }));
+  }, [filtered]);
 
   // ---- actions --------------------------------------------------------------
   const handleSave = async () => {
@@ -317,61 +352,93 @@ export function ProfileHubPage() {
                 No profiles match.
               </Typography>
             ) : (
-              filtered.map((profile) => {
-                const active = profile.id === selectedId;
-                const pct = completeness(profile.fields);
-                const status = String(profile.fields['Profile Status'] ?? '');
-                return (
+              sections.map((section) => (
+                <Box key={section.status}>
+                  {/* Status section header */}
                   <Box
-                    key={profile.id}
-                    onClick={() => setSelectedId(profile.id)}
                     sx={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 1,
                       px: 1.75,
-                      py: 1.25,
-                      cursor: 'pointer',
-                      borderLeft: '3px solid',
-                      borderColor: active ? 'primary.main' : 'transparent',
-                      bgcolor: active
-                        ? alpha(theme.palette.primary.main, isDark ? 0.16 : 0.07)
-                        : 'transparent',
-                      '&:hover': {
-                        bgcolor: alpha(theme.palette.primary.main, isDark ? 0.1 : 0.04),
-                      },
+                      py: 0.75,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      bgcolor: 'background.default',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          flexShrink: 0,
-                          bgcolor: status === 'Active' ? 'success.main' : 'text.disabled',
-                        }}
-                      />
-                      <Typography
-                        variant="body2"
-                        noWrap
-                        sx={{ fontWeight: active ? 700 : 500, flex: 1 }}
-                      >
-                        {String(profile.fields['Profile Name'] ?? 'Untitled')}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: pct === 100 ? 'success.main' : 'warning.main',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {pct}%
-                      </Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ pl: 2 }}>
-                      {String(profile.fields['Profile Email'] ?? profile.fields['Profile ID'] ?? '-')}
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        bgcolor: STATUS_DOT[section.status] ?? 'text.disabled',
+                      }}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+                    >
+                      {section.status}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {section.items.length}
                     </Typography>
                   </Box>
-                );
-              })
+
+                  {section.items.map((profile) => {
+                    const active = profile.id === selectedId;
+                    const pct = completeness(profile.fields);
+                    return (
+                      <Box
+                        key={profile.id}
+                        onClick={() => setSelectedId(profile.id)}
+                        sx={{
+                          px: 1.75,
+                          py: 1.25,
+                          cursor: 'pointer',
+                          borderLeft: '3px solid',
+                          borderColor: active ? 'primary.main' : 'transparent',
+                          bgcolor: active
+                            ? alpha(theme.palette.primary.main, isDark ? 0.16 : 0.07)
+                            : 'transparent',
+                          '&:hover': {
+                            bgcolor: alpha(theme.palette.primary.main, isDark ? 0.1 : 0.04),
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{ fontWeight: active ? 700 : 500, flex: 1 }}
+                          >
+                            {String(profile.fields['Profile Name'] ?? 'Untitled')}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: pct === 100 ? 'success.main' : 'warning.main',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {pct}%
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {String(
+                            profile.fields['Profile Email'] ?? profile.fields['Profile ID'] ?? '-',
+                          )}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ))
             )}
           </Box>
         </Paper>
@@ -397,17 +464,37 @@ export function ProfileHubPage() {
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>
                       {String(draft['Profile Name'] ?? 'Untitled')}
                     </Typography>
-                    <Box sx={{ display: 'flex', gap: 0.75, mt: 0.75, flexWrap: 'wrap' }}>
-                      <Chip
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <TextField
+                        select
                         size="small"
-                        label={String(draft['Profile Status'] ?? 'Unknown')}
-                        color={draft['Profile Status'] === 'Active' ? 'success' : 'default'}
+                        label="Status"
+                        value={String(draft['Profile Status'] ?? 'Active')}
+                        onChange={(e) => setDraft((d) => ({ ...d, 'Profile Status': e.target.value }))}
+                        sx={{ minWidth: 130 }}
+                      >
+                        {PROFILE_STATUSES.map((option) => (
+                          <MenuItem key={option} value={option}>
+                            {option}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={Boolean(draft['Hidden'])}
+                            onChange={(e) => setDraft((d) => ({ ...d, Hidden: e.target.checked }))}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" color="text.secondary">
+                            Hidden from pickers
+                          </Typography>
+                        }
                       />
-                      {draft['Token Valid'] ? (
-                        <Chip size="small" icon={<VerifiedIcon />} color="info" label="Token valid" />
-                      ) : (
-                        <Chip size="small" variant="outlined" label="Token unverified" />
-                      )}
+
                       {isDirty && (
                         <Chip size="small" color="warning" label={`${dirtyFields.size} unsaved`} />
                       )}
@@ -511,14 +598,26 @@ export function ProfileHubPage() {
                           </Typography>
                         </Box>
                         {group.key === 'token' && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={handleCheckToken}
-                            disabled={tokenChecking}
-                          >
-                            {tokenChecking ? 'Checking...' : 'Check with Facebook'}
-                          </Button>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                            {draft['Token Valid'] ? (
+                              <Chip
+                                size="small"
+                                icon={<VerifiedIcon />}
+                                color="success"
+                                label="Token valid"
+                              />
+                            ) : (
+                              <Chip size="small" variant="outlined" label="Not verified" />
+                            )}
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={handleCheckToken}
+                              disabled={tokenChecking}
+                            >
+                              {tokenChecking ? 'Checking...' : 'Check with Facebook'}
+                            </Button>
+                          </Box>
                         )}
                       </Box>
                       <Box
