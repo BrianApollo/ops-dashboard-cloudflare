@@ -3,7 +3,7 @@
  * Campaign identity, ad preset, infrastructure, delivery, URL/tracking.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { nativeDateInputStyle, nativeTimeInputStyle } from '../../ui';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -11,6 +11,7 @@ import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import Select from '@mui/material/Select';
+import Autocomplete from '@mui/material/Autocomplete';
 import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
 import Collapse from '@mui/material/Collapse';
@@ -30,6 +31,7 @@ import { RedtrackCampaignSelector } from './RedtrackCampaignSelector';
 import { RedtrackDuplicateCampaign } from './RedtrackDuplicateCampaign';
 import type { CampaignDraft, InfraOption } from '../../features/campaigns/launch/types';
 import type { RedTrackCampaignDetails, CampaignOption } from '../../features/redtrack';
+import { createAutocompleteFilter } from '../../utils';
 
 // =============================================================================
 // AD PRESET TYPE (from ad-presets feature)
@@ -100,6 +102,11 @@ export function CampaignSetupColumn({
   const [presetExpanded, setPresetExpanded] = useState(false);
   const [urlExpanded, setUrlExpanded] = useState(false);
   const selectedPreset = adPresets.find((p) => p.id === draft.adPresetId);
+  const selectedAdAccount = adAccounts.find((acc) => acc.id === draft.adAccountId) ?? null;
+  const filterAdAccounts = useMemo(
+    () => createAutocompleteFilter((acc: InfraOption) => acc.name),
+    [],
+  );
 
   const handleSaveName = () => {
     onDraftChange({ name: editedName });
@@ -167,29 +174,39 @@ export function CampaignSetupColumn({
             Campaign Settings
           </Typography>
         </Box>
-        <Select
-          value={draft.adAccountId && adAccounts.some((acc) => acc.id === draft.adAccountId) ? draft.adAccountId : ''}
-          onChange={(e) => onDraftChange({ adAccountId: e.target.value || null })}
+        <Autocomplete
+          value={selectedAdAccount}
+          onChange={(_, newValue) => onDraftChange({ adAccountId: newValue?.id ?? null })}
+          options={adAccounts}
+          getOptionLabel={(option) => option.name}
+          isOptionEqualToValue={(option, val) => option.id === val.id}
+          filterOptions={filterAdAccounts}
           size="small"
-          displayEmpty
-          sx={{
-            minWidth: 180,
-            '& .MuiSelect-select': {
-              ...textSm,
-              py: 0.75,
-            },
-          }}
-        >
-          <MenuItem value="">Select ad account...</MenuItem>
-          {adAccounts.map((acc) => (
-            <MenuItem key={acc.id} value={acc.id}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={textSm}>{acc.name}</Typography>
-                <StatusPill status={acc.status} />
+          autoHighlight
+          openOnFocus
+          sx={{ minWidth: 240 }}
+          renderOption={(props, option) => {
+            const { key, ...rest } = props;
+            return (
+              <Box
+                component="li"
+                key={option.id}
+                {...rest}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <Typography sx={textSm}>{option.name}</Typography>
+                <StatusPill status={option.status} />
               </Box>
-            </MenuItem>
-          ))}
-        </Select>
+            );
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder="Search ad accounts..."
+              sx={{ '& .MuiInputBase-input': { ...textSm } }}
+            />
+          )}
+        />
       </Box>
 
       {/* Content */}

@@ -36,6 +36,8 @@ export interface UseAddAdsOrchestratorOptions {
   productName: string | undefined;
   adAccountId: string;
   accessToken: string;
+  /** Backstop destination URL when the template creative has none. */
+  websiteUrl?: string;
 }
 
 export interface CreationProgress {
@@ -121,6 +123,7 @@ export function useAddAdsOrchestrator({
   productName,
   adAccountId,
   accessToken,
+  websiteUrl,
 }: UseAddAdsOrchestratorOptions): UseAddAdsOrchestratorReturn {
   // ---------------------------------------------------------------------------
   // TEMPLATE CREATIVE
@@ -436,7 +439,15 @@ export function useAddAdsOrchestrator({
       }
 
       // 3. Map template → config
-      const { pageId, adCreative } = mapTemplateCreative(templateCreative, adStatus);
+      const { pageId, adCreative } = mapTemplateCreative(templateCreative, adStatus, websiteUrl);
+
+      // Facebook rejects a blank link_data.link with an opaque "The link field is
+      // required" error. Fail here instead, where we can say what is actually wrong.
+      if (!adCreative.websiteUrl) {
+        throw new Error(
+          'Could not determine the destination URL from the template ad. Set the campaign website URL and try again.',
+        );
+      }
 
       // 4. Build MediaItemForAd[] (using fresh state)
       // We need to pull the LATEST fbVideoId/thumbnail from the uploader state/library
@@ -558,6 +569,7 @@ export function useAddAdsOrchestrator({
     adSetId,
     totalSelectedCount,
     uploader,
+    websiteUrl,
   ]);
 
   // ---------------------------------------------------------------------------

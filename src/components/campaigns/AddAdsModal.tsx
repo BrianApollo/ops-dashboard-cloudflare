@@ -30,6 +30,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
 import { useAddAdsOrchestrator } from '../../features/campaigns/useAddAdsOrchestrator';
+import { mapTemplateCreative } from '../../features/campaigns/launch/mapTemplateCreative';
 import { CreateAIVideoDialog } from '../videos/CreateAIVideoDialog';
 import type { Campaign } from '../../features/campaigns';
 import type { SelectableVideo, SelectableImage } from '../../features/campaigns/launch/types';
@@ -116,7 +117,18 @@ export function AddAdsModal({
     productName: campaignRecord.product?.name,
     adAccountId,
     accessToken,
+    websiteUrl: campaignRecord.websiteUrl,
   });
+
+  // Resolved the same way the creation step resolves it, so the banner reflects
+  // what will actually be sent (works for image and video templates alike).
+  const templateSummary = useMemo(
+    () =>
+      flow.templateCreative
+        ? mapTemplateCreative(flow.templateCreative, 'PAUSED', campaignRecord.websiteUrl)
+        : null,
+    [flow.templateCreative, campaignRecord.websiteUrl],
+  );
 
   const [mediaTab, setMediaTab] = useState<'videos' | 'images'>('videos');
   const [showUsedVideos, setShowUsedVideos] = useState(false);
@@ -183,14 +195,14 @@ export function AddAdsModal({
       <DialogTitle>Add Ads</DialogTitle>
       <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {/* Template info banner */}
-        {flow.templateCreative && (
+        {templateSummary && (
           <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
             <Typography variant="caption" color="text.secondary">
-              Page: {flow.templateCreative.object_story_spec?.page_id ?? 'N/A'}
+              Page: {templateSummary.pageId || 'N/A'}
               {' · '}
-              CTA: {flow.templateCreative.object_story_spec?.video_data?.call_to_action?.type ?? 'N/A'}
+              CTA: {templateSummary.adCreative.callToAction || 'N/A'}
               {' · '}
-              URL: {flow.templateCreative.object_story_spec?.video_data?.call_to_action?.value?.link ?? 'N/A'}
+              URL: {templateSummary.adCreative.websiteUrl || 'N/A'}
             </Typography>
           </Box>
         )}

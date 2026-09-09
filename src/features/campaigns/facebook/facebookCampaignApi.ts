@@ -70,11 +70,23 @@ export interface FbCreative {
         value?: { link?: string };
       };
     };
+    /** Present instead of video_data on image ad creatives. */
+    link_data?: {
+      picture?: string;
+      image_hash?: string;
+      link?: string;
+      call_to_action?: {
+        type: string;
+        value?: { link?: string };
+      };
+    };
   };
   asset_feed_spec?: {
     bodies?: Array<{ text: string }>;
     titles?: Array<{ text: string }>;
     descriptions?: Array<{ text: string }>;
+    /** Where Facebook returns the destination URL for Advantage+ creatives. */
+    link_urls?: Array<{ website_url?: string; display_url?: string }>;
   };
   degrees_of_freedom_spec?: unknown;
   url_tags?: string;
