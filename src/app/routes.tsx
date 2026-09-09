@@ -5,6 +5,7 @@ import { CampaignLaunchPage } from "../pages/campaigns/CampaignLaunchPage";
 import { CampaignViewPage } from "../pages/campaigns/CampaignViewPage";
 import { InfrastructurePage } from "../pages/infrastructure/InfrastructurePage";
 import { ManagePage } from "../pages/manage/ManagePage";
+import { ProfileHubPage } from "../pages/profile-hub/ProfileHubPage";
 import { RulesPage } from "../pages/rules/RulesPage";
 import { SchedulesPage } from "../pages/schedules/SchedulesPage";
 import { OverviewPage } from "../pages/overview/OverviewPage";
@@ -30,6 +31,7 @@ export function AppRoutes() {
           <Route path="/ops/products/:id/campaigns/:campaignId" element={<CampaignViewPage />} />
           <Route path="/ops/products/:id/campaigns/:campaignId/launch" element={<CampaignLaunchPage />} />
           <Route path="/ops/manage" element={<ManagePage />} />
+          <Route path="/ops/profile-hub" element={<ProfileHubPage />} />
           <Route path="/ops/schedules" element={<SchedulesPage />} />
           <Route path="/ops/rules" element={<RulesPage />} />
           <Route path="/ops/infrastructure" element={<InfrastructurePage />} />

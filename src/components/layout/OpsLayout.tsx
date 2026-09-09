@@ -27,6 +27,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import GavelIcon from '@mui/icons-material/Gavel';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import BadgeIcon from '@mui/icons-material/Badge';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 
@@ -45,6 +46,7 @@ const SIDEBAR_WIDTH_COLLAPSED = 72;
 
 const secondaryNavItems = [
   { to: '/ops/infrastructure', label: 'Infrastructure', icon: SettingsInputComponentIcon },
+  { to: '/ops/profile-hub', label: 'Profile Hub', icon: BadgeIcon },
 ];
 
 // =============================================================================
