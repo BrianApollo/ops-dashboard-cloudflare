@@ -9,6 +9,7 @@
 import { airtableFetch } from '../../core/data/airtable-client';
 import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
 import { listBMs, listPages } from '../infrastructure/data';
+import { uploadFile } from '../../core/storage';
 import type { HubProfile } from './types';
 import { EDITABLE_FIELDS } from './types';
 
@@ -129,4 +130,34 @@ export async function checkProfileToken(token: string): Promise<TokenCheckResult
   } catch (err) {
     return { valid: false, error: err instanceof Error ? err.message : 'Network error' };
   }
+}
+
+// =============================================================================
+// RECOVERY CODES (attachment)
+// =============================================================================
+
+export interface AirtableAttachment {
+  id: string;
+  url: string;
+  filename: string;
+}
+
+/**
+ * Upload a recovery-codes file to R2, then attach it to the profile record.
+ * Existing attachments are kept by passing their ids back.
+ */
+export async function uploadRecoveryCodes(
+  recordId: string,
+  file: File,
+  existing: AirtableAttachment[],
+): Promise<HubProfile> {
+  const safeName = `${Date.now()}-${file.name.replace(/[^\w.-]+/g, '_')}`;
+  const { url } = await uploadFile(file, safeName, { prefix: `profiles/${recordId}/recovery-codes` });
+
+  return updateHubProfile(recordId, {
+    'Recovery Codes': [
+      ...existing.map((a) => ({ id: a.id })),
+      { url, filename: file.name },
+    ],
+  });
 }

@@ -6,6 +6,8 @@
  * flow needs). Nothing here is shared with that module on purpose.
  */
 
+import { SOP_STAGES, FIELD_SETUP_COMPLETE, FIELD_SETUP_COMPLETED_ON } from './sop';
+
 export type FieldKind =
   | 'text'
   | 'secret'
@@ -15,7 +17,8 @@ export type FieldKind =
   | 'datetime'
   | 'checkbox'
   | 'status'
-  | 'links';
+  | 'links'
+  | 'attachments';
 
 export interface ProfileFieldDef {
   /** Exact Airtable field name. */
@@ -101,6 +104,7 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
       { name: 'Profile Gender', label: 'Gender', kind: 'text' },
       { name: 'Profile Location', label: 'Location', kind: 'text' },
       { name: 'Proxy', label: 'Proxy', kind: 'text', hint: 'Proxy assigned in AdsPower' },
+      { name: 'Recovery Codes', label: 'Recovery Codes', kind: 'attachments', wide: true, hint: 'Facebook backup codes file / screenshot' },
     ],
   },
 
@@ -150,7 +154,16 @@ export const HEADER_FIELDS: ProfileFieldDef[] = [
   { name: 'Profile Status', label: 'Status', kind: 'status', required: true },
   { name: 'Hidden', label: 'Hidden from pickers', kind: 'checkbox' },
   { name: 'Token Valid', label: 'Token Valid', kind: 'checkbox' },
+  // Setup SOP progress — see sop.ts
+  ...SOP_STAGES.map((s) => ({ name: s.doneField, label: s.title, kind: 'checkbox' as const })),
+  { name: FIELD_SETUP_COMPLETE, label: 'Setup Complete', kind: 'checkbox' },
+  { name: FIELD_SETUP_COMPLETED_ON, label: 'Setup Completed On', kind: 'date' },
 ];
+
+/** Airtable field name -> definition, for rendering a field by name. */
+export const FIELD_INDEX: Record<string, ProfileFieldDef> = Object.fromEntries(
+  [...PROFILE_GROUPS.flatMap((g) => g.fields), ...HEADER_FIELDS].map((f) => [f.name, f]),
+);
 
 /** Dedupe by Airtable field name — a field may appear on more than one card. */
 function byName(defs: ProfileFieldDef[]): ProfileFieldDef[] {

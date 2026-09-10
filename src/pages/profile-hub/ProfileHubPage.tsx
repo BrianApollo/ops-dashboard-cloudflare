@@ -1,12 +1,13 @@
 /**
  * ProfileHubPage - staff-facing view of the Airtable "Profiles" table.
  *
- * Master/detail:
- *   left  - searchable profile list with a "data complete" indicator
- *   right - every field, grouped into cards, editable inline
+ * Two modes of the same record:
+ *   In Setup - the nine-stage SOP checklist, each stage carrying the fields
+ *              it edits. Ends with the Final Verification dialog.
+ *   Live     - every field grouped into cards, for day-to-day upkeep.
  *
- * Standalone: nothing here is imported by the existing pages, and it only
- * reuses the shared Airtable client + theme.
+ * Master/detail: searchable list on the left (In Setup / Live tabs, grouped
+ * by status), the selected profile on the right.
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -42,9 +43,13 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UndoIcon from '@mui/icons-material/Undo';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 
 import { ToggleTabs, type ToggleTabOption } from '../../ui/ToggleTabs';
 import { ProfileField } from './ProfileField';
+import { SetupChecklist } from './SetupChecklist';
+import { StageHelpDrawer } from './StageHelpDrawer';
+import { VerifyDialog } from './VerifyDialog';
 import {
   listHubProfiles,
   updateHubProfile,
@@ -52,6 +57,8 @@ import {
   deleteHubProfile,
   checkProfileToken,
   fetchLinkedNames,
+  uploadRecoveryCodes,
+  type AirtableAttachment,
 } from '../../features/profile-hub/data';
 import {
   PROFILE_GROUPS,
@@ -61,6 +68,14 @@ import {
   type HubProfile,
   type ProfileGroupDef,
 } from '../../features/profile-hub/types';
+import {
+  SOP_STAGES,
+  FIELD_SETUP_COMPLETE,
+  FIELD_SETUP_COMPLETED_ON,
+  stagesDone,
+  isSetupComplete,
+  type SopStage,
+} from '../../features/profile-hub/sop';
 
 // =============================================================================
 // CONSTANTS
@@ -85,12 +100,16 @@ const STATUS_DOT: Record<string, string> = {
   Restricted: 'warning.main',
 };
 
-type StatusFilter = 'all' | 'active' | 'incomplete';
+type ListTab = 'setup' | 'live';
+const LIST_TABS: ToggleTabOption<ListTab>[] = [
+  { value: 'setup', label: 'In Setup' },
+  { value: 'live', label: 'Live' },
+];
 
-const STATUS_TABS: ToggleTabOption<StatusFilter>[] = [
-  { value: 'all', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'incomplete', label: 'Needs Info' },
+type DetailView = 'checklist' | 'fields';
+const DETAIL_VIEWS: ToggleTabOption<DetailView>[] = [
+  { value: 'checklist', label: 'Setup checklist' },
+  { value: 'fields', label: 'All fields' },
 ];
 
 // =============================================================================
@@ -110,10 +129,13 @@ export function ProfileHubPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [helpStage, setHelpStage] = useState<SopStage | null>(null);
 
   const [linkedNames, setLinkedNames] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<StatusFilter>('all');
+  const [tab, setTab] = useState<ListTab>('setup');
+  const [detailView, setDetailView] = useState<DetailView>('checklist');
   const [tokenChecking, setTokenChecking] = useState(false);
 
   // ---- load ----------------------------------------------------------------
@@ -123,7 +145,6 @@ export function ProfileHubPage() {
     try {
       const data = await listHubProfiles();
       setProfiles(data);
-      setSelectedId((current) => current ?? data[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load profiles');
     } finally {
@@ -145,10 +166,15 @@ export function ProfileHubPage() {
     [profiles, selectedId],
   );
 
-  // Reset the draft whenever a different profile is opened.
+  // Reset the draft (and the view) whenever a different profile is opened.
+  // Keyed on the id, not the object, so a save/upload that replaces the
+  // profile object doesn't wipe other unsaved edits.
   useEffect(() => {
-    setDraft(selected ? { ...selected.fields } : {});
-  }, [selected]);
+    const profile = profiles.find((p) => p.id === selectedId);
+    setDraft(profile ? { ...profile.fields } : {});
+    setDetailView('checklist');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const dirtyFields = useMemo(() => {
     if (!selected) return new Set<string>();
@@ -164,12 +190,19 @@ export function ProfileHubPage() {
   const isDirty = dirtyFields.size > 0;
 
   // ---- list filtering -------------------------------------------------------
+  const counts = useMemo(
+    () => ({
+      setup: profiles.filter((p) => !isSetupComplete(p.fields)).length,
+      live: profiles.filter((p) => isSetupComplete(p.fields)).length,
+    }),
+    [profiles],
+  );
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return profiles
       .filter((p) => {
-        if (tab === 'active' && String(p.fields['Profile Status'] ?? '') !== 'Active') return false;
-        if (tab === 'incomplete' && completeness(p.fields) === 100) return false;
+        if (isSetupComplete(p.fields) !== (tab === 'live')) return false;
         if (!query) return true;
         return [
           p.fields['Profile Name'],
@@ -182,6 +215,13 @@ export function ProfileHubPage() {
         String(a.fields['Profile Name'] ?? '').localeCompare(String(b.fields['Profile Name'] ?? '')),
       );
   }, [profiles, search, tab]);
+
+  // Select the first visible profile when nothing (or nothing visible) is selected.
+  useEffect(() => {
+    if (loading) return;
+    if (selectedId && filtered.some((p) => p.id === selectedId)) return;
+    setSelectedId(filtered[0]?.id ?? null);
+  }, [filtered, selectedId, loading]);
 
   /**
    * Split the filtered list into status sections, in PROFILE_STATUSES order.
@@ -207,6 +247,10 @@ export function ProfileHubPage() {
   }, [filtered]);
 
   // ---- actions --------------------------------------------------------------
+  const applyUpdated = (updated: HubProfile) => {
+    setProfiles((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+  };
+
   const handleSave = async () => {
     if (!selected) return;
     setSaving(true);
@@ -214,7 +258,8 @@ export function ProfileHubPage() {
       const changed: Record<string, unknown> = {};
       for (const key of dirtyFields) changed[key] = draft[key];
       const updated = await updateHubProfile(selected.id, changed);
-      setProfiles((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+      applyUpdated(updated);
+      setDraft({ ...updated.fields });
       setToast('Profile saved');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
@@ -231,8 +276,9 @@ export function ProfileHubPage() {
         'Profile Status': 'Inactive',
       });
       setProfiles((list) => [...list, created]);
+      setTab('setup');
       setSelectedId(created.id);
-      setToast('Profile created - fill in the details');
+      setToast('Profile created - start with stage 1');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create profile');
     } finally {
@@ -256,6 +302,47 @@ export function ProfileHubPage() {
     }
   };
 
+  /** Final verification passed: flag complete and stamp the date. Saves immediately. */
+  const handleVerify = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const changed: Record<string, unknown> = {};
+      for (const key of dirtyFields) changed[key] = draft[key];
+      changed[FIELD_SETUP_COMPLETE] = true;
+      changed[FIELD_SETUP_COMPLETED_ON] = new Date().toISOString().slice(0, 10);
+      const updated = await updateHubProfile(selected.id, changed);
+      applyUpdated(updated);
+      setDraft({ ...updated.fields });
+      setVerifyOpen(false);
+      setTab('live');
+      setToast('Setup complete - profile is now live');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not mark complete');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Send a live profile back to the checklist. */
+  const handleReopen = () => {
+    setDraft((d) => ({ ...d, [FIELD_SETUP_COMPLETE]: false }));
+  };
+
+  /** Attachments save straight away — there is no "draft" for a file. */
+  const handleUpload = async (field: string, file: File) => {
+    if (!selected) return;
+    try {
+      const existing = (selected.fields[field] as AirtableAttachment[] | undefined) ?? [];
+      const updated = await uploadRecoveryCodes(selected.id, file, existing);
+      applyUpdated(updated);
+      setDraft((d) => ({ ...d, [field]: updated.fields[field] }));
+      setToast('File uploaded');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    }
+  };
+
   const handleCheckToken = async () => {
     if (!selected) return;
     setTokenChecking(true);
@@ -269,9 +356,15 @@ export function ProfileHubPage() {
     );
   };
 
+  const setField = (field: string, value: unknown) =>
+    setDraft((d) => ({ ...d, [field]: value }));
+
   // ---- render ---------------------------------------------------------------
+  const inSetup = selected ? !isSetupComplete(draft) : false;
+  const done = selected ? stagesDone(draft) : 0;
   const percent = selected ? completeness(draft) : 0;
   const missing = selected ? missingFields(draft) : [];
+  const showChecklist = inSetup && detailView === 'checklist';
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
@@ -282,7 +375,7 @@ export function ProfileHubPage() {
             Profile Hub
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Keep every Facebook profile's details accurate and up to date.
+            Set up new Facebook profiles step by step, and keep live ones accurate.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -336,8 +429,9 @@ export function ProfileHubPage() {
             />
             <ToggleTabs
               value={tab}
-              options={STATUS_TABS}
-              onChange={(value) => setTab(value)}
+              options={LIST_TABS.map((t) => ({ ...t, count: counts[t.value] }))}
+              onChange={setTab}
+              fullWidth
             />
           </Box>
           <Divider />
@@ -349,7 +443,7 @@ export function ProfileHubPage() {
               </Box>
             ) : filtered.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
-                No profiles match.
+                {tab === 'setup' ? 'No profiles in setup.' : 'No live profiles yet.'}
               </Typography>
             ) : (
               sections.map((section) => (
@@ -392,6 +486,8 @@ export function ProfileHubPage() {
 
                   {section.items.map((profile) => {
                     const active = profile.id === selectedId;
+                    const setupProfile = !isSetupComplete(profile.fields);
+                    const stageCount = stagesDone(profile.fields);
                     const pct = completeness(profile.fields);
                     return (
                       <Box
@@ -419,21 +515,41 @@ export function ProfileHubPage() {
                           >
                             {String(profile.fields['Profile Name'] ?? 'Untitled')}
                           </Typography>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              color: pct === 100 ? 'success.main' : 'warning.main',
-                              fontWeight: 700,
-                            }}
-                          >
-                            {pct}%
-                          </Typography>
-                        </Box>
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {String(
-                            profile.fields['Profile Email'] ?? profile.fields['Profile ID'] ?? '-',
+                          {setupProfile ? (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: stageCount === SOP_STAGES.length ? 'success.main' : 'primary.main',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {stageCount}/{SOP_STAGES.length}
+                            </Typography>
+                          ) : (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: pct === 100 ? 'success.main' : 'warning.main',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {pct}%
+                            </Typography>
                           )}
-                        </Typography>
+                        </Box>
+                        {setupProfile ? (
+                          <LinearProgress
+                            variant="determinate"
+                            value={(stageCount / SOP_STAGES.length) * 100}
+                            sx={{ height: 3, borderRadius: 2, mt: 0.75 }}
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {String(
+                              profile.fields['Profile Email'] ?? profile.fields['Profile ID'] ?? '-',
+                            )}
+                          </Typography>
+                        )}
                       </Box>
                     );
                   })}
@@ -457,20 +573,30 @@ export function ProfileHubPage() {
             </Paper>
           ) : (
             <>
-              {/* Summary bar */}
-              <Paper variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+              {/* Summary bar — sticky so Save is always reachable */}
+              <Paper
+                variant="outlined"
+                sx={{ borderRadius: 2, p: 2, position: 'sticky', top: 16, zIndex: 2 }}
+              >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                   <Box sx={{ flex: 1, minWidth: 220 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {String(draft['Profile Name'] ?? 'Untitled')}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                        {String(draft['Profile Name'] ?? 'Untitled')}
+                      </Typography>
+                      {inSetup ? (
+                        <Chip size="small" icon={<ChecklistIcon />} label="In setup" color="primary" />
+                      ) : (
+                        <Chip size="small" icon={<VerifiedIcon />} label="Live" color="success" />
+                      )}
+                    </Box>
                     <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                       <TextField
                         select
                         size="small"
                         label="Status"
                         value={String(draft['Profile Status'] ?? 'Active')}
-                        onChange={(e) => setDraft((d) => ({ ...d, 'Profile Status': e.target.value }))}
+                        onChange={(e) => setField('Profile Status', e.target.value)}
                         sx={{ minWidth: 130 }}
                       >
                         {PROFILE_STATUSES.map((option) => (
@@ -485,7 +611,7 @@ export function ProfileHubPage() {
                           <Switch
                             size="small"
                             checked={Boolean(draft['Hidden'])}
-                            onChange={(e) => setDraft((d) => ({ ...d, Hidden: e.target.checked }))}
+                            onChange={(e) => setField('Hidden', e.target.checked)}
                           />
                         }
                         label={
@@ -501,24 +627,60 @@ export function ProfileHubPage() {
                     </Box>
                   </Box>
 
+                  {/* Progress */}
                   <Box sx={{ minWidth: 200 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                       <Typography variant="caption" color="text.secondary">
-                        Data complete
+                        {inSetup ? 'Setup progress' : 'Data complete'}
                       </Typography>
                       <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                        {percent}%
+                        {inSetup ? `${done} / ${SOP_STAGES.length}` : `${percent}%`}
                       </Typography>
                     </Box>
                     <LinearProgress
                       variant="determinate"
-                      value={percent}
-                      color={percent === 100 ? 'success' : 'warning'}
+                      value={inSetup ? (done / SOP_STAGES.length) * 100 : percent}
+                      color={
+                        inSetup
+                          ? done === SOP_STAGES.length
+                            ? 'success'
+                            : 'primary'
+                          : percent === 100
+                            ? 'success'
+                            : 'warning'
+                      }
                       sx={{ height: 6, borderRadius: 3 }}
                     />
                   </Box>
 
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  {/* Actions */}
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    {inSetup ? (
+                      <Tooltip
+                        title={
+                          done === SOP_STAGES.length
+                            ? 'Run the final verification checklist'
+                            : `Tick all ${SOP_STAGES.length} stages first`
+                        }
+                      >
+                        <span>
+                          <Button
+                            variant="outlined"
+                            color="success"
+                            size="small"
+                            startIcon={<VerifiedIcon />}
+                            disabled={done !== SOP_STAGES.length || saving}
+                            onClick={() => setVerifyOpen(true)}
+                          >
+                            Verify &amp; Complete
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Button size="small" onClick={handleReopen} sx={{ textTransform: 'none' }}>
+                        Reopen setup
+                      </Button>
+                    )}
                     <Tooltip title="Discard changes">
                       <span>
                         <IconButton
@@ -547,109 +709,152 @@ export function ProfileHubPage() {
                   </Box>
                 </Box>
 
-                {missing.length > 0 && (
+                {/* Setup profiles can flip between the checklist and the full field view */}
+                {inSetup && (
+                  <Box sx={{ mt: 1.5 }}>
+                    <ToggleTabs
+                      value={detailView}
+                      options={DETAIL_VIEWS}
+                      onChange={setDetailView}
+                      size="small"
+                    />
+                  </Box>
+                )}
+
+                {!inSetup && missing.length > 0 && (
                   <Alert severity="warning" sx={{ mt: 1.5, py: 0.25 }}>
                     Missing: {missing.join(', ')}
                   </Alert>
                 )}
               </Paper>
 
-              {/* Field groups */}
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
-                  gap: 2,
-                  alignItems: 'start',
-                }}
-              >
-                {PROFILE_GROUPS.map((group) => {
-                  const accent = GROUP_ACCENTS[group.accent];
-                  const full = group.span === 'full';
-                  return (
-                    <Paper
-                      key={group.key}
-                      variant="outlined"
-                      sx={{
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        gridColumn: full ? '1 / -1' : 'auto',
-                      }}
-                    >
-                      <Box
+              {showChecklist ? (
+                <SetupChecklist
+                  draft={draft}
+                  dirtyFields={dirtyFields}
+                  linkedNames={linkedNames}
+                  onChange={setField}
+                  onUpload={handleUpload}
+                  onHelp={setHelpStage}
+                />
+              ) : (
+                /* Field groups */
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+                    gap: 2,
+                    alignItems: 'start',
+                  }}
+                >
+                  {PROFILE_GROUPS.map((group) => {
+                    const accent = GROUP_ACCENTS[group.accent];
+                    const full = group.span === 'full';
+                    return (
+                      <Paper
+                        key={group.key}
+                        variant="outlined"
                         sx={{
-                          px: 2,
-                          py: 1.25,
-                          borderLeft: '3px solid',
-                          borderColor: accent,
-                          bgcolor: alpha(accent, isDark ? 0.14 : 0.06),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 1,
+                          borderRadius: 2,
+                          overflow: 'hidden',
+                          gridColumn: full ? '1 / -1' : 'auto',
                         }}
                       >
-                        <Box>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                            {group.title}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {group.subtitle}
-                          </Typography>
-                        </Box>
-                        {group.key === 'token' && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                            {draft['Token Valid'] ? (
-                              <Chip
+                        <Box
+                          sx={{
+                            px: 2,
+                            py: 1.25,
+                            borderLeft: '3px solid',
+                            borderColor: accent,
+                            bgcolor: alpha(accent, isDark ? 0.14 : 0.06),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 1,
+                          }}
+                        >
+                          <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                              {group.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {group.subtitle}
+                            </Typography>
+                          </Box>
+                          {group.key === 'token' && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                              {draft['Token Valid'] ? (
+                                <Chip
+                                  size="small"
+                                  icon={<VerifiedIcon />}
+                                  color="success"
+                                  label="Token valid"
+                                />
+                              ) : (
+                                <Chip size="small" variant="outlined" label="Not verified" />
+                              )}
+                              <Button
                                 size="small"
-                                icon={<VerifiedIcon />}
-                                color="success"
-                                label="Token valid"
+                                variant="outlined"
+                                onClick={handleCheckToken}
+                                disabled={tokenChecking}
+                              >
+                                {tokenChecking ? 'Checking...' : 'Check with Facebook'}
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
+                        <Box
+                          sx={{
+                            p: 2,
+                            display: 'grid',
+                            gridTemplateColumns: full
+                              ? { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }
+                              : { xs: '1fr', sm: '1fr 1fr' },
+                            gap: 2,
+                          }}
+                        >
+                          {group.fields.map((def) => (
+                            <Box key={def.name} sx={{ gridColumn: def.wide ? '1 / -1' : 'auto' }}>
+                              <ProfileField
+                                def={def}
+                                value={draft[def.name]}
+                                dirty={dirtyFields.has(def.name)}
+                                linkedNames={linkedNames}
+                                onChange={(value) => setField(def.name, value)}
+                                onUpload={
+                                  def.kind === 'attachments'
+                                    ? (file) => handleUpload(def.name, file)
+                                    : undefined
+                                }
                               />
-                            ) : (
-                              <Chip size="small" variant="outlined" label="Not verified" />
-                            )}
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={handleCheckToken}
-                              disabled={tokenChecking}
-                            >
-                              {tokenChecking ? 'Checking...' : 'Check with Facebook'}
-                            </Button>
-                          </Box>
-                        )}
-                      </Box>
-                      <Box
-                        sx={{
-                          p: 2,
-                          display: 'grid',
-                          gridTemplateColumns: full
-                            ? { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(4, 1fr)' }
-                            : { xs: '1fr', sm: '1fr 1fr' },
-                          gap: 2,
-                        }}
-                      >
-                        {group.fields.map((def) => (
-                          <Box key={def.name} sx={{ gridColumn: def.wide ? '1 / -1' : 'auto' }}>
-                            <ProfileField
-                              def={def}
-                              value={draft[def.name]}
-                              dirty={dirtyFields.has(def.name)}
-                              linkedNames={linkedNames}
-                              onChange={(value) => setDraft((d) => ({ ...d, [def.name]: value }))}
-                            />
-                          </Box>
-                        ))}
-                      </Box>
-                    </Paper>
-                  );
-                })}
-              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      </Paper>
+                    );
+                  })}
+                </Box>
+              )}
             </>
           )}
         </Box>
       </Box>
+
+      {/* Stage help */}
+      <StageHelpDrawer stage={helpStage} onClose={() => setHelpStage(null)} />
+
+      {/* Final verification */}
+      {selected && (
+        <VerifyDialog
+          key={selected.id}
+          open={verifyOpen}
+          profileName={String(draft['Profile Name'] ?? '')}
+          busy={saving}
+          onClose={() => setVerifyOpen(false)}
+          onConfirm={handleVerify}
+        />
+      )}
 
       {/* Delete confirm */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>

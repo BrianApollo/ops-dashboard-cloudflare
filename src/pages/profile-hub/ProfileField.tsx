@@ -3,7 +3,7 @@
  * Purely presentational; the page owns the draft state.
  */
 
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
@@ -18,6 +18,9 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import Button from '@mui/material/Button';
 
 import { PROFILE_STATUSES, type ProfileFieldDef } from '../../features/profile-hub/types';
 
@@ -28,6 +31,8 @@ interface ProfileFieldProps {
   dirty: boolean;
   /** Airtable record id -> display name, for linked-record chips. */
   linkedNames?: Record<string, string>;
+  /** For 'attachments' fields: upload handler. Omitted = read-only list. */
+  onUpload?: (file: File) => Promise<void>;
 }
 
 /** Airtable date values come back as ISO strings; <input type="date"> wants YYYY-MM-DD. */
@@ -42,9 +47,10 @@ function formatDateTime(value: unknown): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
 }
 
-export function ProfileField({ def, value, onChange, dirty, linkedNames }: ProfileFieldProps) {
+export function ProfileField({ def, value, onChange, dirty, linkedNames, onUpload }: ProfileFieldProps) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const text = value == null ? '' : String(value);
 
@@ -111,6 +117,67 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames }: Profi
                 <Chip key={id} size="small" label={linkedNames?.[id] ?? id} variant="outlined" />
               );
             })
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+  // ---- attachments ----------------------------------------------------------
+  if (def.kind === 'attachments') {
+    const files = Array.isArray(value)
+      ? (value as Array<{ id: string; url: string; filename: string }>)
+      : [];
+    const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !onUpload) return;
+      setUploading(true);
+      try {
+        await onUpload(file);
+      } finally {
+        setUploading(false);
+      }
+    };
+    return (
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            {def.label}
+          </Typography>
+          {onUpload && (
+            <Button
+              component="label"
+              size="small"
+              variant="outlined"
+              startIcon={<UploadFileIcon />}
+              disabled={uploading}
+            >
+              {uploading ? 'Uploading...' : 'Upload'}
+              <input type="file" hidden onChange={handleFile} />
+            </Button>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+          {files.length === 0 ? (
+            <Typography variant="body2" color="text.disabled">
+              {def.hint ? `None yet — ${def.hint}` : 'None yet'}
+            </Typography>
+          ) : (
+            files.map((f) => (
+              <Chip
+                key={f.id}
+                size="small"
+                variant="outlined"
+                icon={<AttachFileIcon />}
+                label={f.filename}
+                component="a"
+                href={f.url}
+                target="_blank"
+                rel="noreferrer"
+                clickable
+              />
+            ))
           )}
         </Box>
       </Box>
