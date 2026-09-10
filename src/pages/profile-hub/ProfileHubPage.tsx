@@ -48,6 +48,7 @@ import ChecklistIcon from '@mui/icons-material/Checklist';
 import { ToggleTabs, type ToggleTabOption } from '../../ui/ToggleTabs';
 import { ProfileField } from './ProfileField';
 import { SetupChecklist } from './SetupChecklist';
+import { Stage1Panel } from './Stage1Panel';
 import { StageHelpDrawer } from './StageHelpDrawer';
 import { VerifyDialog } from './VerifyDialog';
 import {
@@ -736,6 +737,9 @@ export function ProfileHubPage() {
                   onChange={setField}
                   onUpload={handleUpload}
                   onHelp={setHelpStage}
+                  renderExtra={(stage) =>
+                    stage.number === 1 ? <Stage1Panel draft={draft} setField={setField} /> : null
+                  }
                 />
               ) : (
                 /* Field groups */

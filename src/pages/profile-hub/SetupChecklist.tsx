@@ -4,6 +4,7 @@
  * Ticks and edits go into the page's draft; the page owns saving.
  */
 
+import type { ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -25,6 +26,8 @@ interface SetupChecklistProps {
   onChange: (field: string, value: unknown) => void;
   onUpload: (field: string, file: File) => Promise<void>;
   onHelp: (stage: SopStage) => void;
+  /** Extra content rendered under a stage's fields (e.g. the stage 1 AdsPower panel). */
+  renderExtra?: (stage: SopStage) => ReactNode;
 }
 
 export function SetupChecklist({
@@ -34,6 +37,7 @@ export function SetupChecklist({
   onChange,
   onUpload,
   onHelp,
+  renderExtra,
 }: SetupChecklistProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -125,6 +129,8 @@ export function SetupChecklist({
                   })}
                 </Box>
               )}
+
+              {renderExtra?.(stage)}
             </Box>
 
             {/* Done + help */}

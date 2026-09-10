@@ -23,6 +23,7 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import Button from '@mui/material/Button';
 
 import { PROFILE_STATUSES, type ProfileFieldDef } from '../../features/profile-hub/types';
+import { ORIGINAL_DATA_KEYS, parseOriginalData } from '../../features/profile-hub/original';
 
 interface ProfileFieldProps {
   def: ProfileFieldDef;
@@ -181,6 +182,72 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
           )}
         </Box>
       </Box>
+    );
+  }
+
+  // ---- json (read-only key/value view) --------------------------------------
+  if (def.kind === 'json') {
+    const entries = Object.entries(parseOriginalData(value)).filter(([, v]) => v && String(v).trim());
+    return (
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          {def.label}
+        </Typography>
+        {entries.length === 0 ? (
+          <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>
+            Not recorded
+          </Typography>
+        ) : (
+          <Box
+            sx={{
+              mt: 0.5,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(3, 1fr)' },
+              gap: 1,
+            }}
+          >
+            {entries.map(([k, v]) => {
+              const meta = ORIGINAL_DATA_KEYS.find((o) => o.key === k);
+              return (
+                <Box key={k} sx={{ minWidth: 0 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {meta?.label ?? k}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    title={String(v)}
+                    sx={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem' }}
+                  >
+                    {String(v)}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  // ---- textarea -------------------------------------------------------------
+  if (def.kind === 'textarea') {
+    return (
+      <TextField
+        fullWidth
+        size="small"
+        multiline
+        minRows={2}
+        label={def.label}
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        helperText={def.hint}
+        sx={
+          dirty
+            ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'warning.main', borderWidth: 2 } }
+            : undefined
+        }
+      />
     );
   }
 
