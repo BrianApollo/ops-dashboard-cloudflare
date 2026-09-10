@@ -89,7 +89,10 @@ export function Stage1Panel({ draft, setField }: Stage1PanelProps) {
         if (!cancelled) setOptions(list);
       })
       .catch(() => {
-        if (!cancelled) setApError('Could not reach AdsPower — is it running on this machine?');
+        if (!cancelled)
+          setApError(
+            'Could not reach AdsPower. Make sure AdsPower is open on this PC and the AdsPower bridge (scripts/adspower-bridge.bat) is running.',
+          );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -99,11 +102,19 @@ export function Stage1Panel({ draft, setField }: Stage1PanelProps) {
     };
   }, []);
 
+  // The list already carries proxy / username / 2FA, so prefer it — AdsPower
+  // rate-limits to ~1 request/s and a second call right after the list trips it.
   useEffect(() => {
     if (!linkedId) {
       setLive(null);
       return;
     }
+    const fromList = options.find((o) => o.user_id === linkedId);
+    if (fromList) {
+      setLive(fromList);
+      return;
+    }
+    if (loading) return; // wait for the list before falling back to a direct fetch
     let cancelled = false;
     getAdsPowerProfile(linkedId).then((p) => {
       if (!cancelled) setLive(p);
@@ -111,23 +122,35 @@ export function Stage1Panel({ draft, setField }: Stage1PanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [linkedId]);
+  }, [linkedId, options, loading]);
 
   const selectedOption = options.find((o) => o.user_id === linkedId) ?? null;
 
   // Cross-checks: what AdsPower says vs what Airtable says.
-  const apProxy = proxyLabel(live);
-  const atProxy = String(draft['Proxy'] ?? '').trim();
+  // Field names verified against the live API: the 2FA secret comes back as
+  // `fakey`, and `username` is whatever Facebook logs in with (UID or email).
+  const ap = live as (AdsPowerProfile & { fakey?: string; ip?: string; ip_country?: string }) | null;
+  const at = (field: string) => String(draft[field] ?? '').trim();
+  const same = (a: string, b: string) => Boolean(a) && a.toLowerCase() === b.toLowerCase();
+
+  const apProxy = proxyLabel(ap);
+  const atProxy = at('Proxy');
   const proxyOk = Boolean(apProxy) && atProxy.toLowerCase().includes(apProxy.toLowerCase());
 
-  const apUser = (live?.username ?? '').trim();
-  const atEmail = String(draft['Profile Email'] ?? '').trim();
-  const emailOk = Boolean(apUser) && apUser.toLowerCase() === atEmail.toLowerCase();
+  const apCountry = (ap?.ip_country ?? '').toLowerCase();
+  const countryOk = apCountry === 'us';
 
-  const ap2fa = Boolean(live?.user_2fa);
-  const at2fa = Boolean(String(draft['Profile 2FA'] ?? '').trim());
+  const apUser = (ap?.username ?? '').trim();
+  const userIsEmail = apUser.includes('@');
+  const loginOk = same(apUser, at('Profile Email')) || same(apUser, at('UID'));
 
-  const checks = live
+  const apPassword = (ap?.password ?? '').trim();
+  const passwordOk = Boolean(apPassword) && apPassword === at('Profile FB Password');
+
+  const ap2fa = (ap?.fakey ?? ap?.user_2fa ?? '').trim();
+  const twoFaOk = Boolean(ap2fa) && ap2fa === at('Profile 2FA');
+
+  const checks = ap
     ? [
         {
           label: 'Proxy',
@@ -137,18 +160,35 @@ export function Stage1Panel({ draft, setField }: Stage1PanelProps) {
           fix: apProxy && !proxyOk ? () => setField('Proxy', apProxy) : undefined,
         },
         {
-          label: 'Login email',
-          ok: emailOk,
-          adsPower: apUser || '(none set)',
-          airtable: atEmail || '(empty)',
-          fix: apUser && !emailOk ? () => setField('Profile Email', apUser) : undefined,
+          label: 'IP is US',
+          ok: countryOk,
+          adsPower: ap.ip ? `${ap.ip} (${apCountry || '?'})` : '(no IP yet — open the profile once)',
+          airtable: '',
+          fix: undefined,
         },
         {
-          label: '2FA',
-          ok: ap2fa && at2fa,
-          adsPower: ap2fa ? 'Set' : 'Not set',
-          airtable: at2fa ? 'Set' : 'Empty',
-          fix: live?.user_2fa && !at2fa ? () => setField('Profile 2FA', live.user_2fa) : undefined,
+          label: 'Login',
+          ok: loginOk,
+          adsPower: apUser || '(none set)',
+          airtable: at('Profile Email') || at('UID') || '(empty)',
+          fix:
+            apUser && !loginOk
+              ? () => setField(userIsEmail ? 'Profile Email' : 'UID', apUser)
+              : undefined,
+        },
+        {
+          label: 'Password',
+          ok: passwordOk,
+          adsPower: apPassword ? 'Set' : '(none set)',
+          airtable: at('Profile FB Password') ? (passwordOk ? 'Matches' : 'Different') : '(empty)',
+          fix: apPassword && !passwordOk ? () => setField('Profile FB Password', apPassword) : undefined,
+        },
+        {
+          label: '2FA secret',
+          ok: twoFaOk,
+          adsPower: ap2fa ? 'Set' : '(none set)',
+          airtable: at('Profile 2FA') ? (twoFaOk ? 'Matches' : 'Different') : '(empty)',
+          fix: ap2fa && !twoFaOk ? () => setField('Profile 2FA', ap2fa) : undefined,
         },
       ]
     : [];
@@ -286,7 +326,9 @@ export function Stage1Panel({ draft, setField }: Stage1PanelProps) {
                 </Typography>
                 <Box sx={{ flex: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   <Chip size="small" variant="outlined" label={`AdsPower: ${c.adsPower}`} />
-                  <Chip size="small" variant="outlined" label={`Airtable: ${c.airtable}`} />
+                  {c.airtable && (
+                    <Chip size="small" variant="outlined" label={`Airtable: ${c.airtable}`} />
+                  )}
                 </Box>
                 {c.fix && (
                   <Button size="small" onClick={c.fix} sx={{ textTransform: 'none', flexShrink: 0 }}>
