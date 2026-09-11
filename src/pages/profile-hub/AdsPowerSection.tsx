@@ -20,6 +20,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
 import { formLabelSx, textFieldEditModeSx, textFieldViewModeSx } from '../../components/products/composition/styles';
 import { EditableSection } from './EditableSection';
+import { isFilled } from './CompactValue';
 import { listAdsPowerProfiles, getAdsPowerProfile, type AdsPowerProfile } from '../../services/adspower';
 import { FIELD_INDEX } from '../../features/profile-hub/types';
 import { FIELD_LINKED_ADSPROFILE } from '../../features/profile-hub/original';
@@ -64,6 +65,10 @@ export function AdsPowerSection({ values, onSave, headerExtra }: AdsPowerSection
     };
   }, []);
 
+  // Complete = the three fields filled AND an AdsPower profile linked.
+  const complete =
+    FIELDS.every((f) => isFilled(values[f.name])) && isFilled(values[FIELD_LINKED_ADSPROFILE]);
+
   return (
     <EditableSection
       title="2 · Add profile to AdsPower"
@@ -72,12 +77,14 @@ export function AdsPowerSection({ values, onSave, headerExtra }: AdsPowerSection
       values={values}
       onSave={onSave}
       fields={FIELDS}
+      complete={complete}
       headerExtra={headerExtra}
     >
-      {({ editing, saving, draft, setField }) => (
+      {({ editing, saving, compact, draft, setField }) => (
         <AdsPowerBody
           editing={editing}
           saving={saving}
+          compact={compact}
           draft={draft}
           setField={setField}
           options={options}
@@ -94,6 +101,7 @@ export function AdsPowerSection({ values, onSave, headerExtra }: AdsPowerSection
 interface BodyProps {
   editing: boolean;
   saving: boolean;
+  compact: boolean;
   draft: Record<string, unknown>;
   setField: (field: string, value: unknown) => void;
   options: AdsPowerProfile[];
@@ -101,7 +109,7 @@ interface BodyProps {
   apError: string | null;
 }
 
-function AdsPowerBody({ editing, saving, draft, setField, options, loading, apError }: BodyProps) {
+function AdsPowerBody({ editing, saving, compact, draft, setField, options, loading, apError }: BodyProps) {
   const linkedId = String(draft[FIELD_LINKED_ADSPROFILE] ?? '');
   const [live, setLive] = useState<ApLive | null>(null);
 
@@ -150,6 +158,39 @@ function AdsPowerBody({ editing, saving, draft, setField, options, loading, apEr
         { label: '2FA secret', ok: twoFaOk, adsPower: ap2fa ? 'Set' : '(none set)', airtable: at('Profile 2FA') ? (twoFaOk ? 'Matches' : 'Different') : '(empty)', fix: ap2fa && !twoFaOk ? () => setField('Profile 2FA', ap2fa) : undefined },
       ]
     : [];
+
+  // Collapsed: the linked profile as a value, and the checks as a single chip row.
+  if (compact) {
+    const passing = checks.filter((c) => c.ok).length;
+    const linkedLabel = selectedOption
+      ? `${selectedOption.name || selectedOption.user_id}${selectedOption.group_name ? ` · ${selectedOption.group_name}` : ''}`
+      : linkedId;
+    return (
+      <Box sx={{ mt: 1.25, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>
+            AdsPower profile
+          </Typography>
+          <Typography variant="body2" noWrap>{linkedLabel}</Typography>
+        </Box>
+        {live ? (
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Chip
+              size="small"
+              color={passing === checks.length ? 'success' : 'warning'}
+              label={`${passing}/${checks.length} checks match AdsPower`}
+              sx={{ height: 22 }}
+            />
+            {checks.filter((c) => !c.ok).map((c) => (
+              <Chip key={c.label} size="small" variant="outlined" color="warning" icon={<ErrorOutlineIcon />} label={c.label} sx={{ height: 22 }} />
+            ))}
+          </Box>
+        ) : apError ? (
+          <Typography variant="caption" color="text.secondary">AdsPower not reachable — checks unavailable</Typography>
+        ) : null}
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ mt: 2 }}>

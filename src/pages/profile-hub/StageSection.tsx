@@ -56,6 +56,8 @@ export function StageSection({ stage, boxNumber, done, onToggleDone, onHelp, val
       values={values}
       onSave={onSave}
       fields={fields}
+      // A stage is complete when it's ticked done — the tick is the staff's word.
+      complete={done}
       linkedNames={linkedNames}
       onUpload={onUpload}
       headerExtra={<StageHeaderExtra stage={stage} done={done} onToggleDone={onToggleDone} onHelp={onHelp} />}

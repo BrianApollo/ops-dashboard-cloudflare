@@ -14,6 +14,7 @@ import { QuickAddDialog } from './QuickAddDialog';
 
 import { EditableSection } from './EditableSection';
 import { ProfileField } from './ProfileField';
+import { CompactValue, CompactGrid, isFilled } from './CompactValue';
 import type { ProfileFieldDef } from '../../features/profile-hub/types';
 import {
   FIELD_ORIGINAL_DATA,
@@ -61,6 +62,8 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
   const [quickOpen, setQuickOpen] = useState(false);
   const saved = useMemo(() => parseOriginalData(values[FIELD_ORIGINAL_DATA]), [values]);
   const hasSaved = Object.values(saved).some((v) => v && v.trim());
+  // Complete = every received item present. Extra notes are not needed.
+  const complete = ORIGINAL_DATA_KEYS.every(({ key }) => isFilled(saved[key]));
 
   /** Copy the saved day-0 values into the live profile fields. Saves straight away. */
   const seedLiveFields = () => {
@@ -100,6 +103,7 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
       accent="#64748b"
       values={values}
       onSave={onSave}
+      complete={complete}
       headerExtra={
         <>
           <Button size="small" variant="outlined" startIcon={<BoltIcon />} onClick={() => setQuickOpen(true)} sx={{ textTransform: 'none' }}>
@@ -115,10 +119,27 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
         </>
       }
     >
-      {({ editing, saving, draft, setField }) => {
+      {({ editing, saving, compact, draft, setField }) => {
         const original = parseOriginalData(draft[FIELD_ORIGINAL_DATA]);
         const setOriginal = (key: keyof OriginalData, value: string) =>
           setField(FIELD_ORIGINAL_DATA, JSON.stringify({ ...original, [key]: value }, null, 2));
+
+        if (compact) {
+          const notes = String(values[FIELD_EXTRA_NOTES] ?? '').trim();
+          return (
+            <CompactGrid columns={4}>
+              {ORIGINAL_DATA_KEYS.filter(({ key }) => key !== 'cookies').map(({ key, label }) => (
+                <CompactValue key={key} def={{ name: key, label, kind: KIND[key] }} value={saved[key]} />
+              ))}
+              <CompactValue def={{ name: 'cookies', label: 'Cookies', kind: 'secret' }} value={saved.cookies} />
+              {notes && (
+                <Box sx={{ gridColumn: '1 / -1' }}>
+                  <CompactValue def={NOTES_DEF} value={notes} />
+                </Box>
+              )}
+            </CompactGrid>
+          );
+        }
 
         return (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: 'repeat(3, 1fr)' }, gap: 2 }}>

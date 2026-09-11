@@ -35,6 +35,8 @@ export interface ProfileFieldDef {
   required?: boolean;
   /** Full-width in the two-column group grid. */
   wide?: boolean;
+  /** Does not count towards a section being complete (compact view). */
+  optional?: boolean;
   hint?: string;
 }
 
@@ -82,9 +84,9 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
     accent: 'amber',
     fields: [
       { name: 'Permanent Token', label: 'Permanent Token', kind: 'secret', wide: true },
-      { name: 'Permanent Token End Date', label: 'Token Expiry', kind: 'date' },
+      { name: 'Permanent Token End Date', optional: true, label: 'Token Expiry', kind: 'date' },
       { name: 'Last Sync', label: 'Last Sync', kind: 'datetime', readOnly: true },
-      { name: 'Profile Review Date', label: 'Next Review Date', kind: 'date' },
+      { name: 'Profile Review Date', optional: true, label: 'Next Review Date', kind: 'date' },
     ],
   },
 
@@ -101,13 +103,13 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
       { name: 'Profile Email', label: 'Facebook Email', kind: 'email', required: true },
       { name: 'Profile FB Password', label: 'Facebook Password', kind: 'secret', required: true },
       { name: 'Profile 2FA', label: '2FA Secret', kind: 'secret', required: true, hint: 'TOTP key' },
-      { name: 'UID', label: 'Facebook UID', kind: 'text' },
-      { name: 'Profile Link', label: 'Facebook Profile Link', kind: 'url' },
-      { name: 'Profile Birth Date', label: 'Birth Date', kind: 'date' },
-      { name: 'Profile Gender', label: 'Gender', kind: 'text' },
-      { name: 'Profile Location', label: 'Location', kind: 'text' },
+      { name: 'UID', optional: true, label: 'Facebook UID', kind: 'text' },
+      { name: 'Profile Link', optional: true, label: 'Facebook Profile Link', kind: 'url' },
+      { name: 'Profile Birth Date', optional: true, label: 'Birth Date', kind: 'date' },
+      { name: 'Profile Gender', optional: true, label: 'Gender', kind: 'text' },
+      { name: 'Profile Location', optional: true, label: 'Location', kind: 'text' },
       { name: 'Proxy', label: 'Proxy', kind: 'text', hint: 'Proxy assigned in AdsPower' },
-      { name: 'Recovery Codes', label: 'Recovery Codes', kind: 'attachments', wide: true, hint: 'Facebook backup codes file / screenshot' },
+      { name: 'Recovery Codes', optional: true, label: 'Recovery Codes', kind: 'attachments', wide: true, hint: 'Facebook backup codes file / screenshot' },
     ],
   },
 
@@ -142,7 +144,7 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
     span: 'full',
     fields: [
       { name: 'Original Data', label: 'Original credentials', kind: 'json', readOnly: true, wide: true },
-      { name: 'Extra Notes', label: 'Extra notes', kind: 'textarea', wide: true },
+      { name: 'Extra Notes', optional: true, label: 'Extra notes', kind: 'textarea', wide: true },
     ],
   },
   {
@@ -154,7 +156,7 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
     fields: [
       { name: 'Linked BM', label: 'Business Managers', kind: 'links', readOnly: true, wide: true },
       { name: 'Linked Pages', label: 'Pages', kind: 'links', readOnly: true, wide: true },
-      { name: 'Master Profile', label: 'Master Profile', kind: 'links', readOnly: true, wide: true },
+      { name: 'Master Profile', optional: true, label: 'Master Profile', kind: 'links', readOnly: true, wide: true },
     ],
   },
 ];
