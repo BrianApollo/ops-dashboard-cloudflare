@@ -77,11 +77,12 @@ export function StageSection({ stage, boxNumber, done, onToggleDone, onHelp, val
       linkedNames={linkedNames}
       onUpload={onUpload}
       headerExtra={<StageHeaderExtra stage={stage} done={done} onToggleDone={onToggleDone} onHelp={onHelp} />}
-    >
-      {({ draft, compact }) =>
-        stage.compare && stage.compare.length > 0 ? (
-          <Box sx={{ mt: compact ? 1.25 : 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {stage.compare.map(({ field, originalKey }) => {
+      renderAfter={(fieldDef, { draft, compact }) => {
+        const items = (stage.compare ?? []).filter((c) => c.field === fieldDef.name);
+        if (items.length === 0) return null;
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {items.map(({ field, originalKey }) => {
               const delivered = (original[originalKey] ?? '').trim();
               const live = String(draft[field] ?? '').trim();
               const meta = ORIGINAL_DATA_KEYS.find((k) => k.key === originalKey);
@@ -117,8 +118,8 @@ export function StageSection({ stage, boxNumber, done, onToggleDone, onHelp, val
               );
             })}
           </Box>
-        ) : null
-      }
-    </EditableSection>
+        );
+      }}
+    />
   );
 }

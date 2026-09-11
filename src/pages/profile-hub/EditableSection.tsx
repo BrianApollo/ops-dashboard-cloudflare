@@ -54,6 +54,8 @@ interface EditableSectionProps {
    * optional nor read-only has a value). Custom-body sections set this.
    */
   complete?: boolean;
+  /** Rendered as a full-width row directly after the given field (e.g. a comparison line). */
+  renderAfter?: (def: ProfileFieldDef, ctx: SectionEditContext) => ReactNode;
   /** Custom body, rendered under the field grid. */
   children?: (ctx: SectionEditContext) => ReactNode;
 }
@@ -70,6 +72,7 @@ export function EditableSection({
   linkedNames,
   onUpload,
   complete: completeOverride,
+  renderAfter,
   children,
 }: EditableSectionProps) {
   const [editing, setEditing] = useState(false);
@@ -114,6 +117,8 @@ export function EditableSection({
     setDraft(values);
     setEditing(false);
   };
+
+  const ctx: SectionEditContext = { editing, saving, compact, draft, setField };
 
   // In compact mode only show fields that hold something (optional empties are noise).
   const shown = compact ? fields.filter((f) => isFilled(values[f.name])) : fields;
@@ -174,11 +179,15 @@ export function EditableSection({
       {shown.length > 0 &&
         (compact ? (
           <CompactGrid columns={columns === 4 ? 4 : 3}>
-            {shown.map((def) => (
-              <Box key={def.name} sx={{ gridColumn: def.kind === 'textarea' || def.kind === 'attachments' ? '1 / -1' : 'auto', minWidth: 0 }}>
-                <CompactValue def={def} value={values[def.name]} linkedNames={linkedNames} />
-              </Box>
-            ))}
+            {shown.flatMap((def) => {
+              const after = renderAfter?.(def, ctx);
+              return [
+                <Box key={def.name} sx={{ gridColumn: def.kind === 'textarea' || def.kind === 'attachments' ? '1 / -1' : 'auto', minWidth: 0 }}>
+                  <CompactValue def={def} value={values[def.name]} linkedNames={linkedNames} />
+                </Box>,
+                after ? <Box key={def.name + ':after'} sx={{ gridColumn: '1 / -1' }}>{after}</Box> : null,
+              ];
+            })}
           </CompactGrid>
         ) : (
           <Box
@@ -191,7 +200,9 @@ export function EditableSection({
               gap: 2,
             }}
           >
-            {fields.map((def) => (
+            {fields.flatMap((def) => {
+              const after = renderAfter?.(def, ctx);
+              return [
               <Box key={def.name} sx={{ gridColumn: def.wide ? '1 / -1' : 'auto' }}>
                 <ProfileField
                   def={def}
@@ -203,12 +214,14 @@ export function EditableSection({
                     def.kind === 'attachments' && onUpload ? (file) => onUpload(def.name, file) : undefined
                   }
                 />
-              </Box>
-            ))}
+              </Box>,
+              after ? <Box key={def.name + ':after'} sx={{ gridColumn: '1 / -1' }}>{after}</Box> : null,
+              ];
+            })}
           </Box>
         ))}
 
-      {children?.({ editing, saving, compact, draft, setField })}
+      {children?.(ctx)}
     </Paper>
   );
 }
