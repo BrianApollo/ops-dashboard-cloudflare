@@ -237,7 +237,7 @@ function AdsPowerBody({ editing, saving, compact, draft, setField, options, load
           renderInput={(params) => (
             <TextField
               {...params}
-              placeholder={editing ? 'Choose the AdsPower profile…' : '—'}
+              placeholder={editing ? 'Choose the AdsPower profile…' : undefined}
               sx={editing ? textFieldEditModeSx : textFieldViewModeSx}
               InputProps={{
                 ...params.InputProps,

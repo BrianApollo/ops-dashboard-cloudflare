@@ -46,7 +46,7 @@ function toDateInput(value: unknown): string {
 }
 
 function formatDateTime(value: unknown): string {
-  if (typeof value !== 'string' || !value) return '—';
+  if (typeof value !== 'string' || !value) return '';
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
 }
@@ -232,7 +232,7 @@ export function ProfileField({
       <Box>
         <Label def={def} />
         <Typography variant="body2">
-          {def.kind === 'datetime' ? formatDateTime(value) : text || '—'}
+          {def.kind === 'datetime' ? formatDateTime(value) : text}
         </Typography>
       </Box>
     );
@@ -314,7 +314,7 @@ export function ProfileField({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         type={isSecret && !revealed ? 'password' : 'text'}
-        placeholder={disabled ? '—' : def.hint}
+        placeholder={disabled ? undefined : def.hint}
         helperText={disabled ? undefined : def.hint}
         sx={modeSx}
         InputProps={{

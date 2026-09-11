@@ -138,8 +138,12 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
             ));
           return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-              <CompactGrid columns={3}>{row(['userId', 'password', 'twoFaKey'])}</CompactGrid>
-              <CompactGrid columns={4}>{row(['email', 'emailPassword', 'recoveryEmail', 'cookies'])}</CompactGrid>
+              {/* One 4-column grid so both rows line up; row 1 leaves its last slot empty. */}
+              <CompactGrid columns={4}>
+                {row(['userId', 'password', 'twoFaKey'])}
+                <Box />
+                {row(['email', 'emailPassword', 'recoveryEmail', 'cookies'])}
+              </CompactGrid>
               {notes && <CompactValue def={NOTES_DEF} value={notes} />}
             </Box>
           );

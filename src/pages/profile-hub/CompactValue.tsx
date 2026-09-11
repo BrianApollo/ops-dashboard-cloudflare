@@ -33,7 +33,7 @@ export function isFilled(value: unknown): boolean {
 }
 
 function formatDate(value: unknown, withTime: boolean): string {
-  if (typeof value !== 'string' || !value) return '—';
+  if (typeof value !== 'string' || !value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return withTime ? d.toLocaleString() : d.toLocaleDateString();
