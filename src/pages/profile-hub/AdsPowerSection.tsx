@@ -14,6 +14,7 @@ import Button from '@mui/material/Button';
 import Autocomplete from '@mui/material/Autocomplete';
 import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
+import Link from '@mui/material/Link';
 import CircularProgress from '@mui/material/CircularProgress';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -54,8 +55,7 @@ export function AdsPowerSection({ values, onSave, headerExtra }: AdsPowerSection
         if (!cancelled) setOptions(list);
       })
       .catch(() => {
-        if (!cancelled)
-          setApError('Could not reach AdsPower. Make sure AdsPower is open on this PC and the AdsPower bridge (scripts/adspower-bridge.bat) is running.');
+        if (!cancelled) setApError('unreachable');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -186,7 +186,7 @@ function AdsPowerBody({ editing, saving, compact, draft, setField, options, load
             ))}
           </Box>
         ) : apError ? (
-          <Typography variant="caption" color="text.secondary">AdsPower not reachable — checks unavailable</Typography>
+          <Typography variant="caption" color="text.secondary">AdsPower not reachable on this PC — checks unavailable (press Edit for how to fix)</Typography>
         ) : null}
       </Box>
     );
@@ -199,9 +199,29 @@ function AdsPowerBody({ editing, saving, compact, draft, setField, options, load
       </Typography>
 
       {apError ? (
-        <Alert severity="warning" sx={{ py: 0.25 }}>
-          {apError}
-          {linkedId && ` Linked AdsPower id: ${linkedId}`}
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Can't reach AdsPower on this PC.
+          </Typography>
+          <Typography variant="body2" component="div">
+            AdsPower's API only works on the computer it's installed on, and it blocks websites unless the
+            bridge is running. On this PC:
+            <Box component="ol" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
+              <li>Make sure AdsPower is open.</li>
+              <li>
+                <Link href="/adspower-bridge.bat" download underline="always">
+                  Download adspower-bridge.bat
+                </Link>{' '}
+                and double-click it — leave its window open.
+              </li>
+              <li>Press Edit here again.</li>
+            </Box>
+          </Typography>
+          {linkedId && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Linked AdsPower id: {linkedId}
+            </Typography>
+          )}
         </Alert>
       ) : (
         <Autocomplete
