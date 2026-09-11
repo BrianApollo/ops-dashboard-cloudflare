@@ -133,7 +133,7 @@ export async function checkProfileToken(token: string): Promise<TokenCheckResult
 }
 
 // =============================================================================
-// RECOVERY CODES (attachment)
+// ATTACHMENTS
 // =============================================================================
 
 export interface AirtableAttachment {
@@ -143,19 +143,21 @@ export interface AirtableAttachment {
 }
 
 /**
- * Upload a recovery-codes file to R2, then attach it to the profile record.
+ * Upload a file to R2, then attach it to an attachment field on the record.
  * Existing attachments are kept by passing their ids back.
  */
-export async function uploadRecoveryCodes(
+export async function uploadAttachment(
   recordId: string,
+  field: string,
   file: File,
   existing: AirtableAttachment[],
 ): Promise<HubProfile> {
   const safeName = `${Date.now()}-${file.name.replace(/[^\w.-]+/g, '_')}`;
-  const { url } = await uploadFile(file, safeName, { prefix: `profiles/${recordId}/recovery-codes` });
+  const folder = field.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const { url } = await uploadFile(file, safeName, { prefix: `profiles/${recordId}/${folder}` });
 
   return updateHubProfile(recordId, {
-    'Recovery Codes': [
+    [field]: [
       ...existing.map((a) => ({ id: a.id })),
       { url, filename: file.name },
     ],

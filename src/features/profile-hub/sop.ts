@@ -8,7 +8,7 @@
  * `sop/`), left empty until they exist.
  */
 
-import { FIELD_ORIGINAL_DATA, ORIGINAL_DATA_KEYS, parseOriginalData } from './original';
+import { FIELD_ORIGINAL_DATA, ORIGINAL_DATA_KEYS, parseOriginalData, type OriginalData } from './original';
 
 export interface SopStage {
   /** 1-9 */
@@ -23,6 +23,13 @@ export interface SopStage {
   fields: string[];
   /** The SOP's own checklist lines, shown in the help drawer. */
   steps: string[];
+  /** Per-stage label overrides (field name -> label shown in this box). */
+  labels?: Record<string, string>;
+  /**
+   * Credentials this stage rotates: show the delivered value (from Box 1)
+   * next to the live field, and whether it has actually been changed.
+   */
+  compare?: Array<{ field: string; originalKey: keyof OriginalData }>;
   /** Optional media for the help drawer. */
   video?: string;
   screenshots?: string[];
@@ -70,6 +77,10 @@ export const SOP_STAGES: SopStage[] = [
       'Profile Security Email',
       'Security Email Password',
     ],
+    labels: {
+      'Profile Security Email': 'Backup Email',
+      'Security Email Password': 'Backup Email Password',
+    },
     steps: [
       'Create a new Hotmail, Mail.com, Proton Mail, or other suitable mailbox.',
       'Set the company backup email as the mailbox recovery/backup email.',
@@ -84,6 +95,7 @@ export const SOP_STAGES: SopStage[] = [
     timing: '+1-2 days',
     summary: 'Point the Facebook profile at the new mailbox.',
     fields: ['Profile Email'],
+    compare: [{ field: 'Profile Email', originalKey: 'email' }],
     steps: [
       'Update the Facebook login email to the new mailbox.',
       'Confirm the new email is working correctly.',
@@ -98,6 +110,7 @@ export const SOP_STAGES: SopStage[] = [
     timing: '+a few days',
     summary: 'Rotate the password separately from the email change.',
     fields: ['Profile FB Password'],
+    compare: [{ field: 'Profile FB Password', originalKey: 'password' }],
     steps: [
       'Change the Facebook password.',
       'Verify the new password works.',
@@ -112,6 +125,7 @@ export const SOP_STAGES: SopStage[] = [
     timing: '+a few days',
     summary: 'New authenticator secret in Airtable and AdsPower, fresh recovery codes stored.',
     fields: ['Profile 2FA', 'Recovery Codes'],
+    compare: [{ field: 'Profile 2FA', originalKey: 'twoFaKey' }],
     steps: [
       'Change the Facebook 2FA setup.',
       'Capture the long authenticator secret string (typically around 16 characters).',
@@ -128,7 +142,7 @@ export const SOP_STAGES: SopStage[] = [
     title: 'Accept Business Manager access',
     timing: 'Around week 2+',
     summary: 'Add the profile to the required existing Business Managers.',
-    fields: ['Linked BM'],
+    fields: ['Linked BM', 'SOP 7 Screenshot'],
     steps: [
       'Send/share the required Business Manager invitations to the new profile.',
       'Open the invitation email from the new profile and accept it.',
@@ -144,7 +158,7 @@ export const SOP_STAGES: SopStage[] = [
     title: 'Assign business assets',
     timing: '+1-3 days',
     summary: 'Ad Accounts, Data Sources and Pixels assigned in one controlled pass.',
-    fields: [],
+    fields: ['SOP 8 Screenshot'],
     steps: [
       'Select the profile/person inside the Business Manager settings.',
       'Choose Assign Assets.',
@@ -159,7 +173,7 @@ export const SOP_STAGES: SopStage[] = [
     title: 'Complete Page admin access',
     timing: 'Final stage',
     summary: 'Page admin access accepted, then Pages assigned to the profile.',
-    fields: ['Linked Pages'],
+    fields: ['Linked Pages', 'SOP 9 Screenshot'],
     steps: [
       'From an existing Page admin profile, invite/share Page access with the new profile.',
       'Open the invitation from the new profile and accept it.',

@@ -178,6 +178,10 @@ export const HEADER_FIELDS: ProfileFieldDef[] = [
   { name: FIELD_ORIGINAL_DATA, label: 'Original Data', kind: 'json' },
   { name: FIELD_EXTRA_NOTES, label: 'Extra Notes', kind: 'textarea' },
   { name: FIELD_LINKED_ADSPROFILE, label: 'AdsPower Profile', kind: 'text' },
+  // Proof screenshots for the access stages
+  { name: 'SOP 7 Screenshot', label: 'Screenshot', kind: 'attachments', optional: true, wide: true, hint: 'proof of BM access' },
+  { name: 'SOP 8 Screenshot', label: 'Screenshot', kind: 'attachments', optional: true, wide: true, hint: 'proof of assigned assets' },
+  { name: 'SOP 9 Screenshot', label: 'Screenshot', kind: 'attachments', optional: true, wide: true, hint: 'proof of Page access' },
 ];
 
 /** Airtable field name -> definition, for rendering a field by name. */

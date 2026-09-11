@@ -130,9 +130,11 @@ export function CompactValue({ def, value, linkedNames }: CompactValueProps) {
 
   return (
     <Box sx={{ minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>
-        {def.label}
-      </Typography>
+      {def.label && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>
+          {def.label}
+        </Typography>
+      )}
       {body}
     </Box>
   );

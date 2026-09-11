@@ -51,7 +51,7 @@ import {
   deleteHubProfile,
   checkProfileToken,
   fetchLinkedNames,
-  uploadRecoveryCodes,
+  uploadAttachment,
   type AirtableAttachment,
 } from '../../features/profile-hub/data';
 import {
@@ -164,7 +164,7 @@ export function ProfileHubPage() {
     if (!selected) return;
     try {
       const existing = (selected.fields[field] as AirtableAttachment[] | undefined) ?? [];
-      applyUpdated(await uploadRecoveryCodes(selected.id, file, existing));
+      applyUpdated(await uploadAttachment(selected.id, field, file, existing));
       setToast('File uploaded');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
