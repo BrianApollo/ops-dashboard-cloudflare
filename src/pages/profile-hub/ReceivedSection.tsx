@@ -41,14 +41,15 @@ const KIND: Record<keyof OriginalData, ProfileFieldDef['kind']> = {
   cookies: 'textarea',
 };
 
-/** Received item -> the live profile field it seeds on day 0. */
-const SEEDS: Partial<Record<keyof OriginalData, string>> = {
-  userId: 'UID',
-  password: 'Profile FB Password',
-  twoFaKey: 'Profile 2FA',
-  email: 'Profile Email',
-  emailPassword: 'Profile Email Password',
-  recoveryEmail: 'Profile Security Email',
+/** Received item -> the live profile field(s) it seeds on day 0. */
+const SEEDS: Partial<Record<keyof OriginalData, string[]>> = {
+  // The Facebook user id is both the UID and the Profile ID column.
+  userId: ['UID', 'Profile ID'],
+  password: ['Profile FB Password'],
+  twoFaKey: ['Profile 2FA'],
+  email: ['Profile Email'],
+  emailPassword: ['Profile Email Password'],
+  recoveryEmail: ['Profile Security Email'],
 };
 
 const NOTES_DEF: ProfileFieldDef = {
@@ -68,9 +69,9 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
   /** Copy the saved day-0 values into the live profile fields. Saves straight away. */
   const seedLiveFields = () => {
     const changed: Record<string, unknown> = {};
-    for (const [key, field] of Object.entries(SEEDS) as Array<[keyof OriginalData, string]>) {
+    for (const [key, targets] of Object.entries(SEEDS) as Array<[keyof OriginalData, string[]]>) {
       const value = saved[key];
-      if (value && value.trim()) changed[field] = value.trim();
+      if (value && value.trim()) for (const field of targets) changed[field] = value.trim();
     }
     return onSave(changed);
   };
@@ -86,9 +87,9 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
       changed[FIELD_EXTRA_NOTES] = existing ? `${existing}\n${extra}` : extra;
     }
     if (copyToProfile) {
-      for (const [key, field] of Object.entries(SEEDS) as Array<[keyof OriginalData, string]>) {
+      for (const [key, targets] of Object.entries(SEEDS) as Array<[keyof OriginalData, string[]]>) {
         const value = parsed.data[key];
-        if (value && value.trim()) changed[field] = value.trim();
+        if (value && value.trim()) for (const field of targets) changed[field] = value.trim();
       }
     }
     await onSave(changed);
@@ -109,7 +110,7 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
           <Button size="small" variant="outlined" startIcon={<BoltIcon />} onClick={() => setQuickOpen(true)} sx={{ textTransform: 'none' }}>
             Quick add
           </Button>
-        <Tooltip title="Fill the live profile fields (UID, passwords, 2FA, emails) from these values">
+        <Tooltip title="Fill the live profile fields (Profile ID, UID, passwords, 2FA, emails) from these values">
           <span>
             <Button size="small" variant="text" disabled={!hasSaved} onClick={seedLiveFields} sx={{ textTransform: 'none' }}>
               Copy into profile fields

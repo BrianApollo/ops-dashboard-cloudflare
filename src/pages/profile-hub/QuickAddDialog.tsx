@@ -111,7 +111,7 @@ export function QuickAddDialog({ open, onClose, onFill }: QuickAddDialogProps) {
               control={<Checkbox size="small" checked={copyToProfile} onChange={(e) => setCopyToProfile(e.target.checked)} />}
               label={
                 <Typography variant="body2">
-                  Also copy into the live profile fields (UID, passwords, 2FA, emails)
+                  Also copy into the live profile fields (Profile ID, UID, passwords, 2FA, emails)
                 </Typography>
               }
             />
