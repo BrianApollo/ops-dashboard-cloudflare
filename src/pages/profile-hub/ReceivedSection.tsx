@@ -126,18 +126,21 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
 
         if (compact) {
           const notes = String(values[FIELD_EXTRA_NOTES] ?? '').trim();
+          // Row 1: the Facebook login trio. Row 2: the mailbox + cookies.
+          const row = (keys: Array<keyof OriginalData>) =>
+            ORIGINAL_DATA_KEYS.filter(({ key }) => keys.includes(key)).map(({ key, label }) => (
+              <CompactValue
+                key={key}
+                def={{ name: key, label, kind: key === 'cookies' ? 'secret' : KIND[key] }}
+                value={saved[key]}
+              />
+            ));
           return (
-            <CompactGrid columns={4}>
-              {ORIGINAL_DATA_KEYS.filter(({ key }) => key !== 'cookies').map(({ key, label }) => (
-                <CompactValue key={key} def={{ name: key, label, kind: KIND[key] }} value={saved[key]} />
-              ))}
-              <CompactValue def={{ name: 'cookies', label: 'Cookies', kind: 'secret' }} value={saved.cookies} />
-              {notes && (
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <CompactValue def={NOTES_DEF} value={notes} />
-                </Box>
-              )}
-            </CompactGrid>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              <CompactGrid columns={3}>{row(['userId', 'password', 'twoFaKey'])}</CompactGrid>
+              <CompactGrid columns={4}>{row(['email', 'emailPassword', 'recoveryEmail', 'cookies'])}</CompactGrid>
+              {notes && <CompactValue def={NOTES_DEF} value={notes} />}
+            </Box>
           );
         }
 
