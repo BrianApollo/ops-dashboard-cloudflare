@@ -109,7 +109,7 @@ export const PROFILE_GROUPS: ProfileGroupDef[] = [
       { name: 'Profile Gender', optional: true, label: 'Gender', kind: 'text' },
       { name: 'Profile Location', optional: true, label: 'Location', kind: 'text' },
       { name: 'Proxy', label: 'Proxy', kind: 'text', hint: 'Proxy assigned in AdsPower' },
-      { name: 'Recovery Codes', optional: true, label: 'Recovery Codes', kind: 'attachments', wide: true, hint: 'Facebook backup codes file / screenshot' },
+      { name: 'Recovery Codes', optional: true, label: 'Recovery Codes', kind: 'textarea', wide: true, hint: 'Paste the Facebook backup codes here, one per line' },
     ],
   },
 
