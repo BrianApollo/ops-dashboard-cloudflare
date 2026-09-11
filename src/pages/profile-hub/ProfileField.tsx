@@ -1,6 +1,7 @@
 /**
- * ProfileField - renders one Airtable field as an editable control.
- * Purely presentational; the page owns the draft state.
+ * ProfileField - renders one Airtable field as a form control, in the same
+ * label-above / grey-until-Edit style as the Products Setup tab.
+ * Purely presentational; the owning section holds the draft.
  */
 
 import { useState, type ChangeEvent } from 'react';
@@ -13,6 +14,7 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import InputAdornment from '@mui/material/InputAdornment';
+import Button from '@mui/material/Button';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -20,8 +22,8 @@ import CheckIcon from '@mui/icons-material/Check';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
-import Button from '@mui/material/Button';
 
+import { formLabelSx, textFieldEditModeSx, textFieldViewModeSx } from '../../components/products/composition/styles';
 import { PROFILE_STATUSES, type ProfileFieldDef } from '../../features/profile-hub/types';
 import { ORIGINAL_DATA_KEYS, parseOriginalData } from '../../features/profile-hub/original';
 
@@ -29,7 +31,8 @@ interface ProfileFieldProps {
   def: ProfileFieldDef;
   value: unknown;
   onChange: (value: unknown) => void;
-  dirty: boolean;
+  /** View mode: greyed and not editable until the section's Edit is pressed. */
+  disabled?: boolean;
   /** Airtable record id -> display name, for linked-record chips. */
   linkedNames?: Record<string, string>;
   /** For 'attachments' fields: upload handler. Omitted = read-only list. */
@@ -48,12 +51,28 @@ function formatDateTime(value: unknown): string {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
 }
 
-export function ProfileField({ def, value, onChange, dirty, linkedNames, onUpload }: ProfileFieldProps) {
+function Label({ def }: { def: ProfileFieldDef }) {
+  return (
+    <Typography variant="caption" color="text.secondary" sx={formLabelSx}>
+      {def.label}
+    </Typography>
+  );
+}
+
+export function ProfileField({
+  def,
+  value,
+  onChange,
+  disabled = false,
+  linkedNames,
+  onUpload,
+}: ProfileFieldProps) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const text = value == null ? '' : String(value);
+  const modeSx = disabled ? textFieldViewModeSx : textFieldEditModeSx;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text);
@@ -64,36 +83,19 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
   // ---- checkbox -------------------------------------------------------------
   if (def.kind === 'checkbox') {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-          px: 1.5,
-          py: 0.75,
-          borderRadius: 1.5,
-          border: '1px solid',
-          borderColor: dirty ? 'warning.main' : 'divider',
-          bgcolor: 'background.paper',
-          minHeight: 56,
-        }}
-      >
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {def.label}
+      <Box>
+        <Label def={def} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 40 }}>
+          <Switch
+            size="small"
+            checked={Boolean(value)}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          <Typography variant="body2" color={value ? 'text.primary' : 'text.secondary'}>
+            {value ? 'Yes' : 'No'}
           </Typography>
-          {def.hint && (
-            <Typography variant="caption" color="text.secondary">
-              {def.hint}
-            </Typography>
-          )}
         </Box>
-        <Switch
-          size="small"
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
-        />
       </Box>
     );
   }
@@ -103,10 +105,8 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
     const items = Array.isArray(value) ? value : [];
     return (
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-          {def.label}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+        <Label def={def} />
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
           {items.length === 0 ? (
             <Typography variant="body2" color="text.disabled">
               None linked
@@ -143,23 +143,22 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-            {def.label}
-          </Typography>
-          {onUpload && (
+          <Label def={def} />
+          {onUpload && !disabled && (
             <Button
               component="label"
               size="small"
               variant="outlined"
               startIcon={<UploadFileIcon />}
               disabled={uploading}
+              sx={{ mb: 0.5 }}
             >
               {uploading ? 'Uploading...' : 'Upload'}
               <input type="file" hidden onChange={handleFile} />
             </Button>
           )}
         </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
           {files.length === 0 ? (
             <Typography variant="body2" color="text.disabled">
               {def.hint ? `None yet — ${def.hint}` : 'None yet'}
@@ -190,17 +189,14 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
     const entries = Object.entries(parseOriginalData(value)).filter(([, v]) => v && String(v).trim());
     return (
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-          {def.label}
-        </Typography>
+        <Label def={def} />
         {entries.length === 0 ? (
-          <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>
+          <Typography variant="body2" color="text.disabled">
             Not recorded
           </Typography>
         ) : (
           <Box
             sx={{
-              mt: 0.5,
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: 'repeat(3, 1fr)' },
               gap: 1,
@@ -230,37 +226,34 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
     );
   }
 
-  // ---- textarea -------------------------------------------------------------
-  if (def.kind === 'textarea') {
-    return (
-      <TextField
-        fullWidth
-        size="small"
-        multiline
-        minRows={2}
-        label={def.label}
-        value={text}
-        onChange={(e) => onChange(e.target.value)}
-        helperText={def.hint}
-        sx={
-          dirty
-            ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'warning.main', borderWidth: 2 } }
-            : undefined
-        }
-      />
-    );
-  }
-
   // ---- read-only display ----------------------------------------------------
   if (def.readOnly) {
     return (
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-          {def.label}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 0.5 }}>
+        <Label def={def} />
+        <Typography variant="body2">
           {def.kind === 'datetime' ? formatDateTime(value) : text || '—'}
         </Typography>
+      </Box>
+    );
+  }
+
+  // ---- textarea -------------------------------------------------------------
+  if (def.kind === 'textarea') {
+    return (
+      <Box>
+        <Label def={def} />
+        <TextField
+          fullWidth
+          size="small"
+          multiline
+          minRows={2}
+          value={text}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          helperText={disabled ? undefined : def.hint}
+          sx={modeSx}
+        />
       </Box>
     );
   }
@@ -268,37 +261,43 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
   // ---- status ---------------------------------------------------------------
   if (def.kind === 'status') {
     return (
-      <TextField
-        select
-        fullWidth
-        size="small"
-        label={def.label}
-        value={text || 'Active'}
-        onChange={(e) => onChange(e.target.value)}
-        sx={dirty ? { '& .MuiOutlinedInput-root': { bgcolor: 'warning.light' } } : undefined}
-      >
-        {PROFILE_STATUSES.map((option) => (
-          <MenuItem key={option} value={option}>
-            {option}
-          </MenuItem>
-        ))}
-      </TextField>
+      <Box>
+        <Label def={def} />
+        <TextField
+          select
+          fullWidth
+          size="small"
+          value={text || 'Active'}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value)}
+          sx={modeSx}
+        >
+          {PROFILE_STATUSES.map((option) => (
+            <MenuItem key={option} value={option}>
+              {option}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Box>
     );
   }
 
   // ---- date -----------------------------------------------------------------
   if (def.kind === 'date') {
     return (
-      <TextField
-        fullWidth
-        size="small"
-        type="date"
-        label={def.label}
-        value={toDateInput(value)}
-        onChange={(e) => onChange(e.target.value || null)}
-        InputLabelProps={{ shrink: true }}
-        helperText={def.hint}
-      />
+      <Box>
+        <Label def={def} />
+        <TextField
+          fullWidth
+          size="small"
+          type="date"
+          value={toDateInput(value)}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.value || null)}
+          helperText={disabled ? undefined : def.hint}
+          sx={modeSx}
+        />
+      </Box>
     );
   }
 
@@ -306,47 +305,47 @@ export function ProfileField({ def, value, onChange, dirty, linkedNames, onUploa
   const isSecret = def.kind === 'secret';
 
   return (
-    <TextField
-      fullWidth
-      size="small"
-      label={def.label}
-      value={text}
-      onChange={(e) => onChange(e.target.value)}
-      type={isSecret && !revealed ? 'password' : 'text'}
-      helperText={def.hint}
-      InputProps={{
-        sx: isSecret ? { fontFamily: 'ui-monospace, monospace', fontSize: '0.8125rem' } : undefined,
-        endAdornment: (
-          <InputAdornment position="end">
-            {isSecret && (
-              <IconButton size="small" edge="end" onClick={() => setRevealed((r) => !r)}>
-                {revealed ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-              </IconButton>
-            )}
-            {def.kind === 'url' && text && (
-              <IconButton size="small" edge="end" href={text} target="_blank" rel="noreferrer">
-                <OpenInNewIcon fontSize="small" />
-              </IconButton>
-            )}
-            {text && (
-              <Tooltip title={copied ? 'Copied' : 'Copy'}>
-                <IconButton size="small" edge="end" onClick={handleCopy}>
-                  {copied ? (
-                    <CheckIcon fontSize="small" color="success" />
-                  ) : (
-                    <ContentCopyIcon fontSize="small" />
-                  )}
+    <Box>
+      <Label def={def} />
+      <TextField
+        fullWidth
+        size="small"
+        value={text}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        type={isSecret && !revealed ? 'password' : 'text'}
+        placeholder={disabled ? '—' : def.hint}
+        helperText={disabled ? undefined : def.hint}
+        sx={modeSx}
+        InputProps={{
+          sx: isSecret ? { fontFamily: 'ui-monospace, monospace', fontSize: '0.8125rem' } : undefined,
+          endAdornment: (
+            <InputAdornment position="end">
+              {isSecret && text && (
+                <IconButton size="small" edge="end" onClick={() => setRevealed((r) => !r)}>
+                  {revealed ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                 </IconButton>
-              </Tooltip>
-            )}
-          </InputAdornment>
-        ),
-      }}
-      sx={
-        dirty
-          ? { '& .MuiOutlinedInput-notchedOutline': { borderColor: 'warning.main', borderWidth: 2 } }
-          : undefined
-      }
-    />
+              )}
+              {def.kind === 'url' && text && (
+                <IconButton size="small" edge="end" href={text} target="_blank" rel="noreferrer">
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              )}
+              {text && (
+                <Tooltip title={copied ? 'Copied' : 'Copy'}>
+                  <IconButton size="small" edge="end" onClick={handleCopy}>
+                    {copied ? (
+                      <CheckIcon fontSize="small" color="success" />
+                    ) : (
+                      <ContentCopyIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              )}
+            </InputAdornment>
+          ),
+        }}
+      />
+    </Box>
   );
 }
