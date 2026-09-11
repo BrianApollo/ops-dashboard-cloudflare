@@ -4,10 +4,13 @@
  * Kept for good, because SOP stages 3-6 overwrite the live fields.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
+import BoltIcon from '@mui/icons-material/Bolt';
+
+import { QuickAddDialog } from './QuickAddDialog';
 
 import { EditableSection } from './EditableSection';
 import { ProfileField } from './ProfileField';
@@ -18,6 +21,7 @@ import {
   ORIGINAL_DATA_KEYS,
   parseOriginalData,
   type OriginalData,
+  type SupplierParse,
 } from '../../features/profile-hub/original';
 
 interface ReceivedSectionProps {
@@ -54,6 +58,7 @@ const NOTES_DEF: ProfileFieldDef = {
 };
 
 export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
+  const [quickOpen, setQuickOpen] = useState(false);
   const saved = useMemo(() => parseOriginalData(values[FIELD_ORIGINAL_DATA]), [values]);
   const hasSaved = Object.values(saved).some((v) => v && v.trim());
 
@@ -67,7 +72,28 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
     return onSave(changed);
   };
 
+  /** Quick add: write the parsed supplier line (and optionally seed the live fields) in one save. */
+  const fillFromSupplier = async (parsed: SupplierParse, copyToProfile: boolean) => {
+    const changed: Record<string, unknown> = {
+      [FIELD_ORIGINAL_DATA]: JSON.stringify(parsed.data, null, 2),
+    };
+    if (parsed.extras.length > 0) {
+      const existing = String(values[FIELD_EXTRA_NOTES] ?? '').trim();
+      const extra = 'Extra from supplier line: ' + parsed.extras.join(' | ');
+      changed[FIELD_EXTRA_NOTES] = existing ? `${existing}\n${extra}` : extra;
+    }
+    if (copyToProfile) {
+      for (const [key, field] of Object.entries(SEEDS) as Array<[keyof OriginalData, string]>) {
+        const value = parsed.data[key];
+        if (value && value.trim()) changed[field] = value.trim();
+      }
+    }
+    await onSave(changed);
+  };
+
   return (
+    <>
+    <QuickAddDialog open={quickOpen} onClose={() => setQuickOpen(false)} onFill={fillFromSupplier} />
     <EditableSection
       title="1 · What we received"
       subtitle="Exactly what the profile came with on day 0. This never changes — the live fields get replaced in stages 3–6."
@@ -75,6 +101,10 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
       values={values}
       onSave={onSave}
       headerExtra={
+        <>
+          <Button size="small" variant="outlined" startIcon={<BoltIcon />} onClick={() => setQuickOpen(true)} sx={{ textTransform: 'none' }}>
+            Quick add
+          </Button>
         <Tooltip title="Fill the live profile fields (UID, passwords, 2FA, emails) from these values">
           <span>
             <Button size="small" variant="text" disabled={!hasSaved} onClick={seedLiveFields} sx={{ textTransform: 'none' }}>
@@ -82,6 +112,7 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
             </Button>
           </span>
         </Tooltip>
+        </>
       }
     >
       {({ editing, saving, draft, setField }) => {
@@ -113,5 +144,6 @@ export function ReceivedSection({ values, onSave }: ReceivedSectionProps) {
         );
       }}
     </EditableSection>
+    </>
   );
 }
