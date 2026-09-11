@@ -25,7 +25,7 @@ import VerifiedIcon from '@mui/icons-material/Verified';
 import { StatusPill } from '../../ui';
 import { matchesAllTokens } from '../../utils';
 import type { HubProfile } from '../../features/profile-hub/types';
-import { SOP_STAGES, stagesDone, isSetupComplete } from '../../features/profile-hub/sop';
+import { setupProgress, isSetupComplete } from '../../features/profile-hub/sop';
 
 interface ProfileSelectorProps {
   profiles: HubProfile[];
@@ -96,7 +96,7 @@ export function ProfileSelector({ profiles, selected, onSelect, onCreate }: Prof
           </Box>
 
           {inSetup ? (
-            <Chip size="small" icon={<ChecklistIcon />} label={`In setup · ${stagesDone(selected.fields)}/${SOP_STAGES.length}`} color="primary" />
+            <Chip size="small" icon={<ChecklistIcon />} label={`In setup · ${setupProgress(selected.fields).done}/${setupProgress(selected.fields).total}`} color="primary" />
           ) : (
             <Chip size="small" icon={<VerifiedIcon />} label="Live" color="success" />
           )}
@@ -183,7 +183,7 @@ export function ProfileSelector({ profiles, selected, onSelect, onCreate }: Prof
                 </Typography>
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                   {group.label === 'In Setup'
-                    ? `${stagesDone(p.fields)}/${SOP_STAGES.length} stages done`
+                    ? `${setupProgress(p.fields).done}/${setupProgress(p.fields).total} boxes done`
                     : String(p.fields['Profile Email'] ?? p.fields['Profile ID'] ?? '')}
                 </Typography>
               </Box>

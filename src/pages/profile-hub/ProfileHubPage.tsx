@@ -66,7 +66,7 @@ import {
   SOP_STAGES,
   FIELD_SETUP_COMPLETE,
   FIELD_SETUP_COMPLETED_ON,
-  stagesDone,
+  setupProgress,
   isSetupComplete,
   type SopStage,
 } from '../../features/profile-hub/sop';
@@ -229,7 +229,9 @@ export function ProfileHubPage() {
   // ---- render ---------------------------------------------------------------
   const fields = selected?.fields ?? {};
   const inSetup = selected ? !isSetupComplete(fields) : false;
-  const done = selected ? stagesDone(fields) : 0;
+  const progress = selected ? setupProgress(fields) : { done: 0, total: SOP_STAGES.length + 1 };
+  const done = progress.done;
+  const total = progress.total;
   const percent = selected ? completeness(fields) : 0;
   const missing = selected ? missingFields(fields) : [];
 
@@ -321,26 +323,26 @@ export function ProfileHubPage() {
                   {inSetup ? 'Setup progress' : 'Data complete'}
                 </Typography>
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                  {inSetup ? `${done} / ${SOP_STAGES.length}` : `${percent}%`}
+                  {inSetup ? `${done} / ${total}` : `${percent}%`}
                 </Typography>
               </Box>
               <LinearProgress
                 variant="determinate"
-                value={inSetup ? (done / SOP_STAGES.length) * 100 : percent}
-                color={inSetup ? (done === SOP_STAGES.length ? 'success' : 'primary') : percent === 100 ? 'success' : 'warning'}
+                value={inSetup ? (done / total) * 100 : percent}
+                color={inSetup ? (done === total ? 'success' : 'primary') : percent === 100 ? 'success' : 'warning'}
                 sx={{ height: 6, borderRadius: 3 }}
               />
             </Box>
 
             {inSetup ? (
-              <Tooltip title={done === SOP_STAGES.length ? 'Run the final verification checklist' : `Tick all ${SOP_STAGES.length} stages first`}>
+              <Tooltip title={done === total ? 'Run the final verification checklist' : `Complete all ${total} boxes first`}>
                 <span>
                   <Button
                     variant="contained"
                     color="success"
                     size="small"
                     startIcon={<VerifiedIcon />}
-                    disabled={done !== SOP_STAGES.length || busy}
+                    disabled={done !== total || busy}
                     onClick={() => setVerifyOpen(true)}
                   >
                     Verify &amp; Complete

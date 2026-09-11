@@ -8,6 +8,8 @@
  * `sop/`), left empty until they exist.
  */
 
+import { FIELD_ORIGINAL_DATA, ORIGINAL_DATA_KEYS, parseOriginalData } from './original';
+
 export interface SopStage {
   /** 1-9 */
   number: number;
@@ -192,4 +194,16 @@ export function stagesDone(fields: Record<string, unknown>): number {
 
 export function isSetupComplete(fields: Record<string, unknown>): boolean {
   return Boolean(fields[FIELD_SETUP_COMPLETE]);
+}
+
+/**
+ * Overall setup progress: Box 1 (what we received) counts when its data is
+ * complete, then one per ticked SOP stage. Total is stages + 1.
+ */
+export function setupProgress(fields: Record<string, unknown>): { done: number; total: number } {
+  const received = ORIGINAL_DATA_KEYS.every(({ key }) => {
+    const v = parseOriginalData(fields[FIELD_ORIGINAL_DATA])[key];
+    return typeof v === 'string' && v.trim() !== '';
+  });
+  return { done: stagesDone(fields) + (received ? 1 : 0), total: SOP_STAGES.length + 1 };
 }
