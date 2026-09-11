@@ -4,7 +4,7 @@
  * grouped list. Groups are In Setup / Live.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -21,6 +21,9 @@ import SearchIcon from '@mui/icons-material/Search';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import EditIcon from '@mui/icons-material/Edit';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
 
 import { StatusPill } from '../../ui';
 import { matchesAllTokens } from '../../utils';
@@ -32,14 +35,52 @@ interface ProfileSelectorProps {
   selected: HubProfile | null;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  /** Rename the selected profile. Resolves once saved. */
+  onRename: (name: string) => Promise<void>;
 }
 
 const name = (p: HubProfile) => String(p.fields['Profile Name'] ?? 'Untitled');
 const status = (p: HubProfile) => String(p.fields['Profile Status'] ?? '');
 
-export function ProfileSelector({ profiles, selected, onSelect, onCreate }: ProfileSelectorProps) {
+export function ProfileSelector({ profiles, selected, onSelect, onCreate, onRename }: ProfileSelectorProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [query, setQuery] = useState('');
+
+  // Inline rename of the selected profile's name.
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
+
+  useEffect(() => {
+    setRenaming(false);
+  }, [selected?.id]);
+
+  const startRename = () => {
+    if (!selected) return;
+    setNameDraft(name(selected));
+    setRenaming(true);
+  };
+
+  const commitRename = async () => {
+    if (!selected) return;
+    const next = nameDraft.trim();
+    if (!next || next === name(selected)) {
+      setRenaming(false);
+      return;
+    }
+    setRenameBusy(true);
+    try {
+      await onRename(next);
+      setRenaming(false);
+    } finally {
+      setRenameBusy(false);
+    }
+  };
+
+  const onRenameKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') commitRename();
+    if (e.key === 'Escape') setRenaming(false);
+  };
 
   const closeMenu = () => {
     setAnchorEl(null);
@@ -85,15 +126,37 @@ export function ProfileSelector({ profiles, selected, onSelect, onCreate }: Prof
             {name(selected).charAt(0).toUpperCase()}
           </Box>
 
-          <Box
-            onClick={(e) => setAnchorEl(e.currentTarget)}
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', '&:hover': { opacity: 0.8 }, minWidth: 0 }}
-          >
-            <Typography variant="h6" noWrap sx={{ fontWeight: 600, fontSize: '1.1rem' }}>
-              {name(selected)}
-            </Typography>
-            <KeyboardArrowDownIcon sx={{ color: 'text.secondary', fontSize: '1.25rem' }} />
-          </Box>
+          {renaming ? (
+            <TextField
+              autoFocus
+              size="small"
+              value={nameDraft}
+              disabled={renameBusy}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={onRenameKey}
+              onBlur={commitRename}
+              placeholder="Profile name"
+              sx={{ minWidth: 260 }}
+              InputProps={{ sx: { fontWeight: 600, fontSize: '1.05rem' } }}
+            />
+          ) : (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0 }}>
+              <Box
+                onClick={(e) => setAnchorEl(e.currentTarget)}
+                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', '&:hover': { opacity: 0.8 }, minWidth: 0 }}
+              >
+                <Typography variant="h6" noWrap sx={{ fontWeight: 600, fontSize: '1.1rem' }}>
+                  {name(selected)}
+                </Typography>
+                <KeyboardArrowDownIcon sx={{ color: 'text.secondary', fontSize: '1.25rem' }} />
+              </Box>
+              <Tooltip title="Rename profile">
+                <IconButton size="small" onClick={startRename} sx={{ color: 'text.secondary' }}>
+                  <EditIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
 
           {inSetup ? (
             <Chip size="small" icon={<ChecklistIcon />} label={`In setup · ${setupProgress(selected.fields).done}/${setupProgress(selected.fields).total}`} color="primary" />

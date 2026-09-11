@@ -253,7 +253,13 @@ export function ProfileHubPage() {
             <CircularProgress size={20} />
           </Paper>
         ) : (
-          <ProfileSelector profiles={profiles} selected={selected} onSelect={setSelectedId} onCreate={handleCreate} />
+          <ProfileSelector
+            profiles={profiles}
+            selected={selected}
+            onSelect={setSelectedId}
+            onCreate={handleCreate}
+            onRename={(n) => saveFields({ 'Profile Name': n })}
+          />
         )}
         <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={load} disabled={loading} sx={{ flexShrink: 0 }}>
           Refresh
