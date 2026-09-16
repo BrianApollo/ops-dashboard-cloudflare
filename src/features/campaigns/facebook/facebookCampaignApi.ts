@@ -35,6 +35,11 @@ export interface FbAdSet {
   daily_budget?: string;
   lifetime_budget?: string;
   optimization_goal?: string;
+  /** Conversion target — carries the pixel the ad set optimizes for. */
+  promoted_object?: {
+    pixel_id?: string;
+    custom_event_type?: string;
+  };
   created_time: string;
 }
 
@@ -46,6 +51,9 @@ export interface FbAd {
   creative?: {
     id: string;
     thumbnail_url?: string;
+    /** Page the ad runs as. */
+    actor_id?: string;
+    object_story_spec?: { page_id?: string };
   };
   created_time: string;
 }
@@ -206,7 +214,7 @@ export async function getFbAdSets(
   }
 
   const result = await fbGet<Response>(`${campaignId}/adsets`, accessToken, {
-    fields: 'id,name,campaign_id,status,daily_budget,lifetime_budget,optimization_goal,created_time',
+    fields: 'id,name,campaign_id,status,daily_budget,lifetime_budget,optimization_goal,promoted_object,created_time',
   });
 
   return result.data || [];
@@ -224,10 +232,33 @@ export async function getFbAds(
   }
 
   const result = await fbGet<Response>(`${campaignId}/ads`, accessToken, {
-    fields: 'id,name,adset_id,status,creative{id,thumbnail_url},created_time',
+    fields: 'id,name,adset_id,status,creative{id,thumbnail_url,actor_id,object_story_spec{page_id}},created_time',
   });
 
   return result.data || [];
+}
+
+/**
+ * Look up display names for Graph objects (pages, pixels) in one request.
+ * Returns a map of id -> name. Rejects if the token can't read any one id,
+ * so callers should group ids by object type.
+ */
+export async function getFbObjectNames(
+  ids: string[],
+  accessToken: string
+): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+
+  const result = await fbGet<Record<string, { id: string; name?: string }>>('', accessToken, {
+    ids: ids.join(','),
+    fields: 'name',
+  });
+
+  const names: Record<string, string> = {};
+  Object.values(result).forEach((obj) => {
+    if (obj?.name) names[obj.id] = obj.name;
+  });
+  return names;
 }
 
 /**

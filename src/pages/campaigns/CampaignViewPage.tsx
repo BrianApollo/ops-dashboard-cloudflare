@@ -69,6 +69,7 @@ import { fetchRedtrackReport, type RedTrackReportRow } from '../../features/redt
 import type { Campaign, FbAdSet, FbAd, FbCreative } from '../../features/campaigns';
 import type { CampaignViewTab } from '../../components/products/composition/types';
 import { AddAdsModal } from '../../components/campaigns/AddAdsModal';
+import { CampaignAssetsBar } from '../../components/campaigns/CampaignAssetsBar';
 
 // API key is injected server-side by the proxy — this is just a sentinel value
 const REDTRACK_API_KEY = 'proxy-managed' as string | undefined;
@@ -1094,13 +1095,17 @@ function ManageTab({ campaign, fbData, accessToken, adAccountId }: ManageTabProp
       >
         <Box
           sx={{
+            borderLeft: '3px solid',
+            borderLeftColor: fbCampaign.status === 'ACTIVE' ? 'success.main' : 'grey.400',
+          }}
+        >
+        <Box
+          sx={{
             px: 2.5,
             py: 2,
             display: 'flex',
             alignItems: 'center',
             gap: 3,
-            borderLeft: '3px solid',
-            borderLeftColor: fbCampaign.status === 'ACTIVE' ? 'success.main' : 'grey.400',
           }}
         >
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1193,6 +1198,10 @@ function ManageTab({ campaign, fbData, accessToken, adAccountId }: ManageTabProp
             onClick={handleCampaignStatusToggle}
             disabled={isUpdating === 'campaign-status'}
           />
+        </Box>
+
+        {/* Page & Pixel */}
+        <CampaignAssetsBar campaign={campaign} adSets={adSets} ads={ads} accessToken={accessToken} />
         </Box>
       </Paper>
 

@@ -10,6 +10,7 @@ export {
   getFbAdSets,
   getFbAds,
   getFbCampaignData,
+  getFbObjectNames,
   getFbCreative,
   getFbVideoStatus,
   getFbVideoThumbnail,

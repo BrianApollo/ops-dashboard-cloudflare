@@ -83,6 +83,7 @@ export {
   getFbCreative,
   getFbVideoStatus,
   getFbVideoThumbnail,
+  getFbObjectNames,
   // Write operations
   updateFbCampaignStatus,
   updateFbCampaignBudget,
