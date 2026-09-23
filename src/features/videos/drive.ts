@@ -159,8 +159,6 @@ export async function uploadVideoWithFolder(options: VideoUploadOptions): Promis
     // ==========================================================================
     const finalFilename = `${videoName}.${extension}`;
 
-    console.log(`[Storage] Uploading video: ${finalFilename}`);
-    console.log(`[Storage] Storage path: ${productStorageKey}/${subfolder}/${finalFilename}`);
 
     // ==========================================================================
     // Extract metadata + upload in parallel
@@ -189,7 +187,6 @@ export async function uploadVideoWithFolder(options: VideoUploadOptions): Promis
     if (metadataResult.status === 'rejected') {
       console.warn('[Storage] Metadata extraction failed (non-fatal):', metadataResult.reason);
     } else {
-      console.log(`[Storage] Metadata extracted: ${metadata?.durationFormatted ?? 'unknown'} duration, ${metadata?.width}x${metadata?.height}`);
     }
 
     // ==========================================================================
@@ -226,7 +223,6 @@ export async function uploadVideoWithFolder(options: VideoUploadOptions): Promis
       );
     }
 
-    console.log(`[Storage] Upload complete. URL: ${result.url}`);
 
     return {
       url: result.url,

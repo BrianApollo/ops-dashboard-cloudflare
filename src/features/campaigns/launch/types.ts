@@ -24,6 +24,13 @@ export interface ImageToUpload {
   image_drive_link?: string;
 }
 
+/**
+ * Usage filter for the Media Sources picker.
+ * - 'not-used': creatives that have not been launched in a campaign yet (default)
+ * - 'used': creatives already linked to a campaign
+ */
+export type MediaUsageFilter = 'not-used' | 'used';
+
 export interface SelectableVideo {
   id: string;
   name: string;

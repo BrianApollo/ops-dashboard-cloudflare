@@ -10,14 +10,14 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useVideosController, updateVideoUsage, appendCampaignToVideos } from '../videos';
+import { useVideosController, markVideosUsed } from '../videos';
 import { useImagesController } from '../images';
-import { getFbCreative, addImageIdsToCampaign } from '.';
+import { getFbCreative, addImageIdsToCampaign, addVideoIdsToCampaign, addAIVideoIdsToCampaign } from '.';
 import { usePrelaunchUploaderEffect } from './launch/usePrelaunchUploaderEffect';
 import { useLaunchMediaState } from './launch/useLaunchMediaState';
 import { mapTemplateCreative } from './launch/mapTemplateCreative';
 import { createAdsBatch } from './launch/fbLaunchApi';
-import { listAIVideosByProduct, updateAIVideoUsage, appendCampaignToAIVideos } from '../ai-videos/data';
+import { listAIVideosByProduct, markAIVideosUsed } from '../ai-videos/data';
 import type { AIVideo } from '../ai-videos/data';
 import type { FbCreative } from '.';
 import type { SelectableVideo, SelectableImage } from './launch/types';
@@ -496,43 +496,25 @@ export function useAddAdsOrchestrator({
         const regularVideos = succeededVideoRecords.filter(v => v.format !== 'ai-video');
         const aiVideoRecords = succeededVideoRecords.filter(v => v.format === 'ai-video');
 
-        // Regular videos: newly-used vs already-used
-        const newlyUsedIds = regularVideos
-          .filter(v => v.status !== 'used')
-          .map(v => v.id);
-        const alreadyUsedIds = regularVideos
-          .filter(v => v.status === 'used')
-          .map(v => v.id);
-
-        if (newlyUsedIds.length > 0) {
-          updateVideoUsage(newlyUsedIds, campaignId).catch((err: unknown) => {
-            console.error('Failed to update video usage:', err);
+        // Status on the media record; the campaign link from the campaign side,
+        // which merges - so a video reused in another campaign keeps both.
+        const regularVideoIds = regularVideos.map(v => v.id);
+        if (regularVideoIds.length > 0) {
+          markVideosUsed(regularVideoIds).catch((err: unknown) => {
+            console.error('Failed to mark videos as used:', err);
+          });
+          addVideoIdsToCampaign(campaignId, regularVideoIds).catch((err: unknown) => {
+            console.error('Failed to attach videos to campaign:', err);
           });
         }
 
-        if (alreadyUsedIds.length > 0) {
-          appendCampaignToVideos(alreadyUsedIds, campaignId).catch((err: unknown) => {
-            console.error('Failed to append campaign to used videos:', err);
+        const aiVideoIds = aiVideoRecords.map(v => v.id);
+        if (aiVideoIds.length > 0) {
+          markAIVideosUsed(aiVideoIds).catch((err: unknown) => {
+            console.error('Failed to mark AI videos as used:', err);
           });
-        }
-
-        // AI videos: newly-used vs already-used
-        const newlyUsedAIIds = aiVideoRecords
-          .filter(v => v.status !== 'Used')
-          .map(v => v.id);
-        const alreadyUsedAIIds = aiVideoRecords
-          .filter(v => v.status === 'Used')
-          .map(v => v.id);
-
-        if (newlyUsedAIIds.length > 0) {
-          updateAIVideoUsage(newlyUsedAIIds, campaignId).catch((err: unknown) => {
-            console.error('Failed to update AI video usage:', err);
-          });
-        }
-
-        if (alreadyUsedAIIds.length > 0) {
-          appendCampaignToAIVideos(alreadyUsedAIIds, campaignId).catch((err: unknown) => {
-            console.error('Failed to append campaign to used AI videos:', err);
+          addAIVideoIdsToCampaign(campaignId, aiVideoIds).catch((err: unknown) => {
+            console.error('Failed to attach AI videos to campaign:', err);
           });
         }
 

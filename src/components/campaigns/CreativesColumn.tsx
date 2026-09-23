@@ -15,6 +15,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Select from '@mui/material/Select';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -27,7 +28,7 @@ import Chip from '@mui/material/Chip';
 import { StatusPill } from '../../ui';
 import { EmptyState } from '../../core/state';
 import { textMd, textSm } from '../../theme/typography';
-import type { SelectableVideo, SelectableImage, CreativeTab, VideoUploadStatus } from '../../features/campaigns/launch/types';
+import type { SelectableVideo, SelectableImage, CreativeTab, MediaUsageFilter } from '../../features/campaigns/launch/types';
 
 const QUICK_SELECT_OPTIONS = [10, 15, 20, 25, 30, 50];
 
@@ -59,6 +60,9 @@ interface CreativesColumnProps {
   onToggleCollapse?: () => void;
   reuseCreatives?: boolean;
   onToggleReuseCreatives?: () => void;
+  /** Show creatives that have not been used in a campaign yet, or the ones that have. */
+  usageFilter?: MediaUsageFilter;
+  onUsageFilterChange?: (value: MediaUsageFilter) => void;
   // Prelaunch uploader
   prelaunchUploader?: PrelaunchUploaderProps;
   canCheckLibrary?: boolean;
@@ -81,6 +85,8 @@ export function CreativesColumn({
   onToggleCollapse,
   reuseCreatives = false,
   onToggleReuseCreatives,
+  usageFilter = 'not-used',
+  onUsageFilterChange,
   prelaunchUploader,
   canCheckLibrary = false,
   videosNotInLibraryCount = 0,
@@ -307,32 +313,60 @@ export function CreativesColumn({
         </Box>
       </Box>
 
-      {/* Reuse Creatives Option */}
-      {onToggleReuseCreatives && (
+      {/* Reuse Creatives Option + Usage Filter */}
+      {(onToggleReuseCreatives || onUsageFilterChange) && (
         <Box
           sx={{
             px: 2,
             py: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
           }}
         >
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={reuseCreatives}
-                onChange={onToggleReuseCreatives}
-                size="small"
-                sx={{ py: 0 }}
-              />
-            }
-            label={
-              <Typography variant="caption" color="text.secondary">
-                Use existing creatives if already in ad account
-              </Typography>
-            }
-            sx={{ m: 0 }}
-          />
+          {onToggleReuseCreatives ? (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={reuseCreatives}
+                  onChange={onToggleReuseCreatives}
+                  size="small"
+                  sx={{ py: 0 }}
+                />
+              }
+              label={
+                <Typography variant="caption" color="text.secondary">
+                  Use existing creatives if already in ad account
+                </Typography>
+              }
+              sx={{ m: 0 }}
+            />
+          ) : (
+            <Box />
+          )}
+
+          {onUsageFilterChange && (
+            <Select
+              value={usageFilter}
+              onChange={(e) => onUsageFilterChange(e.target.value as MediaUsageFilter)}
+              size="small"
+              aria-label="Filter creatives by campaign usage"
+              sx={{
+                minWidth: 120,
+                '& .MuiSelect-select': { py: 0.5, fontSize: '0.75rem' },
+              }}
+            >
+              <MenuItem value="not-used">
+                <Typography variant="body2">Not Used</Typography>
+              </MenuItem>
+              <MenuItem value="used">
+                <Typography variant="body2">Used</Typography>
+              </MenuItem>
+            </Select>
+          )}
         </Box>
       )}
       {/* Content */}

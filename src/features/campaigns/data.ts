@@ -42,6 +42,7 @@ const FIELD_CAMPAIGN_END_DATE = 'End Date';       // Date field
 const FIELD_CAMPAIGN_BUDGET = 'Budget';           // Currency/number field
 const FIELD_CAMPAIGN_DESCRIPTION = 'Description'; // Long text field
 const FIELD_VIDEOS_USED = 'Videos Used In This Campaign';
+const FIELD_AI_VIDEOS_USED = 'Videos copy';   // inverse of AI Videos."Used In Campaign"
 const FIELD_IMAGES_USED = 'Images Used In This Campaign';
 
 // Launch data fields (populated after successful Facebook launch)
@@ -675,6 +676,64 @@ export async function saveCampaignDraft(params: SaveCampaignDraftParams): Promis
   await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
+  });
+}
+
+/**
+ * Add video IDs to a campaign's "Videos Used In This Campaign" field.
+ * Reads existing IDs, merges with new ones, and updates.
+ *
+ * This is the ONLY place the video<->campaign link should be written. The field
+ * is the inverse of Videos."Used In Campaign", so Airtable mirrors this onto
+ * each video, ADDING this campaign and leaving the campaigns it was already
+ * used in untouched. Writing the video side directly would replace that array.
+ */
+export async function addVideoIdsToCampaign(
+  campaignId: string,
+  newVideoIds: string[]
+): Promise<void> {
+  if (newVideoIds.length === 0) return;
+
+  // 1. Read the campaign's current video links
+  const response = await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
+  const record: AirtableRecord = await response.json();
+  const existingIds = (record.fields[FIELD_VIDEOS_USED] as string[]) || [];
+
+  // 2. Merge unique
+  const mergedIds = Array.from(new Set([...existingIds, ...newVideoIds]));
+  if (mergedIds.length === existingIds.length) return;
+
+  // 3. Update
+  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields: { [FIELD_VIDEOS_USED]: mergedIds } }),
+  });
+}
+
+/**
+ * Add AI Video IDs to a campaign's AI-video link field ("Videos copy").
+ * Reads existing IDs, merges with new ones, and updates.
+ *
+ * Same rule as `addVideoIdsToCampaign`: this field is the inverse of
+ * AI Videos."Used In Campaign", so Airtable mirrors the write onto each AI
+ * video, ADDING this campaign and keeping the ones already there.
+ */
+export async function addAIVideoIdsToCampaign(
+  campaignId: string,
+  newVideoIds: string[]
+): Promise<void> {
+  if (newVideoIds.length === 0) return;
+
+  const response = await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
+  const record: AirtableRecord = await response.json();
+  const existingIds = (record.fields[FIELD_AI_VIDEOS_USED] as string[]) || [];
+
+  const mergedIds = Array.from(new Set([...existingIds, ...newVideoIds]));
+  if (mergedIds.length === existingIds.length) return;
+
+  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields: { [FIELD_AI_VIDEOS_USED]: mergedIds } }),
   });
 }
 

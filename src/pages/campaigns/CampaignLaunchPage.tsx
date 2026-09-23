@@ -260,6 +260,8 @@ export function CampaignLaunchPage() {
             onToggleCollapse={() => setMediaCollapsed(!mediaCollapsed)}
             reuseCreatives={c.reuseCreatives}
             onToggleReuseCreatives={c.toggleReuseCreatives}
+            usageFilter={c.mediaUsageFilter}
+            onUsageFilterChange={c.setMediaUsageFilter}
             prelaunchUploader={c.prelaunchUploader}
             canCheckLibrary={!!c.draft.adAccountId && !!c.selectedProfile}
             videosNotInLibraryCount={c.videosNotInLibraryCount}

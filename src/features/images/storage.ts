@@ -97,8 +97,6 @@ export async function uploadImageToStorage(
   const paddedNumber = String(imageNumber).padStart(3, '0');
   const finalFilename = `${productName}_ImageAd_${paddedNumber}.${extension}`;
 
-  console.log(`[Storage] Uploading image: ${finalFilename}`);
-  console.log(`[Storage] Storage path: ${productName}/Images/${finalFilename}`);
 
   // ==========================================================================
   // UPLOAD TO CLOUDFLARE
@@ -129,7 +127,6 @@ export async function uploadImageToStorage(
     );
   }
 
-  console.log(`[Storage] Upload complete. URL: ${result.url}`);
 
   return {
     url: result.url,

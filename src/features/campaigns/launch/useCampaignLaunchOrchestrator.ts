@@ -32,7 +32,7 @@ import { useLaunchAutoSaveEffect } from './useLaunchAutoSaveEffect';
 import { useLaunchRedtrack, type UseLaunchRedtrackReturn } from './useLaunchRedtrack';
 import { useLaunchFacebookInfra } from './useLaunchFacebookInfra';
 import { useLaunchSetupDefaults } from './useLaunchSetupDefaults';
-import { useLaunchMediaState } from './useLaunchMediaState';
+import { useLaunchMediaState, videoMatchesUsage, aiVideoMatchesUsage } from './useLaunchMediaState';
 import { useLaunchValidation } from './useLaunchValidation';
 import { useLaunchOrchestrator } from './useLaunchOrchestrator';
 import { listAIVideosByProduct, type AIVideo } from '../../ai-videos/data';
@@ -43,11 +43,14 @@ import type {
   CampaignDraft,
   InfraOption,
   ValidationGroup,
+  MediaUsageFilter,
 } from './types';
 
 // =============================================================================
 // TYPES
 // =============================================================================
+
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
 interface AdPresetForLaunch {
   id: string;
@@ -90,6 +93,8 @@ export interface UseCampaignLaunchOrchestratorReturn {
   toggleReuseCreatives: () => void;
   launchStatusActive: boolean;
   toggleLaunchStatusActive: () => void;
+  mediaUsageFilter: MediaUsageFilter;
+  setMediaUsageFilter: (value: MediaUsageFilter) => void;
 
   // Draft
   draft: CampaignDraft;
@@ -253,22 +258,28 @@ export function useCampaignLaunchOrchestrator(
       : null;
 
   // ---------------------------------------------------------------------------
+  // MEDIA USAGE FILTER (Media Sources dropdown - applies to videos and images)
+  // ---------------------------------------------------------------------------
+  const [mediaUsageFilter, setMediaUsageFilter] = useState<MediaUsageFilter>('not-used');
+
+  // ---------------------------------------------------------------------------
   // BASE VIDEOS (without library/upload state - needed for prelaunch uploader)
+  // Library check / pre-upload act on what the picker is showing.
   // ---------------------------------------------------------------------------
   const baseVideos = useMemo(() => {
     if (!productId) return [];
     const regular = videosController.list.allRecords
-      .filter((v) => v.product.id === productId && ['available', 'review'].includes(v.status) && v.format !== 'youtube')
+      .filter((v) => v.product.id === productId && videoMatchesUsage(v.status, mediaUsageFilter) && v.format !== 'youtube')
       .map((v) => ({
         id: v.id,
         name: v.name,
         creativeLink: v.creativeLink,
       }));
     const ai = aiVideos
-      .filter((v) => v.status !== 'Used')
+      .filter((v) => aiVideoMatchesUsage(v.status, mediaUsageFilter))
       .map((v) => ({ id: v.id, name: v.name, creativeLink: v.creativeLink }));
     return [...regular, ...ai].sort((a, b) => a.name.localeCompare(b.name));
-  }, [videosController.list.allRecords, productId, aiVideos]);
+  }, [videosController.list.allRecords, productId, aiVideos, mediaUsageFilter]);
 
   // ---------------------------------------------------------------------------
   // PRELAUNCH UPLOADER
@@ -292,39 +303,52 @@ export function useCampaignLaunchOrchestrator(
   // ---------------------------------------------------------------------------
   // AVAILABLE MEDIA (delegated to extracted hook)
   // ---------------------------------------------------------------------------
-  const { availableVideos: regularAvailableVideos, availableImages } = useLaunchMediaState({
+  const {
+    availableVideos: regularAvailableVideos,
+    availableImages,
+    allVideos: regularAllVideos,
+    allImages,
+  } = useLaunchMediaState({
     productId,
     videosController,
     imagesController,
     prelaunchUploader,
+    usageFilter: mediaUsageFilter,
   });
 
-  // Merge AI videos (status !== 'Used') into the available videos list,
-  // applying the same library/upload state lookup used for regular videos.
+  // AI videos live in a separate table - map them into the same shape, applying
+  // the library/upload state lookup used for regular videos.
+  const mapAiVideo = useCallback((v: AIVideo): SelectableVideo => {
+    const libraryEntry = prelaunchUploader.libraryMap.get(v.name);
+    const uploadState = prelaunchUploader.uploadStates.get(v.name);
+    return {
+      id: v.id,
+      name: v.name,
+      status: v.creativeLink ? 'available' : 'todo',
+      format: 'ai-video',
+      creativeLink: v.creativeLink,
+      productId: v.productId,
+      inLibrary: !!libraryEntry,
+      fbVideoId: libraryEntry?.fbVideoId || uploadState?.fbVideoId,
+      fbThumbnailUrl: libraryEntry?.thumbnailUrl || uploadState?.thumbnailUrl,
+      uploadStatus: uploadState?.status,
+      uploadError: uploadState?.error,
+    };
+  }, [prelaunchUploader.libraryMap, prelaunchUploader.uploadStates]);
+
+  // Every video for this product, ignoring the usage filter. Selections are
+  // resolved against this so switching the filter never drops a picked creative.
+  const allVideos = useMemo((): SelectableVideo[] => {
+    return [...regularAllVideos, ...aiVideos.map(mapAiVideo)].sort(byName);
+  }, [regularAllVideos, aiVideos, mapAiVideo]);
+
+  // The list the picker renders.
   const availableVideos = useMemo((): SelectableVideo[] => {
-    const aiSelectable: SelectableVideo[] = aiVideos
-      .filter((v) => v.status !== 'Used')
-      .map((v) => {
-        const libraryEntry = prelaunchUploader.libraryMap.get(v.name);
-        const uploadState = prelaunchUploader.uploadStates.get(v.name);
-        const normalizedStatus = v.creativeLink ? 'available' : 'todo';
-        return {
-          id: v.id,
-          name: v.name,
-          status: normalizedStatus,
-          format: 'ai-video',
-          creativeLink: v.creativeLink,
-          productId: v.productId,
-          inLibrary: !!libraryEntry,
-          fbVideoId: libraryEntry?.fbVideoId || uploadState?.fbVideoId,
-          fbThumbnailUrl: libraryEntry?.thumbnailUrl || uploadState?.thumbnailUrl,
-          uploadStatus: uploadState?.status,
-          uploadError: uploadState?.error,
-        };
-      });
-    return [...regularAvailableVideos, ...aiSelectable]
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [regularAvailableVideos, aiVideos, prelaunchUploader.libraryMap, prelaunchUploader.uploadStates]);
+    const aiSelectable = aiVideos
+      .filter((v) => aiVideoMatchesUsage(v.status, mediaUsageFilter))
+      .map(mapAiVideo);
+    return [...regularAvailableVideos, ...aiSelectable].sort(byName);
+  }, [regularAvailableVideos, aiVideos, mediaUsageFilter, mapAiVideo]);
 
   // ---------------------------------------------------------------------------
   // SELECTION STATE (delegated to extracted hook)
@@ -495,8 +519,8 @@ export function useCampaignLaunchOrchestrator(
       permanentToken: selectedProfile.permanentToken,
       profileName: selectedProfile.profileName,
     } : undefined,
-    availableVideos,
-    availableImages,
+    availableVideos: allVideos,
+    availableImages: allImages,
     selectedVideoIds,
     selectedImageIds,
     productPresets,
@@ -520,8 +544,8 @@ export function useCampaignLaunchOrchestrator(
     draft,
     selectedVideoIds,
     selectedImageIds,
-    availableVideos,
-    availableImages,
+    availableVideos: allVideos,
+    availableImages: allImages,
   });
 
   // ---------------------------------------------------------------------------
@@ -566,6 +590,8 @@ export function useCampaignLaunchOrchestrator(
     toggleReuseCreatives,
     launchStatusActive,
     toggleLaunchStatusActive,
+    mediaUsageFilter,
+    setMediaUsageFilter,
 
     // Draft
     draft,

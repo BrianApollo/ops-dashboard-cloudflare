@@ -20,8 +20,8 @@ import type { SelectableVideo, SelectableImage, CampaignDraft } from './types';
 import { useRunLaunchPipeline } from './useRunLaunchPipeline';
 import type { MediaCounts } from './useRunLaunchPipeline';
 import { writeLaunchSnapshot } from './writeLaunchSnapshot';
-import { updateVideosBatch, FIELD_USED_IN_CAMPAIGN } from '../../videos/data';
-import { updateImageUsage } from '../../images/data';
+import { markVideosUsed } from '../../videos/data';
+import { addVideoIdsToCampaign, addImageIdsToCampaign } from '../data';
 
 // =============================================================================
 // TYPES
@@ -190,8 +190,6 @@ export function useLaunchOrchestrator({
       // POST-LAUNCH PHASE: Persist to Airtable
       // =======================================================================
       if (result.phase === 'complete') {
-        console.log('Campaign launched successfully!');
-
         const snapshotResult = await writeLaunchSnapshot({
           result,
           campaignId,
@@ -249,7 +247,6 @@ export function useLaunchOrchestrator({
       } else if (result.phase === 'error') {
         console.error('Launch failed:', result.error);
       } else if (result.phase === 'stopped') {
-        console.log('Launch was stopped by user');
       }
     } catch (err) {
       console.error('Launch error:', err);
@@ -277,15 +274,14 @@ export function useLaunchOrchestrator({
       try {
         if (item.type === 'video') {
           const record = availableVideos.find((v) => v.name === item.name);
+          // Link via the campaign side so the video keeps its earlier campaigns.
           if (record) {
-            await updateVideosBatch([{
-              id: record.id,
-              fields: { [FIELD_USED_IN_CAMPAIGN]: [campaignId], Status: 'Used' },
-            }]);
+            await markVideosUsed([record.id]);
+            await addVideoIdsToCampaign(campaignId, [record.id]);
           }
         } else {
           const record = availableImages.find((i) => i.name === item.name);
-          if (record) await updateImageUsage(record.id, campaignId);
+          if (record) await addImageIdsToCampaign(campaignId, [record.id]);
         }
       } catch (err) {
         console.error('[retryItem] Failed to update media record after successful retry:', err);

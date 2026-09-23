@@ -112,7 +112,6 @@ export async function uploadVideoBatchSafe(
 
         return itemsToUpload.map(item => {
             if (item.shouldFail) {
-                console.log(`[DEBUG] Simulating failure for video: ${item.name}`);
                 return {
                     id: item.id,
                     success: false,

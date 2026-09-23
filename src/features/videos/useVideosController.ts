@@ -424,8 +424,6 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
         // Step 3: Upload to storage
         // Location: {productStorageKey}/Videos/
         // Filename: {Video.Record Name} (from Airtable, NOT from uploaded file)
-        console.log(`[Upload] Starting upload for video: ${video.name}`);
-        console.log(`[Upload] Storage path: ${productStorageKey}/Videos/`);
 
         const result = await uploadVideoWithFolder({
           videoId,
@@ -468,7 +466,6 @@ export function useVideosController(options: UseVideosControllerOptions = {}): U
             }
 
             if (oldKey) {
-              console.log(`[Upload] Deleting old file: ${oldKey}`);
               await deleteFile(oldKey);
             }
           } catch (deleteError) {

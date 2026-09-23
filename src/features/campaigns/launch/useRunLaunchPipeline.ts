@@ -276,16 +276,8 @@ export function useRunLaunchPipeline(): UseRunLaunchPipelineReturn {
         adAccountTimezone,
       });
 
-      console.log('[useRunLaunchPipeline] Launching campaign:', {
-        videos: videosWithUrls.length,
-        images: imagesWithUrls.length,
-        campaignName: fbInput.campaign.name,
-      });
-
       // Execute launch
       const result = await fbLaunch.launch(fbInput);
-
-      console.log('[useRunLaunchPipeline] Launch result:', result.phase);
 
       return {
         result,

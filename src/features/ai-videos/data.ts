@@ -16,7 +16,6 @@ const FIELD_STATUS = 'Status';
 const FIELD_EDITOR = 'Editor';
 const FIELD_CREATIVE_LINK = 'Creative Link';
 const FIELD_PRODUCT = 'Product';
-const FIELD_USED_IN_CAMPAIGN = 'Used In Campaign';
 const FIELD_VIDEO_DATA = 'Video Data';
 
 export interface AIVideo {
@@ -65,57 +64,25 @@ export async function listAIVideosByProduct(productName: string): Promise<AIVide
 }
 
 /**
- * Update AI Videos to 'Used' status and link campaign.
- * For newly-used AI videos (first time being used in a campaign).
+ * Mark AI Videos as Used WITHOUT touching their "Used In Campaign" links.
+ *
+ * The campaign link is owned by the Campaigns side of the relationship
+ * (`addAIVideoIdsToCampaign`), which merges. Writing the link array from here
+ * too would replace it, losing the campaigns the video was already used in.
  */
-export async function updateAIVideoUsage(ids: string[], campaignId: string): Promise<void> {
+export async function markAIVideosUsed(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+
   const batchSize = 10;
   for (let i = 0; i < ids.length; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize);
-    const records = batch.map((id) => ({
+    const records = ids.slice(i, i + batchSize).map((id) => ({
       id,
-      fields: {
-        [FIELD_STATUS]: 'Used',
-        [FIELD_USED_IN_CAMPAIGN]: [campaignId],
-      },
+      fields: { [FIELD_STATUS]: 'Used' },
     }));
     await airtableFetch(AI_VIDEOS_TABLE, {
       method: 'PATCH',
       body: JSON.stringify({ records }),
     });
-  }
-}
-
-/**
- * Append a campaign relation to AI Videos that are already 'Used'.
- * Reads existing campaign links first, then PATCHes with existing + new.
- */
-export async function appendCampaignToAIVideos(ids: string[], campaignId: string): Promise<void> {
-  const batchSize = 10;
-  for (let i = 0; i < ids.length; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize);
-    const currentRecords: Array<{ id: string; fields: Record<string, unknown> }> = [];
-    for (const id of batch) {
-      const res = await airtableFetch(`${AI_VIDEOS_TABLE}/${id}`);
-      const rec = await res.json();
-      if (rec.id) currentRecords.push(rec);
-    }
-    const records = currentRecords.map((rec) => {
-      const existing = Array.isArray(rec.fields[FIELD_USED_IN_CAMPAIGN])
-        ? (rec.fields[FIELD_USED_IN_CAMPAIGN] as string[])
-        : [];
-      const updated = existing.includes(campaignId) ? existing : [...existing, campaignId];
-      return {
-        id: rec.id,
-        fields: { [FIELD_USED_IN_CAMPAIGN]: updated },
-      };
-    });
-    if (records.length > 0) {
-      await airtableFetch(AI_VIDEOS_TABLE, {
-        method: 'PATCH',
-        body: JSON.stringify({ records }),
-      });
-    }
   }
 }
 

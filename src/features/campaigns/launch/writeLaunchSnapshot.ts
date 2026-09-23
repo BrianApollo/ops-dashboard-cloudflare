@@ -9,8 +9,8 @@
  * This is a pure function - no React hooks, no React imports.
  */
 
-import { updateLaunchData } from '../data';
-import { updateVideosBatch, FIELD_USED_IN_CAMPAIGN } from '../../videos/data';
+import { updateLaunchData, addVideoIdsToCampaign } from '../data';
+import { markVideosUsed } from '../../videos/data';
 import { nowGMT7 } from '../../../utils/date';
 import type { FbLaunchState, LaunchSnapshot, LaunchSnapshotMedia, LaunchSnapshotFailedMedia } from '.';
 
@@ -114,6 +114,8 @@ export async function writeLaunchSnapshot({
   try {
     // -------------------------------------------------------------------------
     // 1. Update Video Records in Airtable (mark as "Used")
+    //    The campaign is ADDED to "Used In Campaign" - a video relaunched into a
+    //    second campaign keeps its link to the first one.
     //    Skipped on the retry path — that flow updates only the retried record.
     // -------------------------------------------------------------------------
     if (updateMediaRecords) {
@@ -123,21 +125,15 @@ export async function writeLaunchSnapshot({
       if (succeededVideos.length > 0) {
         // Map video names back to their Airtable IDs
         const videoIdMap = new Map(videosWithUrls.map(v => [v.name, v.id]));
-        const videoUpdates = succeededVideos
+        const videoIds = succeededVideos
           .map(v => videoIdMap.get(v.name))
-          .filter((id): id is string => !!id)
-          .map(id => ({
-            id,
-            fields: {
-              [FIELD_USED_IN_CAMPAIGN]: [campaignId],
-              'Status': 'Used',
-            }
-          }));
+          .filter((id): id is string => !!id);
 
-        if (videoUpdates.length > 0) {
-          console.log('[writeLaunchSnapshot] Updating Airtable video records...', { count: videoUpdates.length });
-          await updateVideosBatch(videoUpdates);
-          console.log('[writeLaunchSnapshot] Airtable video update successful');
+        if (videoIds.length > 0) {
+          // Status on the video; the link via the campaign side so earlier
+          // campaigns on "Used In Campaign" are kept.
+          await markVideosUsed(videoIds);
+          await addVideoIdsToCampaign(campaignId, videoIds);
         }
       }
     }
@@ -292,7 +288,6 @@ export async function writeLaunchSnapshot({
       snapshot,
       imageIds: succeededImageIds,
     });
-    console.log('[writeLaunchSnapshot] Saved launch snapshot to Airtable');
 
     return { success: true };
   } catch (err) {

@@ -370,11 +370,9 @@ export function useImagesController(
 
         // Delete from Cloudflare Images (best effort)
         const cloudflareImageId = extractImageIdFromUrl(image.image_url!);
-        console.log(`[Debug] Extracted CF Image ID: ${cloudflareImageId} from URL: ${image.image_url}`);
 
         if (cloudflareImageId) {
-          const deleted = await deleteCloudflareImage(cloudflareImageId);
-          console.log(`[Debug] Cloudflare delete result for ${cloudflareImageId}: ${deleted}`);
+          await deleteCloudflareImage(cloudflareImageId);
         } else {
           console.warn(`[Debug] Could not extract Cloudflare Image ID from: ${image.image_url}`);
         }

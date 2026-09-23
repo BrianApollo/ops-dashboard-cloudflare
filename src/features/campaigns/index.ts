@@ -36,6 +36,8 @@ export {
   saveCampaignDraft,
   updateCampaignMedia,
   addImageIdsToCampaign,
+  addVideoIdsToCampaign,
+  addAIVideoIdsToCampaign,
   createCampaign,
   updateCampaignStatus,
   fetchLaunchSetup,
