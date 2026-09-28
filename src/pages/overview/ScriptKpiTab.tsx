@@ -616,10 +616,10 @@ function MonthCalendar({ month }: { month: MonthScriptKpi }) {
         <IconButton size="small" sx={{ p: 0 }}>
           {expanded ? <KeyboardArrowUpIcon sx={{ fontSize: 18 }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 18 }} />}
         </IconButton>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+        <Typography component="span" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
           {month.label}
           {isCurrent && (
-            <Chip label="Current" size="small" color="primary" variant="outlined" sx={{ ml: 1, height: 20, fontSize: '0.6875rem' }} />
+            <Chip component="span" label="Current" size="small" color="primary" variant="outlined" sx={{ ml: 1, height: 20, fontSize: '0.6875rem' }} />
           )}
         </Typography>
         <Typography variant="caption" color="text.secondary">
@@ -923,9 +923,9 @@ function ProgressBarsMonth({ month }: { month: MonthScriptKpi }) {
         <IconButton size="small" sx={{ p: 0 }}>
           {expanded ? <KeyboardArrowUpIcon sx={{ fontSize: 18 }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 18 }} />}
         </IconButton>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+        <Typography component="span" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
           {month.label}
-          {isCurrent && <Chip label="Current" size="small" color="primary" variant="outlined" sx={{ ml: 1, height: 20, fontSize: '0.6875rem' }} />}
+          {isCurrent && <Chip component="span" label="Current" size="small" color="primary" variant="outlined" sx={{ ml: 1, height: 20, fontSize: '0.6875rem' }} />}
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {month.scriptsCompleted}/{month.target} Scripts

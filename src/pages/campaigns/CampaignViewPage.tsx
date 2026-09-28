@@ -47,6 +47,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import AddIcon from '@mui/icons-material/Add';
+import SyncIcon from '@mui/icons-material/Sync';
 import { ToggleTabs } from '../../ui';
 import {
   getCampaign,
@@ -69,6 +70,8 @@ import { fetchRedtrackReport, type RedTrackReportRow } from '../../features/redt
 import type { Campaign, FbAdSet, FbAd, FbCreative } from '../../features/campaigns';
 import type { CampaignViewTab } from '../../components/products/composition/types';
 import { AddAdsModal } from '../../components/campaigns/AddAdsModal';
+import { buildSnapshotFromFacebook } from '../../features/manage/buildSnapshotFromFacebook';
+import { updateLaunchedDataSnapshot } from '../../features/campaigns/data';
 import { CampaignAssetsBar } from '../../components/campaigns/CampaignAssetsBar';
 
 // API key is injected server-side by the proxy — this is just a sentinel value
@@ -282,7 +285,11 @@ export function CampaignViewPage() {
           <RedTrackDataTab redtrackCampaignId={campaign.redtrackCampaignId} />
         )}
         {activeTab === 'launch-data' && (
-          <LaunchDataTab campaign={campaign} />
+          <LaunchDataTab
+            campaign={campaign}
+            accessToken={accessToken}
+            profile={activeProfile ? { id: activeProfile.id, name: activeProfile.profileName } : undefined}
+          />
         )}
       </Box>
     </Box>
@@ -297,17 +304,23 @@ type ContentSection = 'utms' | 'texts' | 'headlines' | 'descriptions';
 
 interface LaunchDataTabProps {
   campaign: Campaign;
+  /** Needed for "Sync from Facebook" on campaigns launched outside the Launcher. */
+  accessToken?: string;
+  profile?: { id: string; name: string };
 }
 
-function LaunchDataTab({ campaign }: LaunchDataTabProps) {
+function LaunchDataTab({ campaign, accessToken, profile }: LaunchDataTabProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<ContentSection>('utms');
   const [showAdIds, setShowAdIds] = useState(false);
   const [showRefs, setShowRefs] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState('');
 
   // Parse launched data JSON
-  let snapshot: import('../../../../features/campaigns/launch/types').LaunchSnapshot | null = null;
+  let snapshot: import('../../features/campaigns/launch/types').LaunchSnapshot | null = null;
   if (campaign.launchedData) {
     try {
       snapshot = JSON.parse(campaign.launchedData);
@@ -316,11 +329,57 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
     }
   }
 
+  // Rebuild the snapshot from Facebook — only for campaigns without a real
+  // Launcher snapshot, so launch records are never overwritten.
+  const canSync = !!campaign.fbCampaignId && !!campaign.fbAdAccountId
+    && (!snapshot || !!snapshot.importedFromFacebook);
+
+  const handleSync = async () => {
+    if (!accessToken || !profile || !campaign.fbCampaignId || !campaign.fbAdAccountId) return;
+    setSyncing(true);
+    setSyncError('');
+    try {
+      const fresh = await buildSnapshotFromFacebook({
+        fbCampaignId: campaign.fbCampaignId,
+        adAccountId: campaign.fbAdAccountId,
+        accessToken,
+        profile,
+        redtrack: campaign.redtrackCampaignId
+          ? { campaignId: campaign.redtrackCampaignId, campaignName: snapshot?.redtrack?.campaignName }
+          : undefined,
+      });
+      await updateLaunchedDataSnapshot(campaign.id, fresh);
+      await queryClient.invalidateQueries({ queryKey: ['campaign', campaign.id] });
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Failed to sync from Facebook');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const syncButton = canSync && (
+    <Button
+      size="small"
+      variant="outlined"
+      onClick={handleSync}
+      disabled={syncing || !accessToken}
+      startIcon={syncing ? <CircularProgress size={14} /> : <SyncIcon />}
+      sx={{ textTransform: 'none', ml: 'auto' }}
+    >
+      {syncing ? 'Syncing…' : 'Sync from Facebook'}
+    </Button>
+  );
+
   if (!snapshot) {
     return (
-      <Alert severity="info" sx={{ m: 2 }}>
-        No launch snapshot data available.
-      </Alert>
+      <Box sx={{ m: 2 }}>
+        <Alert severity="info" action={syncButton || undefined}>
+          {canSync
+            ? 'This campaign was launched outside the Launcher. Sync from Facebook to record its ads and settings.'
+            : 'No launch snapshot data available.'}
+        </Alert>
+        {syncError && <Alert severity="error" sx={{ mt: 1 }}>{syncError}</Alert>}
+      </Box>
     );
   }
 
@@ -373,6 +432,9 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Chip label={chipLabel} color={chipColor as 'success' | 'warning' | 'error'} size="small" />
+          {snapshot.importedFromFacebook && (
+            <Chip label="Imported from Facebook" size="small" variant="outlined" />
+          )}
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
             {result.adsCreated}/{result.adsAttempted} ads created
           </Typography>
@@ -384,7 +446,9 @@ function LaunchDataTab({ campaign }: LaunchDataTabProps) {
           <Typography variant="body2" color="text.secondary">
             {new Date(snapshot.launchedAt).toLocaleString()}
           </Typography>
+          {syncButton}
         </Box>
+        {syncError && <Alert severity="error" sx={{ mt: 1.5 }}>{syncError}</Alert>}
         {result.errors.length > 0 && (
           <Box sx={{ mt: 1.5 }}>
             {result.errors.map((err, i) => (

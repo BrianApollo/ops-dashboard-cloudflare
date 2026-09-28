@@ -404,6 +404,8 @@ export interface LaunchSnapshotFailedMedia {
 export interface LaunchSnapshot {
   version: number;
   launchedAt: string;
+  /** True when rebuilt from Facebook for a campaign launched outside the Launcher. */
+  importedFromFacebook?: boolean;
 
   config: {
     campaignName: string;

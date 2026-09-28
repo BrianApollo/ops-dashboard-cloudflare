@@ -8,7 +8,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getActiveProfiles, getMasterProfileId } from '../profiles/data';
-import { getLaunchedCampaignRedtrackMap } from '../campaigns/data';
+import { getLaunchedCampaignRedtrackMap, getFbCampaignRecordMapWithProduct } from '../campaigns/data';
 import { fetchAllCampaigns, updateCampaignStatus, updateCampaignBudget } from './api';
 import { matchesAllTokens } from '../../utils/tokenizedSearch';
 import type { Profile } from '../profiles/types';
@@ -31,6 +31,9 @@ export interface ManageData {
 
   // RedTrack lookup: campaign name → redtrackCampaignId
   redtrackMap: Map<string, string>;
+
+  // Add Ads lookup: FB campaign id → Airtable campaign record id (only campaigns with a product)
+  addAdsRecordMap: Map<string, string>;
 
   // Filters
   filters: ManageFilters;
@@ -102,6 +105,13 @@ export function useManageData(): ManageData {
   const { data: redtrackMap = new Map<string, string>() } = useQuery({
     queryKey: ['launched-redtrack-map'],
     queryFn: getLaunchedCampaignRedtrackMap,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ── Fetch FB campaign → Airtable record map (campaigns eligible for Add Ads) ──
+  const { data: addAdsRecordMap = new Map<string, string>() } = useQuery({
+    queryKey: ['fb-campaign-record-map'],
+    queryFn: getFbCampaignRecordMapWithProduct,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -194,6 +204,7 @@ export function useManageData(): ManageData {
     adAccounts,
     filteredCampaigns,
     redtrackMap,
+    addAdsRecordMap,
     filters,
     setSearch,
     setAdAccountFilter,

@@ -35,6 +35,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import PostAddIcon from '@mui/icons-material/PostAdd';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import AddIcon from '@mui/icons-material/Add';
@@ -62,7 +63,10 @@ interface CampaignTableProps {
   onToggleStatus: (campaignId: string, currentStatus: string) => Promise<void>;
   onEditBudget: (campaignId: string, newBudgetCents: number) => Promise<void>;
   onSchedule?: (campaign: FbManageCampaign) => void;
-  onLinkRedtrack?: (fbCampaignId: string, fbCampaignName: string, fbAdAccountId: string, redtrackCampaignId: string, redtrackCampaignName: string) => Promise<void>;
+  /** Opens Add Ads. Enabled only for campaigns present in addAdsRecordMap. */
+  onAddAds?: (campaign: FbManageCampaign) => void;
+  addAdsRecordMap?: Map<string, string>;
+  onLinkRedtrack?: (fbCampaignId: string, fbCampaignName: string, fbAdAccountId: string, redtrackCampaignId: string, redtrackCampaignName: string, productId?: string) => Promise<void>;
   adReviewButton?: React.ReactNode;
   fetchRoasButton?: React.ReactNode;
   showRoasColumn?: boolean;
@@ -447,6 +451,8 @@ export function CampaignTable({
   onToggleStatus,
   onEditBudget,
   onSchedule,
+  onAddAds,
+  addAdsRecordMap,
   onLinkRedtrack,
   adReviewButton,
   fetchRoasButton,
@@ -795,6 +801,23 @@ export function CampaignTable({
                       {/* Actions */}
                       <TableCell sx={cellSx}>
                         <Box sx={{ display: 'flex', gap: 0.25 }}>
+                          {onAddAds && (
+                            <Tooltip
+                              title={addAdsRecordMap?.has(campaign.id) ? 'Add ads' : 'Campaign not linked to a product'}
+                              arrow
+                            >
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => onAddAds(campaign)}
+                                  disabled={!addAdsRecordMap?.has(campaign.id)}
+                                  sx={{ color: 'text.secondary' }}
+                                >
+                                  <PostAddIcon sx={{ fontSize: 15 }} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
                           {onSchedule && (
                             <Tooltip title="Schedule action" arrow>
                               <IconButton
@@ -873,9 +896,9 @@ export function CampaignTable({
       <LinkRedtrackDialog
         campaign={linkDialogCampaign}
         onClose={() => setLinkDialogCampaign(null)}
-        onSave={async (fbId, fbName, adAccountId, rtId, rtName) => {
+        onSave={async (fbId, fbName, adAccountId, rtId, rtName, productId) => {
           if (onLinkRedtrack) {
-            await onLinkRedtrack(fbId, fbName, adAccountId, rtId, rtName);
+            await onLinkRedtrack(fbId, fbName, adAccountId, rtId, rtName, productId);
           }
           showToast('success', 'Campaign linked to RedTrack successfully');
           setLinkDialogCampaign(null);

@@ -779,6 +779,10 @@ export async function createLinkedCampaign(params: {
   fbAdAccountId: string;
   redtrackCampaignId: string;
   redtrackCampaignName: string;
+  productId?: string;
+  /** JSON launch snapshot built from Facebook; falls back to a placeholder note. */
+  launchedData?: string;
+  launchProfileId?: string;
 }): Promise<void> {
   const fields: Record<string, unknown> = {
     [FIELD_CAMPAIGN_NAME]: params.fbCampaignName,
@@ -788,13 +792,30 @@ export async function createLinkedCampaign(params: {
     [FIELD_FB_AD_ACCOUNT_ID]: params.fbAdAccountId,
     [FIELD_CAMPAIGN_REDTRACK_ID]: params.redtrackCampaignId,
     [FIELD_CAMPAIGN_REDTRACK_NAME]: params.redtrackCampaignName,
-    [FIELD_LAUNCHED_DATA]: 'This campaign is launched without using Launcher',
+    [FIELD_LAUNCHED_DATA]: params.launchedData || 'This campaign is launched without using Launcher',
     [FIELD_LAUNCHED_AT]: nowGMT7(),
   };
+  if (params.productId) {
+    fields[FIELD_CAMPAIGN_PRODUCT] = [params.productId];
+  }
+  if (params.launchProfileId) {
+    fields[FIELD_LAUNCH_PROFILE_ID] = params.launchProfileId;
+  }
 
   await airtableFetch(CAMPAIGNS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
+  });
+}
+
+/**
+ * Replace only the Launched Data snapshot on a campaign record.
+ * Used by "Sync from Facebook" for campaigns launched outside the Launcher.
+ */
+export async function updateLaunchedDataSnapshot(recordId: string, snapshot: LaunchSnapshot): Promise<void> {
+  await airtableFetch(`${CAMPAIGNS_TABLE}/${recordId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ fields: { [FIELD_LAUNCHED_DATA]: JSON.stringify(snapshot) } }),
   });
 }
 
@@ -833,6 +854,44 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
       : '';
     if (fbId && rtId) {
       map.set(fbId, rtId);
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Fetch campaigns that have both an FB Campaign ID and a linked Product, and
+ * return a fbCampaignId → Airtable record id map. Used by the Manage page to
+ * decide which campaigns can use Add Ads (media is listed per product).
+ */
+export async function getFbCampaignRecordMapWithProduct(): Promise<Map<string, string>> {
+  const filterFormula = encodeURIComponent(
+    `AND({${FIELD_FB_CAMPAIGN_ID}} != '', {${FIELD_CAMPAIGN_PRODUCT}} != '')`,
+  );
+  const fieldsParam = 'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID)
+    + '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_PRODUCT);
+
+  const allRecords: AirtableRecord[] = [];
+  let offset: string | undefined;
+
+  do {
+    const base = `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&${fieldsParam}`;
+    const url = offset ? `${base}&offset=${offset}` : base;
+    const response = await airtableFetch(url);
+    const data: AirtableResponse = await response.json();
+    allRecords.push(...data.records);
+    offset = data.offset;
+  } while (offset);
+
+  const map = new Map<string, string>();
+  for (const record of allRecords) {
+    const fbId = typeof record.fields[FIELD_FB_CAMPAIGN_ID] === 'string'
+      ? record.fields[FIELD_FB_CAMPAIGN_ID]
+      : '';
+    const productIds = record.fields[FIELD_CAMPAIGN_PRODUCT] as string[] | undefined;
+    if (fbId && productIds?.length && !map.has(fbId)) {
+      map.set(fbId, record.id);
     }
   }
 

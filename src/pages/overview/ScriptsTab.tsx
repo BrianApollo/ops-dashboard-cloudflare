@@ -23,11 +23,15 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
-import { useTheme } from '@mui/material/styles';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import { useTheme, alpha } from '@mui/material/styles';
 import { listVideos } from '../../features/videos/data';
 import { provider } from '../../data/provider';
 
 const COMPLETED_STATUSES = new Set(['review', 'available', 'used']);
+/** Editor names to leave out of the unfinished count. */
+const EXCLUDED_EDITORS = new Set(['AI']);
 const LONG_SCRIPT_THRESHOLD_MIN = 3;
 
 const MONTH_NAMES = [
@@ -220,6 +224,131 @@ function computeScriptMonthRows(
   return finalized.sort((a, b) => b.key.localeCompare(a.key));
 }
 
+/** Assigned work still outstanding, for whoever is selected in the Editor filter. */
+interface UnfinishedSummary {
+  /** Unfinished script assignments (one script assigned to one editor = one). */
+  scripts: number;
+  /** How many editors have at least one unfinished script. */
+  editors: number;
+  /** Variant rows still sitting in To Do across those scripts. */
+  variantsRemaining: number;
+}
+
+const EMPTY_UNFINISHED: UnfinishedSummary = { scripts: 0, editors: 0, variantsRemaining: 0 };
+
+/**
+ * Assigned-but-unfinished scripts.
+ *
+ * A "script" here is one editor's assignment: the variant rows of that script
+ * linked to that editor. It is FINISHED once every one of those rows has a
+ * video — i.e. the status has moved past To Do. Every linked row must be done,
+ * so a script with 6 variants needs all 6; the expected count follows the rows
+ * that actually exist rather than a fixed number.
+ *
+ * Rows with no editor are assigned to nobody and are skipped, as are rows with
+ * no script link. Unlike computeScriptMonthRows this reads every status — To Do
+ * rows are exactly what it is looking for.
+ *
+ * With `editorId` set the summary covers only that editor. Otherwise it totals
+ * every editor, so the figure equals the sum of the per-editor counts.
+ */
+function computeUnfinishedScripts(
+  videos: Array<{
+    editor: { id: string; name: string };
+    script?: { id: string; name: string };
+    status: string;
+  }>,
+  editorId?: string
+): UnfinishedSummary {
+  const byEditor = new Map<string, Map<string, { total: number; done: number }>>();
+
+  for (const video of videos) {
+    if (editorId && video.editor.id !== editorId) continue;
+    if (!video.editor?.id || video.editor.id === 'unknown') continue;
+    if (EXCLUDED_EDITORS.has(video.editor.name)) continue;
+    if (!video.script?.id || video.script.id === 'unknown') continue;
+
+    let scripts = byEditor.get(video.editor.id);
+    if (!scripts) {
+      scripts = new Map();
+      byEditor.set(video.editor.id, scripts);
+    }
+
+    let counts = scripts.get(video.script.id);
+    if (!counts) {
+      counts = { total: 0, done: 0 };
+      scripts.set(video.script.id, counts);
+    }
+
+    counts.total += 1;
+    if (COMPLETED_STATUSES.has(video.status)) counts.done += 1;
+  }
+
+  let scripts = 0;
+  let editors = 0;
+  let variantsRemaining = 0;
+
+  for (const scriptCounts of byEditor.values()) {
+    let editorHasWork = false;
+    for (const { total, done } of scriptCounts.values()) {
+      if (done >= total) continue;
+      scripts += 1;
+      variantsRemaining += total - done;
+      editorHasWork = true;
+    }
+    if (editorHasWork) editors += 1;
+  }
+
+  return { scripts, editors, variantsRemaining };
+}
+
+/** Top-of-tab total of assigned work still outstanding. */
+function UnfinishedStrip({ summary, scoped }: { summary: UnfinishedSummary; scoped: boolean }) {
+  const theme = useTheme();
+  const done = summary.scripts === 0;
+  const tone = done ? theme.palette.success.main : theme.palette.warning.main;
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        borderRadius: 2,
+        px: 2,
+        py: 1.25,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        borderColor: alpha(tone, 0.4),
+        bgcolor: alpha(tone, 0.06),
+      }}
+    >
+      {done
+        ? <TaskAltIcon sx={{ fontSize: 20, color: 'success.main' }} />
+        : <PendingActionsIcon sx={{ fontSize: 20, color: 'warning.main' }} />}
+
+      {done ? (
+        <Typography component="span" sx={{ fontSize: '0.875rem', fontWeight: 600 }}>
+          {scoped ? 'All assigned scripts are finished' : 'All assigned scripts are finished across every editor'}
+        </Typography>
+      ) : (
+        <Typography component="span" sx={{ fontSize: '0.875rem' }}>
+          <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.0625rem', mr: 0.75 }}>
+            {summary.scripts}
+          </Typography>
+          unfinished script{summary.scripts === 1 ? '' : 's'}
+          {!scoped && summary.editors > 0 && ` across ${summary.editors} editor${summary.editors === 1 ? '' : 's'}`}
+        </Typography>
+      )}
+
+      {!done && (
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+          {summary.variantsRemaining} variant{summary.variantsRemaining === 1 ? '' : 's'} still to do
+        </Typography>
+      )}
+    </Paper>
+  );
+}
+
 type Granularity = 'monthly' | 'weekly';
 
 export function ScriptsTab() {
@@ -246,6 +375,15 @@ export function ScriptsTab() {
     [videosQuery.data, granularity, editorId]
   );
 
+  // Outstanding work for the selected editor, or every editor when "All" is picked.
+  // Granularity does not apply — this is a live backlog, not a period breakdown.
+  const unfinished = useMemo(
+    () => (videosQuery.data
+      ? computeUnfinishedScripts(videosQuery.data, editorId === 'all' ? undefined : editorId)
+      : EMPTY_UNFINISHED),
+    [videosQuery.data, editorId]
+  );
+
   const headerSx = {
     fontWeight: 600,
     fontSize: '0.75rem',
@@ -268,41 +406,50 @@ export function ScriptsTab() {
     );
   }
 
+  const editorFilter = (
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, alignItems: 'center' }}>
+      <FormControl size="small" sx={{ minWidth: 200 }}>
+        <InputLabel id="editor-filter-label">Editor</InputLabel>
+        <Select
+          labelId="editor-filter-label"
+          label="Editor"
+          value={editorId}
+          onChange={(e) => setEditorId(e.target.value)}
+        >
+          <MenuItem value="all">All Editors</MenuItem>
+          {(editorsQuery.data ?? []).map((ed) => (
+            <MenuItem key={ed.id} value={ed.id}>{ed.name}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <ToggleTabs
+        value={granularity}
+        onChange={setGranularity}
+        size="small"
+        options={[
+          { value: 'monthly', label: 'Monthly' },
+          { value: 'weekly', label: 'Weekly' },
+        ]}
+      />
+    </Box>
+  );
+
   if (rows.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <Typography color="text.secondary">No completed scripts found.</Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {editorFilter}
+        <UnfinishedStrip summary={unfinished} scoped={editorId !== 'all'} />
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <Typography color="text.secondary">No completed scripts found.</Typography>
+        </Box>
       </Box>
     );
   }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, alignItems: 'center' }}>
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel id="editor-filter-label">Editor</InputLabel>
-          <Select
-            labelId="editor-filter-label"
-            label="Editor"
-            value={editorId}
-            onChange={(e) => setEditorId(e.target.value)}
-          >
-            <MenuItem value="all">All Editors</MenuItem>
-            {(editorsQuery.data ?? []).map((ed) => (
-              <MenuItem key={ed.id} value={ed.id}>{ed.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <ToggleTabs
-          value={granularity}
-          onChange={setGranularity}
-          size="small"
-          options={[
-            { value: 'monthly', label: 'Monthly' },
-            { value: 'weekly', label: 'Weekly' },
-          ]}
-        />
-      </Box>
+      {editorFilter}
+      <UnfinishedStrip summary={unfinished} scoped={editorId !== 'all'} />
       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
       <Table size="small">
         <TableHead>

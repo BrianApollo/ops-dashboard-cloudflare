@@ -17,7 +17,7 @@ const FB_GRAPH_URL = 'https://graph.facebook.com';
 // HELPERS
 // =============================================================================
 
-async function fbGet<T>(
+export async function fbGet<T>(
   endpoint: string,
   accessToken: string,
   params?: Record<string, string>,

@@ -21,8 +21,10 @@ import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import { ProfileSelector } from '../../components/ProfileSelector';
 import { CampaignTable } from '../../components/CampaignTable';
 import { AdReviewDialog } from '../../components/AdReviewDialog';
+import { ManageAddAdsDialog } from '../../components/manage/ManageAddAdsDialog';
 import { useManageData } from '../../features/manage/useManageData';
 import { checkAdReview } from '../../features/manage/api';
+import { buildSnapshotFromFacebook } from '../../features/manage/buildSnapshotFromFacebook';
 import { getRedtrackIdsByFbCampaignIds, createLinkedCampaign } from '../../features/campaigns/data';
 import { fetchRedtrackCampaignRoas } from '../../features/redtrack/api';
 import type { AdReviewResult, FbManageCampaign } from '../../features/manage/types';
@@ -42,6 +44,7 @@ export function ManagePage() {
     filteredCampaigns,
     adAccounts,
     redtrackMap,
+    addAdsRecordMap,
     filters,
     setSearch,
     setAdAccountFilter,
@@ -119,6 +122,10 @@ export function ManagePage() {
     }
     : undefined;
 
+  // ── Add Ads dialog state ──
+  const [addAdsTarget, setAddAdsTarget] = useState<FbManageCampaign | null>(null);
+  const addAdsRecordId = addAdsTarget ? addAdsRecordMap.get(addAdsTarget.id) : undefined;
+
   // ── Link RedTrack handler ──
   const handleLinkRedtrack = useCallback(async (
     fbCampaignId: string,
@@ -126,17 +133,42 @@ export function ManagePage() {
     fbAdAccountId: string,
     redtrackCampaignId: string,
     redtrackCampaignName: string,
+    productId?: string,
   ) => {
+    // Record what's live on Facebook as the launch snapshot. If that fails,
+    // still link — createLinkedCampaign falls back to a placeholder note.
+    let launchedData: string | undefined;
+    if (selectedProfile?.permanentToken) {
+      try {
+        const snapshot = await buildSnapshotFromFacebook({
+          fbCampaignId,
+          adAccountId: fbAdAccountId,
+          accessToken: selectedProfile.permanentToken,
+          profile: { id: selectedProfile.id, name: selectedProfile.profileName },
+          redtrack: { campaignId: redtrackCampaignId, campaignName: redtrackCampaignName },
+        });
+        launchedData = JSON.stringify(snapshot);
+      } catch (err) {
+        console.error('Failed to build launch snapshot from Facebook:', err);
+      }
+    }
+
     await createLinkedCampaign({
       fbCampaignId,
       fbCampaignName,
       fbAdAccountId,
       redtrackCampaignId,
       redtrackCampaignName,
+      productId,
+      launchedData,
+      launchProfileId: selectedProfile?.id,
     });
-    await queryClient.invalidateQueries({ queryKey: ['launched-redtrack-map'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['launched-redtrack-map'] }),
+      queryClient.invalidateQueries({ queryKey: ['fb-campaign-record-map'] }),
+    ]);
     refetch();
-  }, [refetch, queryClient]);
+  }, [refetch, queryClient, selectedProfile]);
 
   // ── Fetch ROAS state ──
   const [isFetchingRoas, setIsFetchingRoas] = useState(false);
@@ -352,6 +384,8 @@ export function ManagePage() {
         onToggleStatus={toggleCampaignStatus}
         onEditBudget={editCampaignBudget}
         onSchedule={handleSchedule}
+        onAddAds={setAddAdsTarget}
+        addAdsRecordMap={addAdsRecordMap}
         onLinkRedtrack={handleLinkRedtrack}
         // Ad review button
         adReviewButton={
@@ -422,6 +456,19 @@ export function ManagePage() {
           results={reviewResults}
           totalChecked={totalChecked}
           accessToken={selectedProfile?.permanentToken ?? ''}
+        />
+      )}
+      {/* Add Ads dialog */}
+      {addAdsTarget && addAdsRecordId && selectedProfile?.permanentToken && (
+        <ManageAddAdsDialog
+          campaign={addAdsTarget}
+          airtableRecordId={addAdsRecordId}
+          accessToken={selectedProfile.permanentToken}
+          onClose={() => setAddAdsTarget(null)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['manage-campaigns'] });
+            queryClient.invalidateQueries({ queryKey: ['manage-add-ads-fb', addAdsTarget.id] });
+          }}
         />
       )}
       {/* Schedule action dialog */}
