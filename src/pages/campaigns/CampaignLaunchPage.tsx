@@ -27,6 +27,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import SaveIcon from '@mui/icons-material/Save';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { useToast } from '../../core/toast';
 // Controller - canonical location
 import { useCampaignLaunchOrchestrator } from '../../features/campaigns/launch/useCampaignLaunchOrchestrator';
 // Components - canonical location
@@ -35,6 +37,7 @@ import { CampaignSetupColumn } from '../../components/campaigns/CampaignSetupCol
 import { FinalCheckColumn } from '../../components/campaigns/FinalCheckColumn';
 // LaunchProgressView - canonical location
 import { LaunchProgressView } from '../../components/campaigns/LaunchProgressView';
+import { CloneCampaignDialog } from '../../components/campaigns/CloneCampaignDialog';
 import { saveLaunchTemplate } from '../../features/campaigns/data';
 
 // =============================================================================
@@ -57,6 +60,26 @@ export function CampaignLaunchPage() {
   // UI-only state (not business logic)
   const [mediaCollapsed, setMediaCollapsed] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const toast = useToast();
+
+  const handleClone = (sourceCampaignId: string) => {
+    const result = c.cloneFromCampaign(sourceCampaignId);
+    if (!result) {
+      toast.error('Could not find the selected campaign.');
+      return;
+    }
+    const summary = `${result.videosSelected} videos and ${result.imagesSelected} images selected.`;
+    const missing = result.videosMissing + result.imagesMissing;
+    if (missing > 0) {
+      toast.warning(
+        `${summary} ${missing} creative${missing === 1 ? ' is' : 's are'} no longer available for this product.`,
+        `Cloned "${result.sourceName}"`
+      );
+    } else {
+      toast.success(summary, `Cloned "${result.sourceName}"`);
+    }
+  };
 
   const handleSaveTemplate = async () => {
     if (!c.productId) return;
@@ -142,6 +165,24 @@ export function CampaignLaunchPage() {
         <Typography variant="h3" sx={{ fontWeight: 600, flex: 1 }}>
           Campaign Launcher - {c.campaign?.product.name || 'Product'}
         </Typography>
+
+        {/* Clone Existing Campaign */}
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<ContentCopyIcon />}
+          onClick={() => setCloneDialogOpen(true)}
+          sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+        >
+          Clone Campaign{c.cloneCandidates.length > 0 ? ` (${c.cloneCandidates.length})` : ''}
+        </Button>
+        <CloneCampaignDialog
+          open={cloneDialogOpen}
+          productName={c.campaign.product.name || 'this product'}
+          candidates={c.cloneCandidates}
+          onClose={() => setCloneDialogOpen(false)}
+          onClone={handleClone}
+        />
 
         {/* Save as Template */}
         <Button

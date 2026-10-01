@@ -35,6 +35,7 @@ import { useLaunchSetupDefaults } from './useLaunchSetupDefaults';
 import { useLaunchMediaState, videoMatchesUsage, aiVideoMatchesUsage } from './useLaunchMediaState';
 import { useLaunchValidation } from './useLaunchValidation';
 import { useLaunchOrchestrator } from './useLaunchOrchestrator';
+import { useLaunchCloneCampaign, type CloneCandidate, type CloneResult } from './useLaunchCloneCampaign';
 import { listAIVideosByProduct, type AIVideo } from '../../ai-videos/data';
 import type { FbLaunchState } from '../launch';
 import type {
@@ -123,6 +124,10 @@ export interface UseCampaignLaunchOrchestratorReturn {
   // Actions
   launch: () => Promise<void>;
   retryItem: (name: string) => void;
+
+  // Clone from a launched campaign of the same product
+  cloneCandidates: CloneCandidate[];
+  cloneFromCampaign: (sourceCampaignId: string) => CloneResult | null;
 
   // Auto-save status
   saveStatus: 'idle' | 'pending' | 'saving' | 'saved' | 'error';
@@ -361,6 +366,8 @@ export function useCampaignLaunchOrchestrator(
     selectedImageIds,
     reuseCreatives,
     launchStatusActive,
+    setSelectedVideoIds,
+    setSelectedImageIds,
     setReuseCreatives,
     setLaunchStatusActive,
     toggleVideo,
@@ -533,6 +540,24 @@ export function useCampaignLaunchOrchestrator(
   });
 
   // ---------------------------------------------------------------------------
+  // CLONE FROM LAUNCHED CAMPAIGN (delegated to extracted hook)
+  // ---------------------------------------------------------------------------
+  const { cloneCandidates, cloneFromCampaign } = useLaunchCloneCampaign({
+    campaigns: campaignsController.campaigns,
+    currentCampaignId: campaignId,
+    productId,
+    allVideos,
+    allImages,
+    setDraft,
+    setSelectedProfileId,
+    setReuseCreatives,
+    setLaunchStatusActive,
+    setSelectedVideoIds,
+    setSelectedImageIds,
+    setMediaUsageFilter,
+  });
+
+  // ---------------------------------------------------------------------------
   // VALIDATION (delegated to extracted hook)
   // ---------------------------------------------------------------------------
   const {
@@ -620,6 +645,10 @@ export function useCampaignLaunchOrchestrator(
     // Actions
     launch,
     retryItem,
+
+    // Clone
+    cloneCandidates,
+    cloneFromCampaign,
 
     // Auto-save status
     saveStatus,

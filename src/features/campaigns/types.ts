@@ -106,6 +106,15 @@ export interface Campaign {
   /** Full JSON snapshot of everything at launch time (stored in Airtable) */
   launchedData?: string;
 
+  /** Linked Videos records ("Videos Used In This Campaign") */
+  videoIds?: string[];
+
+  /** Linked AI Videos records ("Videos copy") */
+  aiVideoIds?: string[];
+
+  /** Linked Images records ("Images Used In This Campaign") */
+  imageIds?: string[];
+
   // ==========================================================================
   // DRAFT DATA (saved via Save Draft / auto-save)
   // ==========================================================================

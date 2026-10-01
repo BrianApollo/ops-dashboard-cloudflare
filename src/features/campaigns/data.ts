@@ -216,6 +216,13 @@ function mapAirtableToCampaign(
     ? fields[FIELD_LAUNCHED_DATA]
     : undefined;
 
+  // Linked media records
+  const linkIds = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  const videoIds = linkIds(fields[FIELD_VIDEOS_USED]);
+  const aiVideoIds = linkIds(fields[FIELD_AI_VIDEOS_USED]);
+  const imageIds = linkIds(fields[FIELD_IMAGES_USED]);
+
   // Draft fields
   const launchDate = typeof fields[FIELD_LAUNCH_DATE] === 'string'
     ? fields[FIELD_LAUNCH_DATE]
@@ -294,6 +301,9 @@ function mapAirtableToCampaign(
     fbAdAccountId,
     launchProfileId,
     launchedData,
+    videoIds,
+    aiVideoIds,
+    imageIds,
     // Draft fields
     launchDate,
     launchTime,
