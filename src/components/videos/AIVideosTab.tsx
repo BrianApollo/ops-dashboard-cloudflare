@@ -3,6 +3,7 @@
  * Uses useListController in direct mode for filter/search/pagination state.
  */
 
+import { useMemo } from 'react';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -42,8 +43,17 @@ const STATUS_MAP: Record<string, { key: 'available' | 'used'; label: string }> =
 };
 
 export function AIVideosTab({ aiVideos, isLoading, productSelected }: AIVideosTabProps) {
+  // Alphabetical by name (numeric-aware so "Script 2" sorts before "Script 10")
+  const sortedVideos = useMemo(
+    () =>
+      [...aiVideos].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
+      ),
+    [aiVideos],
+  );
+
   const list = useListController<AIVideo, AIVideoFilters>({
-    records: aiVideos,
+    records: sortedVideos,
     initialFilters: { status: null },
     initialPageSize: 20,
     filterFn: (records, filters) =>
