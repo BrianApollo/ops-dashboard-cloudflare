@@ -25,6 +25,30 @@
 
 const RESERVED = new Set(['id', '_created_time', '_updated_at']);
 
+/**
+ * Link fields that are semantically one-to-one in this business and therefore
+ * stored as scalar foreign-key columns ("<name>_id") instead of JSON arrays.
+ * Airtable's prefersSingleRecordLink flag also marks a field single, but it
+ * reflects UI preference, not cardinality, so the app's known-single links
+ * are listed explicitly. Everything not single stays a JSON id-array
+ * (true many-to-many; junction tables are the post-cutover step).
+ */
+const SINGLE_LINKS = new Set([
+  'Videos:Product', 'Videos:Script', 'Videos:Editor',
+  'AI Videos:Product', 'AI Videos:Editor',
+  'Images:Product', 'Temp Images:Product',
+  'Video Scripts:Product', 'Video Scripts:Author',
+  'Campaigns:Product', 'Campaigns:Selected Ad Profile',
+  'Ad Presets:Product', 'Advertorials:Product',
+  'Campaign Launch Setup:Product',
+  'Master Profile:Profile Record',
+  'Schedule:Linked Campaign', 'Schedule:From Rule',
+]);
+
+function isSingleLink(tableName, f) {
+  return f.type === 'multipleRecordLinks' && (f.single === true || SINGLE_LINKS.has(`${tableName}:${f.name}`));
+}
+
 const JSON_TYPES = new Set([
   'multipleRecordLinks', 'multipleAttachments', 'multipleLookupValues',
   'multipleSelects', 'multipleCollaborators',
@@ -52,12 +76,16 @@ export function columnPlan(slimTable) {
   const plan = [];
   for (const f of slimTable.fields) {
     if (SKIP_TYPES.has(f.type)) continue;
-    let col = sanitizeIdentifier(f.name);
+    const single = isSingleLink(slimTable.name, f);
+    let base = sanitizeIdentifier(f.name);
+    if (single && !base.endsWith('_id')) base += '_id'; // scalar FK naming
+    let col = base;
     let n = 2;
-    while (used.has(col)) col = `${sanitizeIdentifier(f.name)}_${n++}`;
+    while (used.has(col)) col = `${base}_${n++}`;
     used.add(col);
     let kind;
-    if (JSON_TYPES.has(f.type)) kind = 'json';
+    if (single) kind = 'link1';
+    else if (JSON_TYPES.has(f.type)) kind = 'json';
     else if (f.type === 'lastModifiedTime' || f.type === 'createdTime') kind = 'scalar';
     else if (COMPUTED_JSON_TYPES.has(f.type)) kind = 'computed';
     else if (NUMBER_TYPES.has(f.type)) kind = 'number';
@@ -66,6 +94,14 @@ export function columnPlan(slimTable) {
     plan.push({ field: f.name, column: col, type: f.type, kind });
   }
   return plan;
+}
+
+/** Index every scalar FK column — one statement each (D1 prepare-friendly). */
+export function createIndexSqls(slimTable) {
+  const t = sqlTableName(slimTable.name);
+  return columnPlan(slimTable)
+    .filter((c) => c.kind === 'link1')
+    .map((c) => `CREATE INDEX IF NOT EXISTS "idx_${t}_${c.column}" ON "${t}"("${c.column}");`);
 }
 
 export function createTableSql(slimTable) {
@@ -92,6 +128,10 @@ export function encodeRow(slimTable, rec) {
     const v = rec.fields[c.field];
     if (v === undefined || v === null) { values.push(null); continue; }
     switch (c.kind) {
+      case 'link1':
+        // The API always carries link values as id-arrays; store the single id.
+        values.push(Array.isArray(v) ? (v[0] ?? null) : v);
+        break;
       case 'json':
       case 'computed':
         values.push(JSON.stringify(v));
@@ -121,6 +161,9 @@ export function decodeRow(slimTable, row) {
     const v = row[c.column];
     if (v === undefined || v === null) continue;
     switch (c.kind) {
+      case 'link1':
+        fields[c.field] = [v]; // back to the id-array shape the API serves
+        break;
       case 'json':
       case 'computed':
         try { fields[c.field] = JSON.parse(v); } catch { fields[c.field] = v; }
@@ -160,6 +203,7 @@ export function buildSlimSchema(metaTables) {
           out.linkedTable = tableById[f.options?.linkedTableId]?.name;
           const inv = f.options?.inverseLinkFieldId ? fieldById[f.options.inverseLinkFieldId] : null;
           if (inv) out.inverseField = inv.field.name;
+          if (f.options?.prefersSingleRecordLink) out.single = true;
         }
         if (COMPUTED_TYPES.has(f.type)) out.computed = true;
         if (f.type === 'multipleLookupValues' || f.type === 'count' || f.type === 'rollup') {

@@ -17,7 +17,7 @@
  */
 
 // @ts-expect-error — shared plain-JS module (single source of the field↔column mapping)
-import { buildSlimSchema, sqlTableName, encodeRow, upsertSql, decodeRow, createTableSql, columnPlan } from '../../../functions/lib/db-api/field-map.mjs';
+import { buildSlimSchema, sqlTableName, encodeRow, upsertSql, decodeRow, createTableSql, createIndexSqls, columnPlan } from '../../../functions/lib/db-api/field-map.mjs';
 
 export interface Env {
   AIRTABLE_API_KEY: string;
@@ -112,6 +112,7 @@ async function applySchemaDrift(env: Env, slim: any): Promise<boolean> {
     if (!prev) {
       console.log(`[schema] new table ${t.name}`);
       await env.DB.prepare(createTableSql(t)).run();
+      for (const idx of createIndexSqls(t)) await env.DB.prepare(idx).run();
       continue;
     }
     const prevCols = new Set(columnPlan(prev).map((c: any) => c.column));

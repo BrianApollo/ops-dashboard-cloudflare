@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 import {
   buildSlimSchema,
   createTableSql,
+  createIndexSqls,
   sqlTableName,
   encodeRow,
   columnPlan,
@@ -149,6 +150,7 @@ const ONLY_TABLES = tablesArgIdx >= 0 ? process.argv[tablesArgIdx + 1].split(','
 
     statements.push(`DROP TABLE IF EXISTS "${sqlTableName(t.name)}";`);
     statements.push(createTableSql(t));
+    statements.push(...createIndexSqls(t));
 
     console.log(`Fetching ${t.name}…`);
     const records = await fetchAll(t.name);
