@@ -2,10 +2,12 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { CircularProgress, Box } from '@mui/material';
 export function RequireAuth() {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, isInitializing } = useAuth();
     const location = useLocation();
 
-    if (isLoading) {
+    // Wait for the cookie-session restore before deciding anything, or a hard
+    // refresh on a deep link bounces to /login and loses the destination.
+    if (isLoading || isInitializing) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
                 <CircularProgress />
@@ -29,7 +31,11 @@ export function RequireAuth() {
 }
 
 export function RedirectIfAuthenticated() {
-    const { user } = useAuth();
+    const { user, isInitializing } = useAuth();
+
+    if (isInitializing) {
+        return null;
+    }
 
     if (user) {
         if (user.role === 'video editor') {
@@ -42,9 +48,9 @@ export function RedirectIfAuthenticated() {
 }
 
 export function RootRedirect() {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, isInitializing } = useAuth();
 
-    if (isLoading) {
+    if (isLoading || isInitializing) {
         return null; // Let RequireAuth handle the loading spinner if wrapped, or show nothing
     }
 

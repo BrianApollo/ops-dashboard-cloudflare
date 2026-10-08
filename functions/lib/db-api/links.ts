@@ -6,7 +6,7 @@
  */
 
 import type { ShimField, ShimTable } from './schema';
-import { fieldDef } from './schema';
+import { fieldDef, resolveTable } from './schema';
 import type { PreparedWrite, RequestStore, StoredRecord } from './store';
 import { isEmptyValue, newAttId, upsertRecordStmt } from './store';
 
@@ -125,6 +125,8 @@ async function queueInverseUpdates(
   const removed = oldIds.filter((id) => !newIds.includes(id));
   if (added.length === 0 && removed.length === 0) return;
 
+  const linkedShim = await resolveTable(store.db, def.linkedTable);
+  if (!linkedShim) return;
   const target = await store.getTable(def.linkedTable);
   for (const id of added) {
     const t = target.byId.get(id);
@@ -132,7 +134,7 @@ async function queueInverseUpdates(
     const arr = Array.isArray(t.fields[def.inverseField]) ? [...(t.fields[def.inverseField] as string[])] : [];
     if (!arr.includes(recId)) arr.push(recId);
     t.fields[def.inverseField] = arr; // keep the in-request cache consistent
-    foreignWrites.push(upsertRecordStmt(def.linkedTable, { ...t, updatedAt: new Date().toISOString() }));
+    foreignWrites.push(upsertRecordStmt(linkedShim, { ...t, updatedAt: new Date().toISOString() }));
   }
   for (const id of removed) {
     const t = target.byId.get(id);
@@ -140,7 +142,7 @@ async function queueInverseUpdates(
     const arr = Array.isArray(t.fields[def.inverseField]) ? (t.fields[def.inverseField] as string[]).filter((x) => x !== recId) : [];
     if (arr.length) t.fields[def.inverseField] = arr;
     else delete t.fields[def.inverseField];
-    foreignWrites.push(upsertRecordStmt(def.linkedTable, { ...t, updatedAt: new Date().toISOString() }));
+    foreignWrites.push(upsertRecordStmt(linkedShim, { ...t, updatedAt: new Date().toISOString() }));
   }
 }
 

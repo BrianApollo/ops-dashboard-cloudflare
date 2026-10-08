@@ -3,6 +3,9 @@
  */
 
 import type { D1Like, ShimTable } from './schema';
+import { resolveTable } from './schema';
+// @ts-expect-error — shared plain-JS module (also used by Node scripts/workers)
+import { sqlTableName, encodeRow, upsertSql, decodeRow } from './field-map.mjs';
 
 export interface StoredRecord {
   id: string;
@@ -56,16 +59,10 @@ export class RequestStore {
       const hit = GLOBAL.tables.get(tableName);
       if (hit) return hit;
       const promise = (async (): Promise<TableData> => {
-        const res = await this.db
-          .prepare(`SELECT id, fields, created_time, updated_at FROM records WHERE table_name = ?`)
-          .bind(tableName)
-          .all();
-        const rows: StoredRecord[] = res.results.map((r) => ({
-          id: r.id as string,
-          fields: JSON.parse(r.fields as string) as Record<string, unknown>,
-          createdTime: r.created_time as string,
-          updatedAt: r.updated_at as string,
-        }));
+        const slim = await resolveTable(this.db, tableName);
+        if (!slim) throw new Error(`Unknown table: ${tableName}`);
+        const res = await this.db.prepare(`SELECT * FROM "${sqlTableName(slim.name)}"`).all();
+        const rows: StoredRecord[] = res.results.map((r) => decodeRow(slim, r) as StoredRecord);
         return { rows, byId: new Map(rows.map((r) => [r.id, r])), decoratedById: new Map() };
       })();
       GLOBAL.tables.set(tableName, promise);
@@ -140,17 +137,15 @@ export interface PreparedWrite {
 }
 
 export function upsertRecordStmt(
-  tableName: string,
+  table: ShimTable,
   rec: StoredRecord
 ): PreparedWrite {
-  return {
-    sql: `INSERT OR REPLACE INTO records (table_name, id, fields, created_time, updated_at) VALUES (?, ?, ?, ?, ?)`,
-    args: [tableName, rec.id, JSON.stringify(rec.fields), rec.createdTime, rec.updatedAt],
-  };
+  const { values } = encodeRow(table, rec);
+  return { sql: upsertSql(table), args: values };
 }
 
-export function deleteRecordStmt(tableName: string, id: string): PreparedWrite {
-  return { sql: `DELETE FROM records WHERE table_name = ? AND id = ?`, args: [tableName, id] };
+export function deleteRecordStmt(table: ShimTable, id: string): PreparedWrite {
+  return { sql: `DELETE FROM "${sqlTableName(table.name)}" WHERE id = ?`, args: [id] };
 }
 
 export function mutationLogStmt(

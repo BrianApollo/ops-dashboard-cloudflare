@@ -11,6 +11,9 @@
 
 import { hashPassword, verifyPassword, createJwt } from '../../lib/auth';
 import type { D1Like } from '../../lib/db-api/schema';
+import { resolveTable } from '../../lib/db-api/schema';
+// @ts-expect-error — shared plain-JS module
+import { sqlTableName, decodeRow, encodeRow, upsertSql } from '../../lib/db-api/field-map.mjs';
 
 interface Env {
   AIRTABLE_API_KEY: string;
@@ -24,6 +27,8 @@ interface Env {
 interface UserRecord {
   id: string;
   fields: Record<string, unknown>;
+  createdTime?: string;
+  updatedAt?: string;
 }
 
 /** Look up Users by email on the active backend. Airtable's `=` is
@@ -31,9 +36,11 @@ interface UserRecord {
 async function findUsersByEmail(env: Env, safeEmail: string): Promise<UserRecord[] | null> {
   if (env.DATA_BACKEND === 'd1') {
     if (!env.DB) return null;
-    const res = await env.DB.prepare(`SELECT id, fields FROM records WHERE table_name = 'Users'`).all();
+    const users = await resolveTable(env.DB, 'Users');
+    if (!users) return null;
+    const res = await env.DB.prepare(`SELECT * FROM "${sqlTableName(users.name)}"`).all();
     return res.results
-      .map((r) => ({ id: r.id as string, fields: JSON.parse(r.fields as string) as Record<string, unknown> }))
+      .map((r) => decodeRow(users, r) as UserRecord)
       .filter((r) => typeof r.fields['Email'] === 'string' && (r.fields['Email'] as string).toLowerCase() === safeEmail.toLowerCase());
   }
 
@@ -57,10 +64,17 @@ async function findUsersByEmail(env: Env, safeEmail: string): Promise<UserRecord
 async function savePasswordHash(env: Env, record: UserRecord, hashed: string): Promise<void> {
   if (env.DATA_BACKEND === 'd1') {
     if (!env.DB) return;
-    const fields = { ...record.fields, Password: hashed };
-    await env.DB.prepare(`UPDATE records SET fields = ?, updated_at = ? WHERE table_name = 'Users' AND id = ?`)
-      .bind(JSON.stringify(fields), new Date().toISOString(), record.id)
-      .run();
+    const users = await resolveTable(env.DB, 'Users');
+    if (!users) return;
+    const now = new Date().toISOString();
+    const rec = {
+      id: record.id,
+      fields: { ...record.fields, Password: hashed },
+      createdTime: record.createdTime ?? now,
+      updatedAt: now,
+    };
+    const { values } = encodeRow(users, rec);
+    await env.DB.prepare(upsertSql(users)).bind(...values).run();
     return;
   }
   await fetch(

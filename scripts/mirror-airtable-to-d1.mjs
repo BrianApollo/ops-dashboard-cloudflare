@@ -1,30 +1,32 @@
 #!/usr/bin/env node
 /**
- * Airtable → D1 mirror (full refresh, re-runnable).
+ * Airtable → D1 mirror (full refresh, re-runnable) — PHYSICAL per-table schema.
  *
- * Fetches every table of the base exactly as the REST API serves it and stores
- * each record as JSON in the D1 `records` table (see scripts/d1/schema.sql).
- * Attachment fields are copied once to R2 (airtable-attachments/ prefix) and
- * their URLs rewritten to permanent R2 URLs, because Airtable CDN URLs expire.
+ * Each Airtable table becomes a real SQL table (snake_case name, one typed
+ * column per field — see functions/lib/db-api/field-map.mjs, the single
+ * source of truth for the mapping). Attachment files are copied once to R2
+ * and their URLs rewritten to permanent R2 URLs.
  *
  * Usage:
  *   node scripts/mirror-airtable-to-d1.mjs             # generate scripts/d1/mirror-*.sql only
  *   node scripts/mirror-airtable-to-d1.mjs --apply     # generate + apply to REMOTE D1
- *   node scripts/mirror-airtable-to-d1.mjs --apply-local  # generate + apply to LOCAL D1 (wrangler dev state)
+ *   node scripts/mirror-airtable-to-d1.mjs --apply-local  # generate + apply to LOCAL D1
  *   node scripts/mirror-airtable-to-d1.mjs --apply --tables "Profiles,Business Managers"
- *       # PARTIAL mirror: refresh only the named tables, leave everything else
- *       # in D1 untouched (use when something was accidentally written to
- *       # Airtable during the parallel phase and needs copying over)
- *   (flags can be combined)
- *
- * Reads config from .env: AIRTABLE_API_KEY, AIRTABLE_BASE_ID,
- * CF_STORAGE_WORKER_URL, CF_R2_PUBLIC_URL, D1_DB_NAME.
+ *       # PARTIAL: refresh only the named tables (drop+recreate those tables),
+ *       # leave all other tables untouched
  */
 
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import {
+  buildSlimSchema,
+  createTableSql,
+  sqlTableName,
+  encodeRow,
+  columnPlan,
+} from '../functions/lib/db-api/field-map.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -72,18 +74,26 @@ async function fetchAll(tableName) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SQL HELPERS — JSON.stringify output is single-line, so simple quoting works.
+// SQL LITERALS (the mirror emits a SQL file, so values are inlined)
 // ─────────────────────────────────────────────────────────────
-const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
+function lit(v) {
+  if (v === null || v === undefined) return 'NULL';
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
+
+function insertRowSql(slimTable, rec) {
+  const { columns, values } = encodeRow(slimTable, rec);
+  return `INSERT OR REPLACE INTO "${sqlTableName(slimTable.name)}" (${columns.map((c) => `"${c}"`).join(', ')}) VALUES (${values.map(lit).join(', ')});`;
+}
 
 // ─────────────────────────────────────────────────────────────
 // ATTACHMENT COPY (Airtable CDN → R2 via the storage worker presign flow)
 // ─────────────────────────────────────────────────────────────
 async function copyAttachment(att, key) {
   const publicUrl = `${CF_R2_PUBLIC_URL}/${key}`;
-  // Skip if already copied on a previous run
   const head = await fetch(publicUrl, { method: 'HEAD' });
-  if (head.ok) return publicUrl;
+  if (head.ok) return { url: publicUrl, copied: false };
 
   const src = await fetch(att.url);
   if (!src.ok) throw new Error(`download ${src.status} for attachment ${att.id}`);
@@ -97,13 +107,13 @@ async function copyAttachment(att, key) {
   if (!presign.ok) throw new Error(`presign ${presign.status}: ${await presign.text()}`);
   const { uploadUrl } = await presign.json();
 
-  const put = await fetch(uploadUrl, {
+  const put = await fetch(uploadUrl.replace(/ /g, '%20'), {
     method: 'PUT',
     headers: { 'Content-Type': att.type || 'application/octet-stream' },
     body: buf,
   });
   if (!put.ok) throw new Error(`R2 PUT ${put.status} for ${key}`);
-  return publicUrl;
+  return { url: publicUrl, copied: true };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -115,58 +125,31 @@ const tablesArgIdx = process.argv.indexOf('--tables');
 const ONLY_TABLES = tablesArgIdx >= 0 ? process.argv[tablesArgIdx + 1].split(',').map((s) => s.trim()) : null;
 
 (async () => {
-  // 1. Schema
   console.log('Fetching base schema…');
   const meta = await atFetch(META);
-  let tables = meta.tables;
+  const slim = buildSlimSchema(meta.tables);
+
+  let tables = slim.tables;
   if (ONLY_TABLES) {
     const unknown = ONLY_TABLES.filter((n) => !tables.some((t) => t.name === n));
     if (unknown.length) { console.error(`Unknown tables: ${unknown.join(', ')}`); process.exit(1); }
     tables = tables.filter((t) => ONLY_TABLES.includes(t.name));
     console.log(`PARTIAL mirror: ${tables.map((t) => t.name).join(', ')}`);
   }
-  const fieldById = {};
-  const tableById = {};
-  for (const t of tables) { tableById[t.id] = t; for (const f of t.fields) fieldById[f.id] = { table: t, field: f }; }
 
-  // Slim schema for the shim: names, types, link topology, primary fields.
-  const COMPUTED_TYPES = new Set(['formula', 'rollup', 'count', 'multipleLookupValues', 'lastModifiedTime', 'createdTime', 'button', 'autoNumber']);
-  const shimSchema = {
-    tables: tables.map((t) => ({
-      id: t.id,
-      name: t.name,
-      primaryField: t.fields.find((f) => f.id === t.primaryFieldId)?.name,
-      fields: t.fields.map((f) => {
-        const out = { name: f.name, type: f.type };
-        if (f.type === 'multipleRecordLinks') {
-          out.linkedTable = tableById[f.options?.linkedTableId]?.name;
-          const inv = f.options?.inverseLinkFieldId ? fieldById[f.options.inverseLinkFieldId] : null;
-          if (inv) out.inverseField = inv.field.name;
-        }
-        if (COMPUTED_TYPES.has(f.type)) out.computed = true;
-        if (f.type === 'multipleLookupValues' || f.type === 'count' || f.type === 'rollup') {
-          const rl = f.options?.recordLinkFieldId ? fieldById[f.options.recordLinkFieldId]?.field.name : undefined;
-          const ff = f.options?.fieldIdInLinkedTable ? fieldById[f.options.fieldIdInLinkedTable]?.field.name : undefined;
-          if (rl) out.viaLinkField = rl;
-          if (ff) out.lookupField = ff;
-        }
-        return out;
-      }),
-    })),
-  };
-
-  // 2. Records (+ attachment rewriting)
+  const metaById = new Map(meta.tables.map((t) => [t.id, t]));
   const statements = [];
-  if (ONLY_TABLES) {
-    for (const t of tables) statements.push(`DELETE FROM records WHERE table_name = ${q(t.name)};`);
-  } else {
-    statements.push('DELETE FROM records;');
-  }
+  statements.push(`DROP TABLE IF EXISTS records;`); // retire the old JSON mirror store
   const counts = {};
   let attCopied = 0, attSkipped = 0;
 
   for (const t of tables) {
-    const attachmentFields = t.fields.filter((f) => f.type === 'multipleAttachments').map((f) => f.name);
+    const rawTable = metaById.get(t.id);
+    const attachmentFields = rawTable.fields.filter((f) => f.type === 'multipleAttachments').map((f) => f.name);
+
+    statements.push(`DROP TABLE IF EXISTS "${sqlTableName(t.name)}";`);
+    statements.push(createTableSql(t));
+
     console.log(`Fetching ${t.name}…`);
     const records = await fetchAll(t.name);
     counts[t.name] = records.length;
@@ -181,11 +164,11 @@ const ONLY_TABLES = tablesArgIdx >= 0 ? process.argv[tablesArgIdx + 1].split(','
         for (const att of v) {
           const safeName = String(att.filename || 'file').replace(/[^\w.-]+/g, '_');
           const key = `airtable-attachments/${t.id}/${r.id}/${att.id}-${safeName}`;
-          const already = (await fetch(`${CF_R2_PUBLIC_URL}/${key}`, { method: 'HEAD' })).ok;
           let url;
           try {
-            url = await copyAttachment(att, key);
-            already ? attSkipped++ : attCopied++;
+            const res = await copyAttachment(att, key);
+            url = res.url;
+            res.copied ? attCopied++ : attSkipped++;
           } catch (e) {
             console.warn(`  ! attachment ${att.id} (${fname} on ${r.id}): ${e.message} — keeping original URL`);
             url = att.url;
@@ -196,23 +179,21 @@ const ONLY_TABLES = tablesArgIdx >= 0 ? process.argv[tablesArgIdx + 1].split(','
       }
 
       const lastUpload = typeof fields['Last Upload At'] === 'string' ? fields['Last Upload At'] : r.createdTime;
-      statements.push(
-        `INSERT OR REPLACE INTO records (table_name,id,fields,created_time,updated_at) VALUES (${q(t.name)},${q(r.id)},${q(JSON.stringify(fields))},${q(r.createdTime)},${q(lastUpload)});`
-      );
+      statements.push(insertRowSql(t, { id: r.id, fields, createdTime: r.createdTime, updatedAt: lastUpload }));
     }
-    console.log(`  ${records.length} records`);
+    console.log(`  ${records.length} records, ${columnPlan(t).length} columns`);
   }
 
+  const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
   if (!ONLY_TABLES) {
-    statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('schema',${q(JSON.stringify(shimSchema))});`);
+    statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('schema',${q(JSON.stringify(slim))});`);
     statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('last_mirror',${q(new Date().toISOString())});`);
     statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('counts',${q(JSON.stringify(counts))});`);
   }
-  // Bump the write-version so warm API instances drop their in-memory cache
-  // (the API invalidates on MAX(mutations_log.seq) — mirrors must move it too).
+  // Bump the write-version so warm API instances drop their in-memory cache.
   statements.push(`INSERT INTO mutations_log (ts,table_name,op,record_id,payload) VALUES (${q(new Date().toISOString())},'_mirror','mirror','_mirror',NULL);`);
 
-  // 3. Write chunked SQL files (~900KB per chunk to stay well under statement/upload limits)
+  // Write chunked SQL files
   fs.mkdirSync(OUT_DIR, { recursive: true });
   for (const old of fs.readdirSync(OUT_DIR)) if (/^mirror-\d+\.sql$/.test(old)) fs.unlinkSync(path.join(OUT_DIR, old));
   const files = [];
@@ -232,13 +213,11 @@ const ONLY_TABLES = tablesArgIdx >= 0 ? process.argv[tablesArgIdx + 1].split(','
   console.log(`\nTables: ${tables.length}; total records: ${Object.values(counts).reduce((a, b) => a + b, 0)}`);
   console.log(`Attachments copied: ${attCopied}, already present: ${attSkipped}`);
   console.log(`SQL chunks: ${files.length}`);
-  console.table(counts);
 
-  // 4. Apply
   for (const flag of [APPLY_REMOTE && '--remote', APPLY_LOCAL && '--local'].filter(Boolean)) {
     for (const file of files) {
       console.log(`wrangler d1 execute ${flag} ${path.basename(file)}…`);
-      execSync(`npx wrangler d1 execute ${D1_DB_NAME} ${flag} -y --file "${file}"`, { cwd: ROOT, stdio: 'inherit' });
+      execSync(`npx wrangler d1 execute ${D1_DB_NAME} ${flag} -y --file "${file}"`, { cwd: ROOT, stdio: 'pipe' });
     }
   }
   console.log('Done.');

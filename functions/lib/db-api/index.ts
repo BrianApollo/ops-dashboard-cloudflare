@@ -272,7 +272,7 @@ async function createOne(
   const data = await store.getTable(table.name);
   data.byId.set(rec.id, rec);
   data.rows.push(rec);
-  writes.push(upsertRecordStmt(table.name, rec), ...foreignWrites, mutationLogStmt(table.name, 'create', rec.id, merged));
+  writes.push(upsertRecordStmt(table, rec), ...foreignWrites, mutationLogStmt(table.name, 'create', rec.id, merged));
   return rec;
 }
 
@@ -307,7 +307,7 @@ async function patchOne(
   const { merged, foreignWrites } = await normalizeWrite(store, table, id, rec.fields, fields || {});
   rec.fields = merged;
   rec.updatedAt = new Date().toISOString();
-  writes.push(upsertRecordStmt(table.name, rec), ...foreignWrites, mutationLogStmt(table.name, 'update', id, fields));
+  writes.push(upsertRecordStmt(table, rec), ...foreignWrites, mutationLogStmt(table.name, 'update', id, fields));
   return rec;
 }
 
@@ -341,7 +341,7 @@ async function removeOne(store: RequestStore, table: ShimTable, id: string, writ
   data.byId.delete(id);
   const idx = data.rows.findIndex((r) => r.id === id);
   if (idx >= 0) data.rows.splice(idx, 1);
-  writes.push(deleteRecordStmt(table.name, id), mutationLogStmt(table.name, 'delete', id, rec.fields));
+  writes.push(deleteRecordStmt(table, id), mutationLogStmt(table.name, 'delete', id, rec.fields));
 }
 
 async function remove(store: RequestStore, table: ShimTable, recordId: string | undefined, search: URLSearchParams, dialect: DialectOptions): Promise<Response> {

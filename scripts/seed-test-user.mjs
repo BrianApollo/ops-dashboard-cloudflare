@@ -1,18 +1,17 @@
 #!/usr/bin/env node
 /**
- * Seed a shim-test admin user into the D1 mirror (local and/or remote).
- * Never touches Airtable. Re-run after each full re-mirror (the mirror's
- * DELETE wipes it).
+ * Seed the shim-test admin user into the D1 `users` table (local and/or
+ * remote). Never touches Airtable. Re-run after each full re-mirror (the
+ * mirror drops + recreates the table). The sync worker preserves this row.
  *
  *   node scripts/seed-test-user.mjs --local --remote
- *
- * Prints the credentials and a ready-to-use JWT for curl tests.
  */
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { buildSlimSchema, encodeRow, sqlTableName } from '../functions/lib/db-api/field-map.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const env = Object.fromEntries(
@@ -25,15 +24,26 @@ const EMAIL = 'shim-test@accotta.local';
 const PASSWORD = 'shim-test-7Qx!2025';
 const REC_ID = 'recSHIMTESTADMIN0';
 
-// PBKDF2 hash in the exact format functions/lib/auth.ts verifies: base64(salt):base64(hash)
 const salt = crypto.randomBytes(16);
 const hash = crypto.pbkdf2Sync(PASSWORD, salt, 100_000, 32, 'sha256');
 const stored = `${salt.toString('base64')}:${hash.toString('base64')}`;
 
-const fields = { Name: 'Shim Test Admin', Email: EMAIL, Password: stored, Role: 'Admin', Active: true };
+// Column layout comes from the live schema, same as every other writer.
+const meta = await (await fetch(`https://api.airtable.com/v0/meta/bases/${env.AIRTABLE_BASE_ID}/tables`, {
+  headers: { Authorization: `Bearer ${env.AIRTABLE_API_KEY}` },
+})).json();
+const users = buildSlimSchema(meta.tables).tables.find((t) => t.name === 'Users');
+if (!users) { console.error('No Users table in schema'); process.exit(1); }
+
 const now = new Date().toISOString();
-const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
-const sql = `INSERT OR REPLACE INTO records (table_name,id,fields,created_time,updated_at) VALUES ('Users',${q(REC_ID)},${q(JSON.stringify(fields))},${q(now)},${q(now)});`;
+const { columns, values } = encodeRow(users, {
+  id: REC_ID,
+  createdTime: now,
+  updatedAt: now,
+  fields: { Name: 'Shim Test Admin', Email: EMAIL, Password: stored, Role: 'Admin', Active: true },
+});
+const lit = (v) => (v === null || v === undefined ? 'NULL' : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
+const sql = `INSERT OR REPLACE INTO "${sqlTableName(users.name)}" (${columns.map((c) => `"${c}"`).join(', ')}) VALUES (${values.map(lit).join(', ')});`;
 const file = path.join(ROOT, 'scripts', 'd1', 'seed-test-user.sql');
 fs.writeFileSync(file, sql, 'utf8');
 
@@ -42,7 +52,6 @@ for (const flag of [process.argv.includes('--local') && '--local', process.argv.
   console.log(`Seeded ${flag}`);
 }
 
-// Mint a JWT the same way functions/lib/auth.ts does (HS256, 24h)
 const b64u = (s) => Buffer.from(s).toString('base64url');
 const nowSec = Math.floor(Date.now() / 1000);
 const header = b64u(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));

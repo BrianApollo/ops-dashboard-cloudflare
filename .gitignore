@@ -53,3 +53,6 @@ tsconfig.node.tsbuildinfo
 # D1 mirror dumps contain real record data (incl. profile credentials) — never commit
 scripts/d1/mirror-*.sql
 scripts/d1/seed-test-user.sql
+
+# sync worker trigger token (local only)
+.sync-token

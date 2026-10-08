@@ -1,0 +1,13 @@
+name = "ops-db-sync"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Keeps the D1 mirror within ~5 minutes of production Airtable during the
+# parallel-run phase. One-way: Airtable wins. Retire this worker at cutover.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ops-dashboard-db-v2"
+database_id = "6b091952-f3ec-4ad5-b4c7-0cd2dc0a614c"

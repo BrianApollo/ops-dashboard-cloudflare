@@ -35,13 +35,19 @@ export interface D1Like {
 }
 
 let cached: ShimSchema | null = null;
+let cachedAt = 0;
 let byNameOrId: Map<string, ShimTable> | null = null;
 
+// Re-read every few minutes so schema drift applied by the sync worker
+// (new fields/tables) reaches warm isolates without a redeploy.
+const SCHEMA_TTL_MS = 5 * 60 * 1000;
+
 export async function loadSchema(db: D1Like): Promise<ShimSchema> {
-  if (cached) return cached;
+  if (cached && Date.now() - cachedAt < SCHEMA_TTL_MS) return cached;
   const row = await db.prepare(`SELECT value FROM meta WHERE key='schema'`).first();
   if (!row) throw new Error('Shim schema missing — run scripts/mirror-airtable-to-d1.mjs');
   cached = JSON.parse(row.value as string) as ShimSchema;
+  cachedAt = Date.now();
   byNameOrId = new Map();
   for (const t of cached.tables) {
     byNameOrId.set(t.name, t);
