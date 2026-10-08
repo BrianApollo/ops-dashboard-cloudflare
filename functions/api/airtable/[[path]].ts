@@ -63,21 +63,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       });
     }
     const shimResponse = await handleShimRequest(env.DB, request, pathSegments, url.searchParams);
+    // Visible in devtools: which backend served this response.
+    const backendHeaders = { 'Content-Type': 'application/json', 'X-Data-Backend': 'd1' };
     if (request.method === 'GET' && shimResponse.ok) {
       try {
         const data = JSON.parse(await shimResponse.clone().text());
         if (data.records && Array.isArray(data.records)) {
           data.records = stripSensitiveFields(data.records, user);
-          return new Response(JSON.stringify(data), {
-            status: shimResponse.status,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return new Response(JSON.stringify(data), { status: shimResponse.status, headers: backendHeaders });
         }
       } catch {
         // Not a records list — pass through (matches the Airtable path)
       }
     }
-    return shimResponse;
+    return new Response(shimResponse.body, { status: shimResponse.status, headers: backendHeaders });
   }
 
   // 4b. Build the Airtable API URL
