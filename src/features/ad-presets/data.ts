@@ -15,9 +15,10 @@
  */
 
 import type { AdPreset } from './types';
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
 import { provider } from '../../data/provider';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import type { DbRecord } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -83,7 +84,7 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 // =============================================================================
 
 function mapAirtableToAdPreset(
-  record: AirtableRecord,
+  record: DbRecord,
   productsMap: Map<string, { id: string; name: string }>
 ): AdPreset | null {
   const fields = record.fields;
@@ -163,16 +164,7 @@ function mapAirtableToAdPreset(
 export async function listAdPresets(signal?: AbortSignal): Promise<AdPreset[]> {
   const productsMap = await fetchProducts();
 
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset ? `${AD_PRESETS_TABLE}?offset=${offset}` : AD_PRESETS_TABLE;
-    const response = await airtableFetch(url, { signal });
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset && !signal?.aborted);
+  const allRecords = await fetchAllRecords(AD_PRESETS_TABLE, { signal });
 
   return allRecords
     .map((record) => mapAirtableToAdPreset(record, productsMap))
@@ -186,22 +178,8 @@ export async function listAdPresets(signal?: AbortSignal): Promise<AdPreset[]> {
 export async function listAdPresetsByProduct(productName: string): Promise<AdPreset[]> {
   const productsMap = await fetchProducts();
 
-  const filterFormula = encodeURIComponent(
-    `{${FIELD_PRODUCT}} = '${productName}'`
-  );
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset
-      ? `${AD_PRESETS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-      : `${AD_PRESETS_TABLE}?filterByFormula=${filterFormula}`;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const whereParam = `where[${encodeURIComponent(FIELD_PRODUCT)}]=${encodeURIComponent(productName)}`;
+  const allRecords = await fetchAllRecords(`${AD_PRESETS_TABLE}?${whereParam}`);
 
   return allRecords
     .map((record) => mapAirtableToAdPreset(record, productsMap))
@@ -215,8 +193,8 @@ export async function getAdPreset(id: string): Promise<AdPreset | null> {
   const productsMap = await fetchProducts();
 
   try {
-    const response = await airtableFetch(`${AD_PRESETS_TABLE}/${id}`);
-    const record: AirtableRecord = await response.json();
+    const response = await dbFetch(`${AD_PRESETS_TABLE}/${id}`);
+    const record: DbRecord = await response.json();
     return mapAirtableToAdPreset(record, productsMap);
   } catch (error) {
     if (error instanceof Error && error.message.includes('404')) {
@@ -304,7 +282,7 @@ export async function updateAdPreset(id: string, payload: AdPresetUpdatePayload)
     return;
   }
 
-  await airtableFetch(`${AD_PRESETS_TABLE}/${id}`, {
+  await dbFetch(`${AD_PRESETS_TABLE}/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -331,12 +309,12 @@ export async function createAdPreset(
     Object.assign(fields, additionalFields);
   }
 
-  const response = await airtableFetch(AD_PRESETS_TABLE, {
+  const response = await dbFetch(AD_PRESETS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const preset = mapAirtableToAdPreset(record, productsMap);
 
   if (!preset) {

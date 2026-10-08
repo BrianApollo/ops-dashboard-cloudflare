@@ -15,10 +15,11 @@ import type { Campaign, CampaignStatus, CampaignPlatform } from './types';
 import type { LaunchSnapshot } from './launch/types';
 import { listVideos } from '../videos/data';
 import { listImages } from '../images/data';
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
 import { provider } from '../../data/provider';
 import { nowGMT7 } from '../../utils/date';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import type { DbRecord } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -132,7 +133,7 @@ function normalizePlatform(rawPlatform: string | undefined): CampaignPlatform | 
  * Maps an Airtable record to Campaign domain model.
  */
 function mapAirtableToCampaign(
-  record: AirtableRecord,
+  record: DbRecord,
   productsMap: Map<string, { id: string; name: string }>
 ): Campaign | null {
   const fields = record.fields;
@@ -352,15 +353,7 @@ export async function listCampaigns(signal?: AbortSignal): Promise<Campaign[]> {
   // Fetch products and campaigns in parallel — campaigns doesn't need products until mapping
   const productsPromise = fetchProducts();
   const campaignsPromise = (async () => {
-    const allRecords: AirtableRecord[] = [];
-    let offset: string | undefined;
-    do {
-      const url = offset ? `${CAMPAIGNS_TABLE}?offset=${offset}` : CAMPAIGNS_TABLE;
-      const response = await airtableFetch(url, { signal });
-      const data: AirtableResponse = await response.json();
-      allRecords.push(...data.records);
-      offset = data.offset;
-    } while (offset && !signal?.aborted);
+    const allRecords = await fetchAllRecords(CAMPAIGNS_TABLE, { signal });
     return allRecords;
   })();
 
@@ -378,22 +371,8 @@ export async function listCampaigns(signal?: AbortSignal): Promise<Campaign[]> {
 export async function listCampaignsByProduct(productName: string): Promise<Campaign[]> {
   const productsMap = await fetchProducts();
 
-  const filterFormula = encodeURIComponent(
-    `{${FIELD_CAMPAIGN_PRODUCT}} = '${productName}'`
-  );
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset
-      ? `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-      : `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}`;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const whereParam = `where[${encodeURIComponent(FIELD_CAMPAIGN_PRODUCT)}]=${encodeURIComponent(productName)}`;
+  const allRecords = await fetchAllRecords(`${CAMPAIGNS_TABLE}?${whereParam}`);
 
   return allRecords
     .map((record) => mapAirtableToCampaign(record, productsMap))
@@ -407,8 +386,8 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
   const productsMap = await fetchProducts();
 
   try {
-    const response = await airtableFetch(`${CAMPAIGNS_TABLE}/${id}`);
-    const record: AirtableRecord = await response.json();
+    const response = await dbFetch(`${CAMPAIGNS_TABLE}/${id}`);
+    const record: DbRecord = await response.json();
     return mapAirtableToCampaign(record, productsMap);
   } catch (error) {
     if (error instanceof Error && error.message.includes('404')) {
@@ -457,7 +436,7 @@ export async function updateCampaignRedtrackId(
     fields[FIELD_CAMPAIGN_REDTRACK_NAME] = redtrackCampaignName;
   }
 
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -470,7 +449,7 @@ export async function updateCampaignName(
   campaignId: string,
   name: string
 ): Promise<void> {
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -524,7 +503,7 @@ export async function updateLaunchData(params: UpdateLaunchDataParams): Promise<
     fields[FIELD_IMAGES_USED] = imageIds;
   }
 
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -537,7 +516,7 @@ export async function updateCampaignStatus(
   campaignId: string,
   status: CampaignStatus
 ): Promise<void> {
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -584,7 +563,7 @@ export async function updateCampaignMedia(
     return;
   }
 
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -600,7 +579,7 @@ export async function createCampaign(
 ): Promise<Campaign> {
   const productsMap = await fetchProducts();
 
-  const response = await airtableFetch(CAMPAIGNS_TABLE, {
+  const response = await dbFetch(CAMPAIGNS_TABLE, {
     method: 'POST',
     body: JSON.stringify({
       fields: {
@@ -611,7 +590,7 @@ export async function createCampaign(
     }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const campaign = mapAirtableToCampaign(record, productsMap);
 
   if (!campaign) {
@@ -683,7 +662,7 @@ export async function saveCampaignDraft(params: SaveCampaignDraftParams): Promis
 
   if (Object.keys(fields).length === 0) return;
 
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -705,8 +684,8 @@ export async function addVideoIdsToCampaign(
   if (newVideoIds.length === 0) return;
 
   // 1. Read the campaign's current video links
-  const response = await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
-  const record: AirtableRecord = await response.json();
+  const response = await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
+  const record: DbRecord = await response.json();
   const existingIds = (record.fields[FIELD_VIDEOS_USED] as string[]) || [];
 
   // 2. Merge unique
@@ -714,7 +693,7 @@ export async function addVideoIdsToCampaign(
   if (mergedIds.length === existingIds.length) return;
 
   // 3. Update
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields: { [FIELD_VIDEOS_USED]: mergedIds } }),
   });
@@ -734,14 +713,14 @@ export async function addAIVideoIdsToCampaign(
 ): Promise<void> {
   if (newVideoIds.length === 0) return;
 
-  const response = await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
-  const record: AirtableRecord = await response.json();
+  const response = await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
+  const record: DbRecord = await response.json();
   const existingIds = (record.fields[FIELD_AI_VIDEOS_USED] as string[]) || [];
 
   const mergedIds = Array.from(new Set([...existingIds, ...newVideoIds]));
   if (mergedIds.length === existingIds.length) return;
 
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields: { [FIELD_AI_VIDEOS_USED]: mergedIds } }),
   });
@@ -757,8 +736,8 @@ export async function addImageIdsToCampaign(
 ): Promise<void> {
   // 1. Fetch current campaign to get existing images
   // We fetch the raw record to get the current field value accurately
-  const response = await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
-  const record: AirtableRecord = await response.json();
+  const response = await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`);
+  const record: DbRecord = await response.json();
   const existingIds = (record.fields[FIELD_IMAGES_USED] as string[]) || [];
 
   // 2. Merge unique
@@ -769,7 +748,7 @@ export async function addImageIdsToCampaign(
     [FIELD_IMAGES_USED]: mergedIds,
   };
 
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${campaignId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -812,7 +791,7 @@ export async function createLinkedCampaign(params: {
     fields[FIELD_LAUNCH_PROFILE_ID] = params.launchProfileId;
   }
 
-  await airtableFetch(CAMPAIGNS_TABLE, {
+  await dbFetch(CAMPAIGNS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
@@ -823,7 +802,7 @@ export async function createLinkedCampaign(params: {
  * Used by "Sync from Facebook" for campaigns launched outside the Launcher.
  */
 export async function updateLaunchedDataSnapshot(recordId: string, snapshot: LaunchSnapshot): Promise<void> {
-  await airtableFetch(`${CAMPAIGNS_TABLE}/${recordId}`, {
+  await dbFetch(`${CAMPAIGNS_TABLE}/${recordId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields: { [FIELD_LAUNCHED_DATA]: JSON.stringify(snapshot) } }),
   });
@@ -838,21 +817,11 @@ export async function updateLaunchedDataSnapshot(recordId: string, snapshot: Lau
  * Used by the Manage page to match Facebook campaigns to Airtable campaigns.
  */
 export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, string>> {
-  const filterFormula = encodeURIComponent(`{${FIELD_CAMPAIGN_STATUS}} = 'Launched'`);
+  const whereParam = `where[${encodeURIComponent(FIELD_CAMPAIGN_STATUS)}]=Launched`;
   const fieldsParam = 'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID)
     + '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_REDTRACK_ID);
 
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const base = `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&${fieldsParam}`;
-    const url = offset ? `${base}&offset=${offset}` : base;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const allRecords = await fetchAllRecords(`${CAMPAIGNS_TABLE}?${whereParam}&${fieldsParam}`);
 
   const map = new Map<string, string>();
   for (const record of allRecords) {
@@ -876,23 +845,13 @@ export async function getLaunchedCampaignRedtrackMap(): Promise<Map<string, stri
  * decide which campaigns can use Add Ads (media is listed per product).
  */
 export async function getFbCampaignRecordMapWithProduct(): Promise<Map<string, string>> {
-  const filterFormula = encodeURIComponent(
-    `AND({${FIELD_FB_CAMPAIGN_ID}} != '', {${FIELD_CAMPAIGN_PRODUCT}} != '')`,
-  );
+  const whereParams =
+    `whereNotEmpty[${encodeURIComponent(FIELD_FB_CAMPAIGN_ID)}]=1` +
+    `&whereNotEmpty[${encodeURIComponent(FIELD_CAMPAIGN_PRODUCT)}]=1`;
   const fieldsParam = 'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID)
     + '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_PRODUCT);
 
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const base = `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&${fieldsParam}`;
-    const url = offset ? `${base}&offset=${offset}` : base;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const allRecords = await fetchAllRecords(`${CAMPAIGNS_TABLE}?${whereParams}&${fieldsParam}`);
 
   const map = new Map<string, string>();
   for (const record of allRecords) {
@@ -919,29 +878,13 @@ export async function getRedtrackIdsByFbCampaignIds(
 ): Promise<Map<string, string>> {
   if (fbCampaignIds.length === 0) return new Map();
 
-  // Airtable OR() formula: match any of the FB Campaign IDs
-  const conditions = fbCampaignIds.map(
-    (id) => `{${FIELD_FB_CAMPAIGN_ID}} = '${id}'`,
-  );
-  const filterFormula = encodeURIComponent(
-    conditions.length === 1 ? conditions[0] : `OR(${conditions.join(',')})`,
-  );
-
+  // Match any of the FB Campaign IDs
+  const whereParam = `whereAny[${encodeURIComponent(FIELD_FB_CAMPAIGN_ID)}]=${encodeURIComponent(fbCampaignIds.join(','))}`;
   const fieldsParam =
     'fields[]=' + encodeURIComponent(FIELD_FB_CAMPAIGN_ID) +
     '&fields[]=' + encodeURIComponent(FIELD_CAMPAIGN_REDTRACK_ID);
 
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const base = `${CAMPAIGNS_TABLE}?filterByFormula=${filterFormula}&${fieldsParam}`;
-    const url = offset ? `${base}&offset=${offset}` : base;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const allRecords = await fetchAllRecords(`${CAMPAIGNS_TABLE}?${whereParam}&${fieldsParam}`);
 
   const map = new Map<string, string>();
 
@@ -993,18 +936,7 @@ export interface CampaignLaunchSetup {
 export async function fetchLaunchSetup(productId: string): Promise<CampaignLaunchSetup | null> {
   // Fetch all records (table should be small) and filter client-side by record ID,
   // because Airtable's ARRAYJOIN on linked records returns display names, not record IDs.
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset
-      ? `${LAUNCH_SETUP_TABLE}?offset=${offset}`
-      : LAUNCH_SETUP_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const allRecords = await fetchAllRecords(LAUNCH_SETUP_TABLE);
 
   // Find first record whose Product linked field contains our productId
   const record = allRecords.find((r) => {
@@ -1065,7 +997,7 @@ export async function updateLaunchSetup(
   if (payload.callToAction !== undefined) fields[FIELD_SETUP_CTA] = payload.callToAction;
   if (payload.targeting !== undefined) fields[FIELD_SETUP_TARGETING] = payload.targeting;
 
-  await airtableFetch(`${LAUNCH_SETUP_TABLE}/${recordId}`, {
+  await dbFetch(`${LAUNCH_SETUP_TABLE}/${recordId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -1088,12 +1020,12 @@ export async function createLaunchSetup(
   if (payload.callToAction) fields[FIELD_SETUP_CTA] = payload.callToAction;
   if (payload.targeting) fields[FIELD_SETUP_TARGETING] = payload.targeting;
 
-  const response = await airtableFetch(LAUNCH_SETUP_TABLE, {
+  const response = await dbFetch(LAUNCH_SETUP_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   return {
     id: record.id,
     adAccount: typeof record.fields[FIELD_SETUP_AD_ACCOUNT] === 'string'
@@ -1139,17 +1071,7 @@ export interface SaveLaunchTemplateParams {
  */
 export async function saveLaunchTemplate(params: SaveLaunchTemplateParams): Promise<void> {
   // 1. Count existing records for this product to generate name
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset
-      ? `${LAUNCH_SETUP_TABLE}?offset=${offset}`
-      : LAUNCH_SETUP_TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const allRecords = await fetchAllRecords(LAUNCH_SETUP_TABLE);
 
   const productRecords = allRecords.filter((r) => {
     const productIds = r.fields[FIELD_SETUP_PRODUCT];
@@ -1176,7 +1098,7 @@ export async function saveLaunchTemplate(params: SaveLaunchTemplateParams): Prom
   if (params.callToAction) fields[FIELD_SETUP_CTA] = params.callToAction;
   if (params.targeting) fields[FIELD_SETUP_TARGETING] = params.targeting;
 
-  await airtableFetch(LAUNCH_SETUP_TABLE, {
+  await dbFetch(LAUNCH_SETUP_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });

@@ -3,7 +3,8 @@
  * Reads/writes to the "Schedule" Airtable table.
  */
 
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
+import { fetchAllRecords } from '../../lib/db-helpers';
 import type { ScheduleRecord, ScheduledAction } from './types';
 import { recordToScheduledAction } from './types';
 
@@ -19,42 +20,15 @@ const TABLE = 'Schedule';
 
 /** Fetch all pending actions (Tonight tab) */
 export async function fetchPendingActions(): Promise<ScheduledAction[]> {
-  const filter = encodeURIComponent(`{Status} = 'Pending'`);
-  const sort = 'sort%5B0%5D%5Bfield%5D=Scheduled%20At&sort%5B0%5D%5Bdirection%5D=asc';
-  const url = `${TABLE}?filterByFormula=${filter}&${sort}`;
-
-  const allRecords: ScheduleRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const fetchUrl = offset ? `${url}&offset=${offset}` : url;
-    const response = await airtableFetch(fetchUrl);
-    const data = (await response.json()) as { records: ScheduleRecord[]; offset?: string };
-    allRecords.push(...(data.records || []));
-    offset = data.offset;
-  } while (offset);
-
+  const url = `${TABLE}?where%5BStatus%5D=Pending&sort%5B0%5D%5Bfield%5D=Scheduled%20At&sort%5B0%5D%5Bdirection%5D=asc`;
+  const allRecords = (await fetchAllRecords(url)) as unknown as ScheduleRecord[];
   return allRecords.map(recordToScheduledAction);
 }
 
 /** Fetch execution log (completed/failed actions) */
 export async function fetchActionLog(): Promise<ScheduledAction[]> {
-  const filter = encodeURIComponent(`OR({Status} = 'Success', {Status} = 'Failed')`);
-  const sort =
-    'sort%5B0%5D%5Bfield%5D=Executed%20At&sort%5B0%5D%5Bdirection%5D=desc';
-  const url = `${TABLE}?filterByFormula=${filter}&${sort}`;
-
-  const allRecords: ScheduleRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const fetchUrl = offset ? `${url}&offset=${offset}` : url;
-    const response = await airtableFetch(fetchUrl);
-    const data = (await response.json()) as { records: ScheduleRecord[]; offset?: string };
-    allRecords.push(...(data.records || []));
-    offset = data.offset;
-  } while (offset);
-
+  const url = `${TABLE}?whereAny%5BStatus%5D=Success,Failed&sort%5B0%5D%5Bfield%5D=Executed%20At&sort%5B0%5D%5Bdirection%5D=desc`;
+  const allRecords = (await fetchAllRecords(url)) as unknown as ScheduleRecord[];
   return allRecords.map(recordToScheduledAction);
 }
 
@@ -64,8 +38,8 @@ export async function fetchActionLog(): Promise<ScheduledAction[]> {
 
 /** Find a Campaign record ID by its Facebook Campaign ID */
 export async function findCampaignRecordIdByFbId(fbCampaignId: string): Promise<string | undefined> {
-  const filter = encodeURIComponent(`{FB Campaign ID} = '${fbCampaignId}'`);
-  const response = await airtableFetch(`Campaigns?filterByFormula=${filter}&fields%5B%5D=Name&maxRecords=1`);
+  const where = `where%5BFB%20Campaign%20ID%5D=${encodeURIComponent(fbCampaignId)}`;
+  const response = await dbFetch(`Campaigns?${where}&fields%5B%5D=Name&maxRecords=1`);
   const data = (await response.json()) as { records: { id: string }[] };
   return data.records?.[0]?.id;
 }
@@ -93,7 +67,7 @@ export async function createScheduledAction(
     }
   }
 
-  const response = await airtableFetch(TABLE, {
+  const response = await dbFetch(TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
@@ -107,7 +81,7 @@ export async function createScheduledAction(
 
 /** Cancel a pending action (delete the record) */
 export async function cancelScheduledAction(recordId: string): Promise<void> {
-  await airtableFetch(`${TABLE}/${recordId}`, {
+  await dbFetch(`${TABLE}/${recordId}`, {
     method: 'DELETE',
   });
 }

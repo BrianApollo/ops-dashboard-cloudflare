@@ -8,7 +8,7 @@
  * The FB_APP_SECRET never reaches the browser.
  */
 
-import { getAuthToken } from '../../core/data/airtable-client';
+import { getAuthToken } from '../../core/data/db-client';
 
 const FB_APP_ID = import.meta.env.VITE_FB_APP_ID as string;
 

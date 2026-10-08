@@ -11,7 +11,8 @@ import type { Campaign } from '../features/campaigns/types';
 import type { Image } from '../features/images/types';
 import type { AdPreset } from '../features/ad-presets/types';
 import type { Advertorial } from '../features/advertorials/types';
-import { airtableFetch } from '../core/data/airtable-client';
+import { dbFetch } from '../core/data/db-client';
+import { fetchAllRecords } from '../lib/db-helpers';
 
 // Shared user shape used by scripts + videos features
 export interface UserRecord {
@@ -24,7 +25,7 @@ export interface UserRecord {
 // SHARED TYPES
 // =============================================================================
 
-interface AirtableRecord {
+interface DbRecord {
   id: string;
   fields: Record<string, unknown>;
   createdTime: string;
@@ -77,7 +78,7 @@ function normalizeProductStatus(raw: string | undefined): ProductStatus {
 // PRODUCTS IMPLEMENTATION (AIRTABLE)
 // =============================================================================
 
-function mapAirtableProduct(record: AirtableRecord): Product | null {
+function mapAirtableProduct(record: DbRecord): Product | null {
   const fields = record.fields;
   const name = typeof fields['Product Name'] === 'string' ? fields['Product Name'] : null;
   if (!name) return null;
@@ -117,16 +118,7 @@ const airtableProducts = {
 
     const promise = (async () => {
       const TABLE = 'Products';
-      const allRecords: AirtableRecord[] = [];
-      let offset: string | undefined;
-      do {
-        const url = offset ? `${TABLE}?offset=${offset}` : TABLE;
-        const res = await airtableFetch(url);
-        const data: { records: AirtableRecord[]; offset?: string } =
-          await res.json();
-        allRecords.push(...data.records);
-        offset = data.offset;
-      } while (offset);
+      const allRecords = await fetchAllRecords(TABLE);
       const products = allRecords
         .map(mapAirtableProduct)
         .filter((p): p is Product => p !== null);
@@ -141,8 +133,8 @@ const airtableProducts = {
 
   async getById(id: string): Promise<Product | null> {
     try {
-      const res = await airtableFetch(`Products/${id}`);
-      const record: AirtableRecord = await res.json();
+      const res = await dbFetch(`Products/${id}`);
+      const record: DbRecord = await res.json();
       return mapAirtableProduct(record);
     } catch (e) {
       if (e instanceof Error && e.message.includes('404')) return null;
@@ -155,7 +147,7 @@ const airtableProducts = {
 // USERS IMPLEMENTATION (AIRTABLE)
 // =============================================================================
 
-function mapAirtableUser(record: AirtableRecord): UserRecord {
+function mapAirtableUser(record: DbRecord): UserRecord {
   const role = Array.isArray(record.fields['Role'])
     ? ((record.fields['Role'] as string[])[0] ?? '')
     : typeof record.fields['Role'] === 'string'
@@ -175,8 +167,8 @@ const airtableUsers = {
     if (lookupCache.users?.promise) return lookupCache.users.promise;
 
     const promise = (async () => {
-      const res = await airtableFetch('Users');
-      const data: { records: AirtableRecord[] } = await res.json();
+      const res = await dbFetch('Users');
+      const data: { records: DbRecord[] } = await res.json();
       const users = data.records.map(mapAirtableUser);
       lookupCache.users = { data: users, timestamp: Date.now() };
       return users;
@@ -195,9 +187,8 @@ const airtableUsers = {
     if (lookupCache.editors?.promise) return lookupCache.editors.promise;
 
     const promise = (async () => {
-      const filter = encodeURIComponent(`({Role} = 'Video Editor')`);
-      const res = await airtableFetch(`Users?filterByFormula=${filter}`);
-      const data: { records: AirtableRecord[] } = await res.json();
+      const res = await dbFetch(`Users?where%5BRole%5D=${encodeURIComponent('Video Editor')}`);
+      const data: { records: DbRecord[] } = await res.json();
       const editors = data.records.map(mapAirtableUser);
       lookupCache.editors = { data: editors, timestamp: Date.now() };
       return editors;

@@ -6,8 +6,9 @@
  */
 
 import type { Profile, ProfileStatus } from './types';
-import { airtableFetch } from '../../core/data/airtable-client';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import { dbFetch } from '../../core/data/db-client';
+import type { DbRecord, DbResponse } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // Table name
 const PROFILES_TABLE = 'Profiles';
@@ -30,7 +31,7 @@ const FIELD_PERMANENT_TOKEN = 'Permanent Token';
 // MAPPER
 // =============================================================================
 
-function mapAirtableToProfile(record: AirtableRecord): Profile | null {
+function mapAirtableToProfile(record: DbRecord): Profile | null {
     const fields = record.fields;
 
     const profileId = typeof fields[FIELD_PROFILE_ID] === 'string'
@@ -71,16 +72,7 @@ function mapAirtableToProfile(record: AirtableRecord): Profile | null {
  * List all profiles from Airtable.
  */
 export async function listProfiles(): Promise<Profile[]> {
-    const allRecords: AirtableRecord[] = [];
-    let offset: string | undefined;
-
-    do {
-        const url = offset ? `${PROFILES_TABLE}?offset=${offset}` : PROFILES_TABLE;
-        const response = await airtableFetch(url);
-        const data: AirtableResponse = await response.json();
-        allRecords.push(...data.records);
-        offset = data.offset;
-    } while (offset);
+    const allRecords = await fetchAllRecords(PROFILES_TABLE);
 
     return allRecords
         .map((record) => mapAirtableToProfile(record))
@@ -92,8 +84,8 @@ export async function listProfiles(): Promise<Profile[]> {
  * Returns the Airtable record ID of the default profile, or null if not set.
  */
 export async function getMasterProfileId(): Promise<string | null> {
-    const response = await airtableFetch('Master Profile?maxRecords=1');
-    const data: AirtableResponse = await response.json();
+    const response = await dbFetch('Master Profile?maxRecords=1');
+    const data: DbResponse = await response.json();
 
     if (data.records.length === 0) return null;
 
@@ -116,9 +108,8 @@ export async function getMasterProfileId(): Promise<string | null> {
  * Get only Active profiles.
  */
 export async function getActiveProfiles(): Promise<Profile[]> {
-    const filterFormula = encodeURIComponent(`({${FIELD_PROFILE_STATUS}} = 'Active')`);
-    const response = await airtableFetch(`${PROFILES_TABLE}?filterByFormula=${filterFormula}`);
-    const data: AirtableResponse = await response.json();
+    const response = await dbFetch(`${PROFILES_TABLE}?where[${encodeURIComponent(FIELD_PROFILE_STATUS)}]=Active`);
+    const data: DbResponse = await response.json();
 
     return data.records
         .map((record) => mapAirtableToProfile(record))

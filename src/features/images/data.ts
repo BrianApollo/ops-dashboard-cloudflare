@@ -11,9 +11,10 @@
  */
 
 import type { Image, ImageStatus, ImageType } from './types';
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
 import { provider } from '../../data/provider';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import type { DbRecord } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -108,7 +109,7 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 // =============================================================================
 
 function mapAirtableToImage(
-  record: AirtableRecord,
+  record: DbRecord,
   productsMap: Map<string, { id: string; name: string }>
 ): Image | null {
   const fields = record.fields;
@@ -221,7 +222,7 @@ function mapAirtableToImage(
  * Handles different field names (e.g. "Name" vs "Image Name").
  */
 function mapTempAirtableToImage(
-  record: AirtableRecord,
+  record: DbRecord,
   productsMap: Map<string, { id: string; name: string }>
 ): Image | null {
   const fields = record.fields;
@@ -292,16 +293,8 @@ export async function listImages(signal?: AbortSignal): Promise<Image[]> {
   const productsMap = await fetchProducts();
 
   // Helper to fetch all records from a table
-  const fetchTable = async (tableName: string): Promise<AirtableRecord[]> => {
-    const records: AirtableRecord[] = [];
-    let offset: string | undefined;
-    do {
-      const url = offset ? `${tableName}?offset=${offset}` : tableName;
-      const response = await airtableFetch(url, { signal });
-      const data: AirtableResponse = await response.json();
-      records.push(...data.records);
-      offset = data.offset;
-    } while (offset && !signal?.aborted);
+  const fetchTable = async (tableName: string): Promise<DbRecord[]> => {
+    const records = await fetchAllRecords(tableName, { signal });
     return records;
   };
 
@@ -309,7 +302,7 @@ export async function listImages(signal?: AbortSignal): Promise<Image[]> {
     fetchTable(IMAGES_TABLE),
     fetchTable(TEMP_IMAGES_TABLE).catch(err => {
       console.warn('Failed to fetch Temp Images:', err);
-      return [] as AirtableRecord[];
+      return [] as DbRecord[];
     }),
   ]);
 
@@ -331,23 +324,11 @@ export async function listImages(signal?: AbortSignal): Promise<Image[]> {
 export async function listImagesByProduct(productName: string): Promise<Image[]> {
   const productsMap = await fetchProducts();
 
-  const filterFormula = encodeURIComponent(
-    `{${FIELD_PRODUCT}} = '${productName}'`
-  );
+  const whereParam = `where[${encodeURIComponent(FIELD_PRODUCT)}]=${encodeURIComponent(productName)}`;
 
   // Helper to fetch filtered records from a table
-  const fetchFilteredTable = async (tableName: string): Promise<AirtableRecord[]> => {
-    const records: AirtableRecord[] = [];
-    let offset: string | undefined;
-    do {
-      const url = offset
-        ? `${tableName}?filterByFormula=${filterFormula}&offset=${offset}`
-        : `${tableName}?filterByFormula=${filterFormula}`;
-      const response = await airtableFetch(url);
-      const data: AirtableResponse = await response.json();
-      records.push(...data.records);
-      offset = data.offset;
-    } while (offset);
+  const fetchFilteredTable = async (tableName: string): Promise<DbRecord[]> => {
+    const records = await fetchAllRecords(`${tableName}?${whereParam}`);
     return records;
   };
 
@@ -355,7 +336,7 @@ export async function listImagesByProduct(productName: string): Promise<Image[]>
     fetchFilteredTable(IMAGES_TABLE),
     fetchFilteredTable(TEMP_IMAGES_TABLE).catch(err => {
       console.warn('Failed to fetch Temp Images:', err);
-      return [] as AirtableRecord[];
+      return [] as DbRecord[];
     }),
   ]);
 
@@ -377,8 +358,8 @@ export async function getImage(id: string): Promise<Image | null> {
   const productsMap = await fetchProducts();
 
   try {
-    const response = await airtableFetch(`${IMAGES_TABLE}/${id}`);
-    const record: AirtableRecord = await response.json();
+    const response = await dbFetch(`${IMAGES_TABLE}/${id}`);
+    const record: DbRecord = await response.json();
     return mapAirtableToImage(record, productsMap);
   } catch (error) {
     if (error instanceof Error && error.message.includes('404')) {
@@ -422,12 +403,12 @@ export async function createImage(
     [FIELD_COUNT]: count,
   };
 
-  const response = await airtableFetch(IMAGES_TABLE, {
+  const response = await dbFetch(IMAGES_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const image = mapAirtableToImage(record, productsMap);
 
   if (!image) {
@@ -441,7 +422,7 @@ export async function createImage(
  * Delete a record from "Temp Images" table.
  */
 export async function deleteTempImage(id: string): Promise<void> {
-  await airtableFetch(`${TEMP_IMAGES_TABLE}/${id}`, {
+  await dbFetch(`${TEMP_IMAGES_TABLE}/${id}`, {
     method: 'DELETE',
   });
 }

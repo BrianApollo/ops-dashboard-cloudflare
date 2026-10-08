@@ -12,7 +12,8 @@
 
 import type { Product, ProductAsset, ProductStatus } from './types';
 import { uploadProductAsset, deleteProductAssetFromDrive, createProductFolder, type UploadProgress } from './drive';
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 const GOOGLE_DRIVE_PRODUCTS_ROOT_ID = import.meta.env.VITE_GOOGLE_DRIVE_PRODUCTS_ROOT_ID;
 
@@ -33,7 +34,7 @@ const FIELD_PRODUCT_LOGO = 'Product Logo';
 // AIRTABLE TYPES
 // =============================================================================
 
-interface AirtableRecord {
+interface DbRecord {
   id: string;
   fields: Record<string, unknown>;
   createdTime: string;
@@ -97,7 +98,7 @@ function parseAttachments(attachments: unknown): ProductAsset[] {
     }));
 }
 
-function mapAirtableToProduct(record: AirtableRecord): Product | null {
+function mapAirtableToProduct(record: DbRecord): Product | null {
   const fields = record.fields;
 
   // Required: Product name
@@ -149,15 +150,7 @@ function mapAirtableToProduct(record: AirtableRecord): Product | null {
  * List all products directly from Airtable with full field mapping (images, logos).
  */
 export async function listProducts(signal?: AbortSignal): Promise<Product[]> {
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset ? `${PRODUCTS_TABLE}?offset=${offset}` : PRODUCTS_TABLE;
-    const res = await airtableFetch(url, { signal });
-    const data: { records: AirtableRecord[]; offset?: string } = await res.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset && !signal?.aborted);
+  const allRecords = await fetchAllRecords(PRODUCTS_TABLE, { signal });
   return allRecords.map(mapAirtableToProduct).filter((p): p is Product => p !== null);
 }
 
@@ -166,8 +159,8 @@ export async function listProducts(signal?: AbortSignal): Promise<Product[]> {
  */
 export async function getProduct(id: string): Promise<Product | null> {
   try {
-    const res = await airtableFetch(`${PRODUCTS_TABLE}/${id}`);
-    const record: AirtableRecord = await res.json();
+    const res = await dbFetch(`${PRODUCTS_TABLE}/${id}`);
+    const record: DbRecord = await res.json();
     return mapAirtableToProduct(record);
   } catch (e) {
     if (e instanceof Error && e.message.includes('404')) return null;
@@ -220,12 +213,12 @@ export async function createProduct(
     fields[FIELD_DRIVE_FOLDER_ID] = driveFolderUrl;
   }
 
-  const response = await airtableFetch(PRODUCTS_TABLE, {
+  const response = await dbFetch(PRODUCTS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const product = mapAirtableToProduct(record);
 
   if (!product) {
@@ -278,8 +271,8 @@ export async function uploadAsset(options: UploadAssetOptions): Promise<UploadAs
   });
 
   // Step 2: Get current product record to preserve existing attachments
-  const response = await airtableFetch(`${PRODUCTS_TABLE}/${productId}`);
-  const record: AirtableRecord = await response.json();
+  const response = await dbFetch(`${PRODUCTS_TABLE}/${productId}`);
+  const record: DbRecord = await response.json();
 
   const fieldName = assetType === 'image' ? FIELD_PRODUCT_IMAGE : FIELD_PRODUCT_LOGO;
   const existingAttachments = Array.isArray(record.fields[fieldName])
@@ -295,7 +288,7 @@ export async function uploadAsset(options: UploadAssetOptions): Promise<UploadAs
   ];
 
   // Step 4: Update Airtable record
-  await airtableFetch(`${PRODUCTS_TABLE}/${productId}`, {
+  await dbFetch(`${PRODUCTS_TABLE}/${productId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -337,8 +330,8 @@ export async function deleteAsset(options: DeleteAssetOptions): Promise<void> {
   }
 
   // Step 2: Get current product record
-  const response = await airtableFetch(`${PRODUCTS_TABLE}/${productId}`);
-  const record: AirtableRecord = await response.json();
+  const response = await dbFetch(`${PRODUCTS_TABLE}/${productId}`);
+  const record: DbRecord = await response.json();
 
   const fieldName = assetType === 'image' ? FIELD_PRODUCT_IMAGE : FIELD_PRODUCT_LOGO;
   const existingAttachments = Array.isArray(record.fields[fieldName])
@@ -352,7 +345,7 @@ export async function deleteAsset(options: DeleteAssetOptions): Promise<void> {
     .map((att) => ({ id: att.id }));
 
   // Step 4: Update Airtable record
-  await airtableFetch(`${PRODUCTS_TABLE}/${productId}`, {
+  await dbFetch(`${PRODUCTS_TABLE}/${productId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -375,7 +368,7 @@ export async function updateProductStatus(
   productId: string,
   status: ProductStatus
 ): Promise<Product> {
-  const response = await airtableFetch(`${PRODUCTS_TABLE}/${productId}`, {
+  const response = await dbFetch(`${PRODUCTS_TABLE}/${productId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -384,7 +377,7 @@ export async function updateProductStatus(
     }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const product = mapAirtableToProduct(record);
 
   if (!product) {

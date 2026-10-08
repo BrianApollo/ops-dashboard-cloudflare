@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User } from '../../features/users/types';
 import { verifyCredentials, restoreSession } from '../../features/users/data';
-import { setAuthToken } from '../data/airtable-client';
+import { setAuthToken } from '../data/db-client';
 
 interface AuthContextType {
     user: User | null;

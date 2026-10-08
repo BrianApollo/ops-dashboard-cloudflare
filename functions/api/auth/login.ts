@@ -10,7 +10,7 @@
  */
 
 import { hashPassword, verifyPassword, createJwt } from '../../lib/auth';
-import type { D1Like } from '../../lib/airtable-shim/schema';
+import type { D1Like } from '../../lib/db-api/schema';
 
 interface Env {
   AIRTABLE_API_KEY: string;

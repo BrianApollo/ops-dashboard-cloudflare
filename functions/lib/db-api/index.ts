@@ -25,13 +25,24 @@ import { decorateRecord } from './computed';
 import { WriteError, normalizeWrite, queueDeleteDetach } from './links';
 
 const PAGE_SIZE = 100;
-const MAX_BATCH = 10; // Airtable's batch limit — enforced to keep both backends honest
+
+export interface DialectOptions {
+  /** false = return every matching row in one response (no offset pages). */
+  paginate: boolean;
+  /** Max records per batch write. Airtable dialect: 10. DB dialect: 200. */
+  maxBatch: number;
+  /** Allow the clean where[Field]=value filter params (DB dialect). */
+  whereParams: boolean;
+}
+
+const AIRTABLE_DIALECT: DialectOptions = { paginate: true, maxBatch: 10, whereParams: false };
 
 export async function handleShimRequest(
   db: D1Like,
   request: Request,
   pathSegments: string[],
-  search: URLSearchParams
+  search: URLSearchParams,
+  dialect: DialectOptions = AIRTABLE_DIALECT
 ): Promise<Response> {
   const store = new RequestStore(db);
   const tableRef = decodeURIComponent(pathSegments[0] || '');
@@ -47,13 +58,13 @@ export async function handleShimRequest(
       case 'GET':
         return recordId
           ? await getSingle(store, table, recordId)
-          : await getList(store, table, search);
+          : await getList(store, table, search, dialect);
       case 'POST':
-        return await create(store, table, await request.json());
+        return await create(store, table, await request.json(), dialect);
       case 'PATCH':
-        return await patch(store, table, recordId, await request.json());
+        return await patch(store, table, recordId, await request.json(), dialect);
       case 'DELETE':
-        return await remove(store, table, recordId, search);
+        return await remove(store, table, recordId, search, dialect);
       default:
         return airtableError(405, 'METHOD_NOT_ALLOWED', `Method ${request.method} not supported`);
     }
@@ -82,7 +93,63 @@ async function getSingle(store: RequestStore, table: ShimTable, recordId: string
   return json(await toApiRecord(store, table, rec));
 }
 
-async function getList(store: RequestStore, table: ShimTable, search: URLSearchParams): Promise<Response> {
+/** Build a display-name getter for formula/where evaluation over one table. */
+async function buildFieldGetter(
+  store: RequestStore,
+  table: ShimTable,
+  referenced: Set<string>
+): Promise<(fields: Record<string, unknown>, name: string) => unknown> {
+  const linkMaps = new Map<string, Map<string, string>>(); // field name → id → primary value
+  for (const name of referenced) {
+    const def = table.fields.find((f) => f.name === name);
+    if (def?.type === 'multipleRecordLinks' && def.linkedTable) {
+      const target = await store.getTable(def.linkedTable);
+      const targetTable = await resolveTable(store.db, def.linkedTable);
+      const primary = targetTable?.primaryField;
+      const map = new Map<string, string>();
+      for (const t of target.rows) {
+        const v = primary ? t.fields[primary] : undefined;
+        map.set(t.id, v === undefined || v === null ? t.id : String(v));
+      }
+      linkMaps.set(name, map);
+    }
+  }
+  return (fields, name) => {
+    const v = fields[name];
+    const map = linkMaps.get(name);
+    if (map && Array.isArray(v)) return (v as string[]).map((id) => map.get(id) ?? id);
+    return v;
+  };
+}
+
+/** DB-dialect filters: where[F]=v (equality), whereAny[F]=v1,v2, whereNotEmpty[F]=1.
+ *  Same display-name semantics as the formula path. */
+interface WhereCond { field: string; kind: 'eq' | 'any' | 'notEmpty'; values: string[] }
+
+function parseWhereParams(search: URLSearchParams): WhereCond[] {
+  const out: WhereCond[] = [];
+  for (const [key, value] of search.entries()) {
+    const m = key.match(/^(where|whereAny|whereNotEmpty)\[(.+)\]$/);
+    if (!m) continue;
+    if (m[1] === 'where') out.push({ field: m[2], kind: 'eq', values: [value] });
+    else if (m[1] === 'whereAny') out.push({ field: m[2], kind: 'any', values: value.split(',') });
+    else out.push({ field: m[2], kind: 'notEmpty', values: [] });
+  }
+  return out;
+}
+
+function toComparableText(v: unknown): string {
+  if (v === undefined || v === null || v === false) return '';
+  if (Array.isArray(v)) return v.map((x) => toComparableText(x)).join(', ');
+  return String(v);
+}
+
+async function getList(
+  store: RequestStore,
+  table: ShimTable,
+  search: URLSearchParams,
+  dialect: DialectOptions
+): Promise<Response> {
   const data = await store.getTable(table.name);
 
   // Decorate everything first — formulas and sorts may reference derived fields.
@@ -94,30 +161,23 @@ async function getList(store: RequestStore, table: ShimTable, search: URLSearchP
   const formulaSrc = search.get('filterByFormula');
   if (formulaSrc) {
     const ast: Node = parseFormula(formulaSrc);
-    const referenced = collectFieldNames(ast);
-    const linkMaps = new Map<string, Map<string, string>>(); // field name → id → primary value
-    for (const name of referenced) {
-      const def = table.fields.find((f) => f.name === name);
-      if (def?.type === 'multipleRecordLinks' && def.linkedTable) {
-        const target = await store.getTable(def.linkedTable);
-        const targetTable = await resolveTable(store.db, def.linkedTable);
-        const primary = targetTable?.primaryField;
-        const map = new Map<string, string>();
-        for (const t of target.rows) {
-          const v = primary ? t.fields[primary] : undefined;
-          map.set(t.id, v === undefined || v === null ? t.id : String(v));
-        }
-        linkMaps.set(name, map);
-      }
+    const get = await buildFieldGetter(store, table, collectFieldNames(ast));
+    rows = rows.filter(({ fields }) => formulaMatches(ast, (name) => get(fields, name)));
+  }
+
+  // DB-dialect where params (AND of all conditions)
+  if (dialect.whereParams) {
+    const conds = parseWhereParams(search);
+    if (conds.length) {
+      const get = await buildFieldGetter(store, table, new Set(conds.map((c) => c.field)));
+      rows = rows.filter(({ fields }) =>
+        conds.every((c) => {
+          const text = toComparableText(get(fields, c.field)).toLowerCase();
+          if (c.kind === 'notEmpty') return text !== '';
+          return c.values.some((v) => v.toLowerCase() === text);
+        })
+      );
     }
-    rows = rows.filter(({ fields }) =>
-      formulaMatches(ast, (name) => {
-        const v = fields[name];
-        const map = linkMaps.get(name);
-        if (map && Array.isArray(v)) return (v as string[]).map((id) => map.get(id) ?? id);
-        return v;
-      })
-    );
   }
 
   // sort[i][field] / sort[i][direction]
@@ -145,10 +205,13 @@ async function getList(store: RequestStore, table: ShimTable, search: URLSearchP
     });
   }
 
-  // maxRecords caps the total; pageSize caps each page.
+  // maxRecords caps the total; pageSize caps each page (Airtable dialect only —
+  // the DB dialect returns everything in one response, that's the point of D1).
   const maxRecords = parseInt(search.get('maxRecords') || '', 10);
   if (!Number.isNaN(maxRecords)) rows = rows.slice(0, maxRecords);
-  const pageSize = Math.min(PAGE_SIZE, parseInt(search.get('pageSize') || '', 10) || PAGE_SIZE);
+  const pageSize = dialect.paginate
+    ? Math.min(PAGE_SIZE, parseInt(search.get('pageSize') || '', 10) || PAGE_SIZE)
+    : rows.length;
 
   const offset = parseInt(search.get('offset') || '0', 10) || 0;
   const page = rows.slice(offset, offset + pageSize);
@@ -166,7 +229,7 @@ async function getList(store: RequestStore, table: ShimTable, search: URLSearchP
   });
 
   const body: { records: unknown[]; offset?: string } = { records };
-  if (offset + pageSize < rows.length) body.offset = String(offset + pageSize);
+  if (dialect.paginate && offset + pageSize < rows.length) body.offset = String(offset + pageSize);
   return json(body);
 }
 
@@ -197,11 +260,11 @@ async function createOne(
   return rec;
 }
 
-async function create(store: RequestStore, table: ShimTable, body: WriteBody): Promise<Response> {
+async function create(store: RequestStore, table: ShimTable, body: WriteBody, dialect: DialectOptions): Promise<Response> {
   const writes: PreparedWrite[] = [];
   if (body.records) {
-    if (body.records.length > MAX_BATCH) {
-      return airtableError(422, 'INVALID_REQUEST_BODY', `You can only create up to ${MAX_BATCH} records per request`);
+    if (body.records.length > dialect.maxBatch) {
+      return airtableError(422, 'INVALID_REQUEST_BODY', `You can only create up to ${dialect.maxBatch} records per request`);
     }
     const created: StoredRecord[] = [];
     for (const r of body.records) created.push(await createOne(store, table, r.fields, writes));
@@ -230,7 +293,7 @@ async function patchOne(
   return rec;
 }
 
-async function patch(store: RequestStore, table: ShimTable, recordId: string | undefined, body: WriteBody): Promise<Response> {
+async function patch(store: RequestStore, table: ShimTable, recordId: string | undefined, body: WriteBody, dialect: DialectOptions): Promise<Response> {
   const writes: PreparedWrite[] = [];
   if (recordId) {
     const rec = await patchOne(store, table, recordId, body.fields || {}, writes);
@@ -238,8 +301,8 @@ async function patch(store: RequestStore, table: ShimTable, recordId: string | u
     return json(await toApiRecord(store, table, rec));
   }
   const records = body.records || [];
-  if (records.length > MAX_BATCH) {
-    return airtableError(422, 'INVALID_REQUEST_BODY', `You can only update up to ${MAX_BATCH} records per request`);
+  if (records.length > dialect.maxBatch) {
+    return airtableError(422, 'INVALID_REQUEST_BODY', `You can only update up to ${dialect.maxBatch} records per request`);
   }
   const updated: StoredRecord[] = [];
   for (const r of records) {
@@ -261,7 +324,7 @@ async function removeOne(store: RequestStore, table: ShimTable, id: string, writ
   writes.push(deleteRecordStmt(table.name, id), mutationLogStmt(table.name, 'delete', id, rec.fields));
 }
 
-async function remove(store: RequestStore, table: ShimTable, recordId: string | undefined, search: URLSearchParams): Promise<Response> {
+async function remove(store: RequestStore, table: ShimTable, recordId: string | undefined, search: URLSearchParams, dialect: DialectOptions): Promise<Response> {
   const writes: PreparedWrite[] = [];
   if (recordId) {
     await removeOne(store, table, recordId, writes);
@@ -270,8 +333,8 @@ async function remove(store: RequestStore, table: ShimTable, recordId: string | 
   }
   const ids = search.getAll('records[]');
   if (ids.length === 0) return airtableError(422, 'INVALID_REQUEST_BODY', 'No record ids given');
-  if (ids.length > MAX_BATCH) {
-    return airtableError(422, 'INVALID_REQUEST_BODY', `You can only delete up to ${MAX_BATCH} records per request`);
+  if (ids.length > dialect.maxBatch) {
+    return airtableError(422, 'INVALID_REQUEST_BODY', `You can only delete up to ${dialect.maxBatch} records per request`);
   }
   for (const id of ids) await removeOne(store, table, id, writes);
   await runBatch(store.db, writes);

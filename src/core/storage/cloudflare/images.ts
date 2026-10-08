@@ -6,7 +6,7 @@
  * Cloudflare API token never reaches the browser.
  */
 
-import { getAuthToken } from '../../data/airtable-client';
+import { getAuthToken } from '../../data/db-client';
 
 /**
  * Extract Cloudflare Image ID from a delivery URL.

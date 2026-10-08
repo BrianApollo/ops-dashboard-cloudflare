@@ -462,7 +462,7 @@ export function ManagePage() {
       {addAdsTarget && addAdsRecordId && selectedProfile?.permanentToken && (
         <ManageAddAdsDialog
           campaign={addAdsTarget}
-          airtableRecordId={addAdsRecordId}
+          DbRecordId={addAdsRecordId}
           accessToken={selectedProfile.permanentToken}
           onClose={() => setAddAdsTarget(null)}
           onSuccess={() => {

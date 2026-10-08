@@ -4,8 +4,9 @@
  * Targets the "AI Videos" Airtable table.
  */
 
-import { airtableFetch } from '../../core/data/airtable-client';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import { dbFetch } from '../../core/data/db-client';
+import type { DbRecord } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // Table name
 const AI_VIDEOS_TABLE = 'AI Videos';
@@ -31,21 +32,8 @@ export interface AIVideo {
  * Uses product name (not ID) because linked record formulas return display names.
  */
 export async function listAIVideosByProduct(productName: string): Promise<AIVideo[]> {
-  const filterFormula = encodeURIComponent(
-    `{${FIELD_PRODUCT}} = '${productName}'`,
-  );
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset
-      ? `${AI_VIDEOS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-      : `${AI_VIDEOS_TABLE}?filterByFormula=${filterFormula}`;
-    const res = await airtableFetch(url);
-    const data: AirtableResponse = await res.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const whereParam = `where[${encodeURIComponent(FIELD_PRODUCT)}]=${encodeURIComponent(productName)}`;
+  const allRecords = await fetchAllRecords(`${AI_VIDEOS_TABLE}?${whereParam}`);
 
   return allRecords
     .map((r): AIVideo | null => {
@@ -73,13 +61,13 @@ export async function listAIVideosByProduct(productName: string): Promise<AIVide
 export async function markAIVideosUsed(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
 
-  const batchSize = 10;
+  const batchSize = 200; // /api/db batch limit
   for (let i = 0; i < ids.length; i += batchSize) {
     const records = ids.slice(i, i + batchSize).map((id) => ({
       id,
       fields: { [FIELD_STATUS]: 'Used' },
     }));
-    await airtableFetch(AI_VIDEOS_TABLE, {
+    await dbFetch(AI_VIDEOS_TABLE, {
       method: 'PATCH',
       body: JSON.stringify({ records }),
     });
@@ -108,12 +96,12 @@ export async function createAIVideo(
     fields[FIELD_VIDEO_DATA] = videoData;
   }
 
-  const response = await airtableFetch(AI_VIDEOS_TABLE, {
+  const response = await dbFetch(AI_VIDEOS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
 
   const videoName = typeof record.fields[FIELD_VIDEO_NAME] === 'string'
     ? record.fields[FIELD_VIDEO_NAME]

@@ -11,9 +11,10 @@
  */
 
 import type { Script, ScriptStatus } from './types';
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
 import { provider } from '../../data/provider';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import type { DbRecord } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -89,7 +90,7 @@ export async function listUsers(): Promise<Array<{ id: string; name: string; rol
 // =============================================================================
 
 function mapAirtableToScript(
-  record: AirtableRecord,
+  record: DbRecord,
   productsMap: Map<string, { id: string; name: string }>,
   usersMap: Map<string, { id: string; name: string }>
 ): Script | null {
@@ -186,15 +187,7 @@ function mapAirtableToScript(
  */
 export async function listScripts(signal?: AbortSignal): Promise<Script[]> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset ? `${SCRIPTS_TABLE}?offset=${offset}` : SCRIPTS_TABLE;
-    const res = await airtableFetch(url, { signal });
-    const data: AirtableResponse = await res.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset && !signal?.aborted);
+  const allRecords = await fetchAllRecords(SCRIPTS_TABLE, { signal });
   return allRecords
     .map(r => mapAirtableToScript(r, productsMap, usersMap))
     .filter((s): s is Script => s !== null);
@@ -206,19 +199,8 @@ export async function listScripts(signal?: AbortSignal): Promise<Script[]> {
  */
 export async function listScriptsByProduct(productName: string): Promise<Script[]> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
-  const filterFormula = encodeURIComponent(`{${FIELD_PRODUCT}} = '${productName}'`);
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset
-      ? `${SCRIPTS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-      : `${SCRIPTS_TABLE}?filterByFormula=${filterFormula}`;
-    const res = await airtableFetch(url);
-    const data: AirtableResponse = await res.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const whereParam = `where[${encodeURIComponent(FIELD_PRODUCT)}]=${encodeURIComponent(productName)}`;
+  const allRecords = await fetchAllRecords(`${SCRIPTS_TABLE}?${whereParam}`);
 
   return allRecords
     .map(r => mapAirtableToScript(r, productsMap, usersMap))
@@ -231,8 +213,8 @@ export async function listScriptsByProduct(productName: string): Promise<Script[
 export async function getScript(id: string): Promise<Script | null> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
   try {
-    const res = await airtableFetch(`${SCRIPTS_TABLE}/${id}`);
-    const record: AirtableRecord = await res.json();
+    const res = await dbFetch(`${SCRIPTS_TABLE}/${id}`);
+    const record: DbRecord = await res.json();
     return mapAirtableToScript(record, productsMap, usersMap);
   } catch (e) {
     if (e instanceof Error && e.message.includes('404')) return null;
@@ -284,12 +266,12 @@ export async function createScript(
     fields[FIELD_CONTENT] = content.trim();
   }
 
-  const response = await airtableFetch(SCRIPTS_TABLE, {
+  const response = await dbFetch(SCRIPTS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const script = mapAirtableToScript(record, productsMap, usersMap);
 
   if (!script) {
@@ -309,7 +291,7 @@ export async function updateScriptContent(
 ): Promise<Script> {
   const [productsMap, usersMap] = await Promise.all([fetchProducts(), fetchUsers()]);
 
-  const response = await airtableFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
+  const response = await dbFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -318,7 +300,7 @@ export async function updateScriptContent(
     }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const script = mapAirtableToScript(record, productsMap, usersMap);
 
   if (!script) {
@@ -361,12 +343,12 @@ export async function createHookScript(
     [FIELD_BASE_SCRIPT_NUMBER]: baseScriptNumber,
   };
 
-  const response = await airtableFetch(SCRIPTS_TABLE, {
+  const response = await dbFetch(SCRIPTS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const script = mapAirtableToScript(record, productsMap, usersMap);
 
   if (!script) {
@@ -380,7 +362,7 @@ export async function createHookScript(
  * Delete a script by ID.
  */
 export async function deleteScript(scriptId: string): Promise<void> {
-  await airtableFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
+  await dbFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
     method: 'DELETE',
   });
 }
@@ -402,7 +384,7 @@ export async function updateScriptHookFields(
   // Combined content = hook + body
   const content = `${hook}\n\n${body}`;
 
-  const response = await airtableFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
+  const response = await dbFetch(`${SCRIPTS_TABLE}/${scriptId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       fields: {
@@ -415,7 +397,7 @@ export async function updateScriptHookFields(
     }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
   const script = mapAirtableToScript(record, productsMap, usersMap);
 
   if (!script) {

@@ -29,7 +29,7 @@ import type { FbManageCampaign } from '../../features/manage/types';
 interface ManageAddAdsDialogProps {
   campaign: FbManageCampaign;
   /** Airtable Campaigns record id linked to this FB campaign. */
-  airtableRecordId: string;
+  DbRecordId: string;
   accessToken: string;
   onClose: () => void;
   onSuccess: () => void;
@@ -37,7 +37,7 @@ interface ManageAddAdsDialogProps {
 
 export function ManageAddAdsDialog({
   campaign,
-  airtableRecordId,
+  DbRecordId,
   accessToken,
   onClose,
   onSuccess,
@@ -45,8 +45,8 @@ export function ManageAddAdsDialog({
   const [target, setTarget] = useState<{ adSetId: string; templateCreativeId: string } | null>(null);
 
   const recordQuery = useQuery({
-    queryKey: ['campaign', airtableRecordId],
-    queryFn: () => getCampaign(airtableRecordId),
+    queryKey: ['campaign', DbRecordId],
+    queryFn: () => getCampaign(DbRecordId),
   });
 
   const fbQuery = useQuery({

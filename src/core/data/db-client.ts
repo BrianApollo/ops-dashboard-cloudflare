@@ -1,15 +1,12 @@
 /**
- * Centralized Airtable Client
+ * Centralized data-API client.
  *
- * ALL Airtable API calls route through the server-side proxy at /api/airtable/.
- * The Airtable API key and Base ID are NEVER in the browser — they live
- * as Cloudflare Pages secrets and are injected by the proxy.
+ * ALL data calls route through the server-side Cloudflare D1 API at /api/db/.
+ * The server authenticates via JWT and reads/writes the D1 database directly —
+ * no third-party API, no rate limits, no request throttling needed.
  *
- * This replaces the duplicated airtableFetch() + validateConfig() pattern
- * that previously existed in every data.ts file.
+ * Record shape is unchanged from the Airtable era: { id, fields, createdTime }.
  */
-
-import { throttledAirtableFetch } from './airtable-throttle';
 
 // =============================================================================
 // AUTH TOKEN
@@ -19,7 +16,7 @@ let authToken: string | null = null;
 
 /**
  * Set the JWT auth token. Called after login.
- * The token is sent with every proxied request.
+ * The token is sent with every request.
  */
 export function setAuthToken(token: string | null): void {
   authToken = token;
@@ -33,18 +30,17 @@ export function getAuthToken(): string | null {
 }
 
 // =============================================================================
-// AIRTABLE FETCH (via server proxy)
+// DATA FETCH (via /api/db server endpoint)
 // =============================================================================
 
 /**
- * Centralized Airtable fetch wrapper.
- * Routes through /api/airtable/ server proxy.
+ * Centralized data fetch wrapper. Routes through the /api/db/ D1 endpoint.
  *
  * @param endpoint - Table name or path (e.g., 'Users', 'Products/rec123')
  * @param options - RequestInit options
- * @returns Response from the proxy
+ * @returns Response from the server
  */
-export async function airtableFetch(
+export async function dbFetch(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<Response> {
@@ -57,7 +53,7 @@ export async function airtableFetch(
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await throttledAirtableFetch(`/api/airtable/${endpoint}`, {
+  const response = await fetch(`/api/db/${endpoint}`, {
     ...options,
     headers: {
       ...headers,
@@ -77,13 +73,13 @@ export async function airtableFetch(
       throw new Error(data.message || 'Access denied');
     }
 
-    let errorMessage = `Airtable API error: ${response.status} ${response.statusText}`;
+    let errorMessage = `Data API error: ${response.status} ${response.statusText}`;
     try {
       const errorData = await response.json() as { error?: { type?: string; message?: string } };
       if (errorData.error) {
         const errType = errorData.error.type || 'UNKNOWN_ERROR';
         const errMsg = errorData.error.message || '';
-        errorMessage = `Airtable error (${errType}): ${errMsg}`;
+        errorMessage = `Data API error (${errType}): ${errMsg}`;
       }
     } catch { /* use default */ }
     throw new Error(errorMessage);

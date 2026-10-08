@@ -12,8 +12,8 @@
 
 import { authenticateRequest } from '../../lib/auth';
 import { canAccessTable, stripSensitiveFields } from '../../lib/permissions';
-import { handleShimRequest } from '../../lib/airtable-shim';
-import type { D1Like } from '../../lib/airtable-shim/schema';
+import { handleShimRequest } from '../../lib/db-api';
+import type { D1Like } from '../../lib/db-api/schema';
 
 interface Env {
   AIRTABLE_API_KEY: string;

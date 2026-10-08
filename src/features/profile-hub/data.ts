@@ -2,20 +2,21 @@
  * Data layer for the Profile Hub page.
  *
  * Reads/writes the FULL Airtable "Profiles" record through the existing
- * server-side proxy (src/core/data/airtable-client). Field names live in
+ * server-side proxy (src/core/data/db-client). Field names live in
  * ./types.ts (PROFILE_GROUPS) — nowhere else.
  */
 
-import { airtableFetch } from '../../core/data/airtable-client';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import { dbFetch } from '../../core/data/db-client';
+import type { DbRecord } from '../../lib/db-types';
 import { listBMs, listPages } from '../infrastructure/data';
 import { uploadFile } from '../../core/storage';
 import type { HubProfile } from './types';
 import { EDITABLE_FIELDS } from './types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 const TABLE = 'Profiles';
 
-function toHubProfile(record: AirtableRecord): HubProfile {
+function toHubProfile(record: DbRecord): HubProfile {
   return { id: record.id, fields: { ...record.fields } };
 }
 
@@ -23,16 +24,7 @@ function toHubProfile(record: AirtableRecord): HubProfile {
  * List every profile (paginated).
  */
 export async function listHubProfiles(): Promise<HubProfile[]> {
-  const all: AirtableRecord[] = [];
-  let offset: string | undefined;
-
-  do {
-    const url = offset ? `${TABLE}?offset=${offset}` : TABLE;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    all.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const all = await fetchAllRecords(TABLE);
 
   return all.map(toHubProfile);
 }
@@ -54,25 +46,25 @@ export async function updateHubProfile(
   recordId: string,
   fields: Record<string, unknown>,
 ): Promise<HubProfile> {
-  const response = await airtableFetch(`${TABLE}/${recordId}`, {
+  const response = await dbFetch(`${TABLE}/${recordId}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields: editableOnly(fields), typecast: true }),
   });
-  return toHubProfile((await response.json()) as AirtableRecord);
+  return toHubProfile((await response.json()) as DbRecord);
 }
 
 export async function createHubProfile(
   fields: Record<string, unknown>,
 ): Promise<HubProfile> {
-  const response = await airtableFetch(TABLE, {
+  const response = await dbFetch(TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields: editableOnly(fields), typecast: true }),
   });
-  return toHubProfile((await response.json()) as AirtableRecord);
+  return toHubProfile((await response.json()) as DbRecord);
 }
 
 export async function deleteHubProfile(recordId: string): Promise<void> {
-  await airtableFetch(`${TABLE}/${recordId}`, { method: 'DELETE' });
+  await dbFetch(`${TABLE}/${recordId}`, { method: 'DELETE' });
 }
 
 // =============================================================================

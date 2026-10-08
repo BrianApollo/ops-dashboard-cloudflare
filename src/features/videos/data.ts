@@ -11,9 +11,10 @@
  */
 
 import type { VideoAsset, VideoStatus, VideoFormat } from './types';
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
 import { provider } from '../../data/provider';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import type { DbRecord, DbResponse } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // Table names
 const VIDEOS_TABLE = 'Videos';
@@ -103,7 +104,7 @@ function denormalizeStatus(status: VideoStatus): string {
  * Handles expanded linked records for Editor, Product, and Script.
  */
 function mapAirtableToVideoAsset(
-  record: AirtableRecord,
+  record: DbRecord,
   editorsMap: Map<string, { id: string; name: string }>,
   productsMap: Map<string, { id: string; name: string; driveFolderId?: string }>,
   scriptsMap: Map<string, { id: string; name: string }>
@@ -340,21 +341,13 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string; 
 async function fetchScripts(): Promise<Map<string, { id: string; name: string }>> {
   const map = new Map<string, { id: string; name: string }>();
   const list: { id: string; name: string }[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset
-      ? `${VIDEO_SCRIPTS_TABLE}?fields[]=${encodeURIComponent(FIELD_SCRIPT_NAME)}&offset=${offset}`
-      : `${VIDEO_SCRIPTS_TABLE}?fields[]=${encodeURIComponent(FIELD_SCRIPT_NAME)}`;
-    const res = await airtableFetch(url);
-    const data: AirtableResponse = await res.json();
-    for (const record of data.records) {
-      const name = typeof record.fields[FIELD_SCRIPT_NAME] === 'string'
-        ? record.fields[FIELD_SCRIPT_NAME] : 'Unknown Script';
-      map.set(record.id, { id: record.id, name });
-      list.push({ id: record.id, name });
-    }
-    offset = data.offset;
-  } while (offset);
+  const records = await fetchAllRecords(`${VIDEO_SCRIPTS_TABLE}?fields[]=${encodeURIComponent(FIELD_SCRIPT_NAME)}`);
+  for (const record of records) {
+    const name = typeof record.fields[FIELD_SCRIPT_NAME] === 'string'
+      ? record.fields[FIELD_SCRIPT_NAME] : 'Unknown Script';
+    map.set(record.id, { id: record.id, name });
+    list.push({ id: record.id, name });
+  }
   scriptsCache = list;
   return map;
 }
@@ -370,21 +363,15 @@ export async function getScriptCounts(
 ): Promise<Record<string, { done: number; total: number }>> {
   const counts: Record<string, { done: number; total: number }> = {};
   const params = `fields[]=${encodeURIComponent(FIELD_SCRIPT_PAST_TODO)}&fields[]=${encodeURIComponent(FIELD_SCRIPT_VIDEOS)}`;
-  let offset: string | undefined;
-  do {
-    const url = offset ? `${VIDEO_SCRIPTS_TABLE}?${params}&offset=${offset}` : `${VIDEO_SCRIPTS_TABLE}?${params}`;
-    const res = await airtableFetch(url, { signal });
-    const data: AirtableResponse = await res.json();
-    for (const rec of data.records) {
-      const doneRaw = rec.fields[FIELD_SCRIPT_PAST_TODO];
-      const videos = rec.fields[FIELD_SCRIPT_VIDEOS];
-      counts[rec.id] = {
-        done: typeof doneRaw === 'number' ? doneRaw : 0,
-        total: Array.isArray(videos) ? videos.length : 0,
-      };
-    }
-    offset = data.offset;
-  } while (offset && !signal?.aborted);
+  const records = await fetchAllRecords(`${VIDEO_SCRIPTS_TABLE}?${params}`, { signal });
+  for (const rec of records) {
+    const doneRaw = rec.fields[FIELD_SCRIPT_PAST_TODO];
+    const videos = rec.fields[FIELD_SCRIPT_VIDEOS];
+    counts[rec.id] = {
+      done: typeof doneRaw === 'number' ? doneRaw : 0,
+      total: Array.isArray(videos) ? videos.length : 0,
+    };
+  }
   return counts;
 }
 
@@ -401,15 +388,7 @@ export async function listVideos(signal?: AbortSignal): Promise<VideoAsset[]> {
     fetchProducts(),
     fetchScripts(),
   ]);
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset ? `${VIDEOS_TABLE}?offset=${offset}` : VIDEOS_TABLE;
-    const res = await airtableFetch(url, { signal });
-    const data: AirtableResponse = await res.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset && !signal?.aborted);
+  const allRecords = await fetchAllRecords(VIDEOS_TABLE, { signal });
   return allRecords
     .map(r => mapAirtableToVideoAsset(r, editorsMap, productsMap, scriptsMap))
     .filter((v): v is VideoAsset => v !== null);
@@ -426,21 +405,8 @@ export async function listVideosByProduct(productName: string): Promise<VideoAss
     fetchScripts(),
   ]);
 
-  const filterFormula = encodeURIComponent(
-    `{${FIELD_PRODUCT}} = '${productName}'`
-  );
-
-  const allRecords: AirtableRecord[] = [];
-  let offset: string | undefined;
-  do {
-    const url = offset
-      ? `${VIDEOS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-      : `${VIDEOS_TABLE}?filterByFormula=${filterFormula}`;
-    const response = await airtableFetch(url);
-    const data: AirtableResponse = await response.json();
-    allRecords.push(...data.records);
-    offset = data.offset;
-  } while (offset);
+  const whereParam = `where[${encodeURIComponent(FIELD_PRODUCT)}]=${encodeURIComponent(productName)}`;
+  const allRecords = await fetchAllRecords(`${VIDEOS_TABLE}?${whereParam}`);
 
   return allRecords
     .map(r => mapAirtableToVideoAsset(r, editorsMap, productsMap, scriptsMap))
@@ -462,7 +428,7 @@ export async function updateVideo(
 ): Promise<void> {
   const fields = mapDomainToAirtableFields(patch);
 
-  await airtableFetch(`${VIDEOS_TABLE}/${id}`, {
+  await dbFetch(`${VIDEOS_TABLE}/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ fields }),
   });
@@ -473,7 +439,7 @@ export async function updateVideo(
  */
 export async function updateVideoStatus(ids: string[], status: VideoStatus): Promise<void> {
   // Airtable batch update limit is 10 records per request
-  const batchSize = 10;
+  const batchSize = 200; // /api/db batch limit
   const statusValue = denormalizeStatus(status);
 
   for (let i = 0; i < ids.length; i += batchSize) {
@@ -483,7 +449,7 @@ export async function updateVideoStatus(ids: string[], status: VideoStatus): Pro
       fields: { [FIELD_STATUS]: statusValue },
     }));
 
-    await airtableFetch(VIDEOS_TABLE, {
+    await dbFetch(VIDEOS_TABLE, {
       method: 'PATCH',
       body: JSON.stringify({ records }),
     });
@@ -501,7 +467,7 @@ export async function updateVideoStatus(ids: string[], status: VideoStatus): Pro
 export async function markVideosUsed(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
 
-  const batchSize = 10;
+  const batchSize = 200; // /api/db batch limit
   const statusValue = denormalizeStatus('used');
 
   for (let i = 0; i < ids.length; i += batchSize) {
@@ -510,7 +476,7 @@ export async function markVideosUsed(ids: string[]): Promise<void> {
       fields: { [FIELD_STATUS]: statusValue },
     }));
 
-    await airtableFetch(VIDEOS_TABLE, {
+    await dbFetch(VIDEOS_TABLE, {
       method: 'PATCH',
       body: JSON.stringify({ records }),
     });
@@ -528,7 +494,7 @@ export async function updateVideosBatch(
 ): Promise<void> {
   if (updates.length === 0) return;
 
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 200; // /api/db batch limit
 
   for (let i = 0; i < updates.length; i += BATCH_SIZE) {
     const batch = updates.slice(i, i + BATCH_SIZE);
@@ -552,7 +518,7 @@ export async function updateVideosBatch(
       fields: u.fields
     }));
 
-    await airtableFetch(VIDEOS_TABLE, {
+    await dbFetch(VIDEOS_TABLE, {
       method: 'PATCH',
       body: JSON.stringify({ records }),
     });
@@ -563,7 +529,7 @@ export async function updateVideosBatch(
  * Delete a video by ID.
  */
 export async function deleteVideo(id: string): Promise<void> {
-  await airtableFetch(`${VIDEOS_TABLE}/${id}`, {
+  await dbFetch(`${VIDEOS_TABLE}/${id}`, {
     method: 'DELETE',
   });
 }
@@ -573,13 +539,13 @@ export async function deleteVideo(id: string): Promise<void> {
  */
 export async function deleteVideos(ids: string[]): Promise<void> {
   // Airtable batch delete limit is 10 records per request
-  const batchSize = 10;
+  const batchSize = 200; // /api/db batch limit
 
   for (let i = 0; i < ids.length; i += batchSize) {
     const batch = ids.slice(i, i + batchSize);
     const params = batch.map((id) => `records[]=${id}`).join('&');
 
-    await airtableFetch(`${VIDEOS_TABLE}?${params}`, {
+    await dbFetch(`${VIDEOS_TABLE}?${params}`, {
       method: 'DELETE',
     });
   }
@@ -614,12 +580,12 @@ export async function createVideo(
     fields[FIELD_SCROLLSTOPPER_NUMBER] = scrollstopperNumber;
   }
 
-  const response = await airtableFetch(VIDEOS_TABLE, {
+  const response = await dbFetch(VIDEOS_TABLE, {
     method: 'POST',
     body: JSON.stringify({ fields }),
   });
 
-  const record: AirtableRecord = await response.json();
+  const record: DbRecord = await response.json();
 
   // Fetch reference data for mapping
   const [editorsMap, productsMap, scriptsMap] = await Promise.all([
@@ -676,20 +642,20 @@ export async function createVideoBatch(videos: CreateVideoInput[]): Promise<Vide
   });
 
   // Chunk into batches of 10 (Airtable limit)
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 200; // /api/db batch limit
   const batches: typeof records[] = [];
   for (let i = 0; i < records.length; i += BATCH_SIZE) {
     batches.push(records.slice(i, i + BATCH_SIZE));
   }
 
   // Execute batches
-  const allCreatedRecords: AirtableRecord[] = [];
+  const allCreatedRecords: DbRecord[] = [];
   for (const batch of batches) {
-    const response = await airtableFetch(VIDEOS_TABLE, {
+    const response = await dbFetch(VIDEOS_TABLE, {
       method: 'POST',
       body: JSON.stringify({ records: batch }),
     });
-    const data: AirtableResponse = await response.json();
+    const data: DbResponse = await response.json();
     allCreatedRecords.push(...data.records);
   }
 

@@ -1,7 +1,8 @@
-import { airtableFetch } from '../../core/data/airtable-client';
+import { dbFetch } from '../../core/data/db-client';
 import type { Advertorial } from './types';
 import { provider } from '../../data/provider';
-import type { AirtableRecord, AirtableResponse } from '../../lib/airtable-types';
+import type { DbRecord } from '../../lib/db-types';
+import { fetchAllRecords } from '../../lib/db-helpers';
 
 // =============================================================================
 // TABLE & FIELD NAMES
@@ -27,7 +28,7 @@ const FIELD_PRODUCT_NAME = 'Product Name';
 // =============================================================================
 
 function mapAirtableToAdvertorial(
-    record: AirtableRecord,
+    record: DbRecord,
     productsMap: Map<string, { id: string; name: string }>
 ): Advertorial | null {
     const fields = record.fields;
@@ -76,16 +77,7 @@ async function fetchProducts(): Promise<Map<string, { id: string; name: string }
 
 export async function listAdvertorials(signal?: AbortSignal): Promise<Advertorial[]> {
     const productsMap = await fetchProducts();
-    const allRecords: AirtableRecord[] = [];
-    let offset: string | undefined;
-
-    do {
-        const url = offset ? `${ADVERTORIALS_TABLE}?offset=${offset}` : ADVERTORIALS_TABLE;
-        const response = await airtableFetch(url, { signal });
-        const data: AirtableResponse = await response.json();
-        allRecords.push(...data.records);
-        offset = data.offset;
-    } while (offset && !signal?.aborted);
+    const allRecords = await fetchAllRecords(ADVERTORIALS_TABLE, { signal });
 
     return allRecords
         .map((record) => mapAirtableToAdvertorial(record, productsMap))
@@ -99,22 +91,8 @@ export async function listAdvertorials(signal?: AbortSignal): Promise<Advertoria
 export async function listAdvertorialsByProduct(productName: string): Promise<Advertorial[]> {
     const productsMap = await fetchProducts();
 
-    const filterFormula = encodeURIComponent(
-        `{${FIELD_PRODUCT}} = '${productName}'`
-    );
-
-    const allRecords: AirtableRecord[] = [];
-    let offset: string | undefined;
-
-    do {
-        const url = offset
-            ? `${ADVERTORIALS_TABLE}?filterByFormula=${filterFormula}&offset=${offset}`
-            : `${ADVERTORIALS_TABLE}?filterByFormula=${filterFormula}`;
-        const response = await airtableFetch(url);
-        const data: AirtableResponse = await response.json();
-        allRecords.push(...data.records);
-        offset = data.offset;
-    } while (offset);
+    const whereParam = `where[${encodeURIComponent(FIELD_PRODUCT)}]=${encodeURIComponent(productName)}`;
+    const allRecords = await fetchAllRecords(`${ADVERTORIALS_TABLE}?${whereParam}`);
 
     return allRecords
         .map((record) => mapAirtableToAdvertorial(record, productsMap))
@@ -139,7 +117,7 @@ export async function createAdvertorial(
     if (text) fields[FIELD_TEXT] = text;
     if (link) fields[FIELD_LINK] = link;
 
-    const response = await airtableFetch(ADVERTORIALS_TABLE, {
+    const response = await dbFetch(ADVERTORIALS_TABLE, {
         method: 'POST',
         body: JSON.stringify({ fields }),
     });
@@ -166,7 +144,7 @@ export async function updateAdvertorial(id: string, fields: Partial<Advertorial>
         airtableFields[FIELD_LINK] = fields.link;
     }
 
-    const response = await airtableFetch(`${ADVERTORIALS_TABLE}/${id}`, {
+    const response = await dbFetch(`${ADVERTORIALS_TABLE}/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ fields: airtableFields }),
     });
