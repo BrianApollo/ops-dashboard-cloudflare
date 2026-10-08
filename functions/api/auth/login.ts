@@ -10,11 +10,70 @@
  */
 
 import { hashPassword, verifyPassword, createJwt } from '../../lib/auth';
+import type { D1Like } from '../../lib/airtable-shim/schema';
 
 interface Env {
   AIRTABLE_API_KEY: string;
   AIRTABLE_BASE_ID: string;
   JWT_SECRET: string;
+  /** "d1" reads/writes Users via the D1 mirror; anything else uses Airtable. */
+  DATA_BACKEND?: string;
+  DB?: D1Like;
+}
+
+interface UserRecord {
+  id: string;
+  fields: Record<string, unknown>;
+}
+
+/** Look up Users by email on the active backend. Airtable's `=` is
+ *  case-insensitive, so the D1 path lowercases both sides to match. */
+async function findUsersByEmail(env: Env, safeEmail: string): Promise<UserRecord[] | null> {
+  if (env.DATA_BACKEND === 'd1') {
+    if (!env.DB) return null;
+    const res = await env.DB.prepare(`SELECT id, fields FROM records WHERE table_name = 'Users'`).all();
+    return res.results
+      .map((r) => ({ id: r.id as string, fields: JSON.parse(r.fields as string) as Record<string, unknown> }))
+      .filter((r) => typeof r.fields['Email'] === 'string' && (r.fields['Email'] as string).toLowerCase() === safeEmail.toLowerCase());
+  }
+
+  const formula = encodeURIComponent(`{Email} = '${safeEmail}'`);
+  const airtableUrl = `https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/Users?filterByFormula=${formula}`;
+  const airtableResponse = await fetch(airtableUrl, {
+    headers: {
+      Authorization: `Bearer ${env.AIRTABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!airtableResponse.ok) {
+    console.error('Airtable query failed:', airtableResponse.status);
+    return null;
+  }
+  const data = (await airtableResponse.json()) as { records: UserRecord[] };
+  return data.records || [];
+}
+
+/** Persist the auto-migrated password hash on the active backend. */
+async function savePasswordHash(env: Env, record: UserRecord, hashed: string): Promise<void> {
+  if (env.DATA_BACKEND === 'd1') {
+    if (!env.DB) return;
+    const fields = { ...record.fields, Password: hashed };
+    await env.DB.prepare(`UPDATE records SET fields = ?, updated_at = ? WHERE table_name = 'Users' AND id = ?`)
+      .bind(JSON.stringify(fields), new Date().toISOString(), record.id)
+      .run();
+    return;
+  }
+  await fetch(
+    `https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/Users/${record.id}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${env.AIRTABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fields: { Password: hashed } }),
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -104,35 +163,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   // Record the attempt before querying (counts toward rate limit even if valid)
   recordAttempt(clientIp);
 
-  // Query Airtable for user by email (server-side — API key stays here)
+  // Query the active backend for user by email (server-side — keys stay here)
   // Sanitize: strip all characters outside safe email charset to prevent formula injection
   const safeEmail = email.replace(/[^a-zA-Z0-9@._+\-]/g, '');
-  const formula = encodeURIComponent(`{Email} = '${safeEmail}'`);
-  const airtableUrl = `https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/Users?filterByFormula=${formula}`;
+  const records = await findUsersByEmail(env, safeEmail);
 
-  const airtableResponse = await fetch(airtableUrl, {
-    headers: {
-      Authorization: `Bearer ${env.AIRTABLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!airtableResponse.ok) {
-    console.error('Airtable query failed:', airtableResponse.status);
+  if (records === null) {
     return new Response(JSON.stringify({ error: 'Authentication service unavailable' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  const data = await airtableResponse.json() as {
-    records: Array<{
-      id: string;
-      fields: Record<string, unknown>;
-    }>;
-  };
-
-  if (!data.records || data.records.length === 0) {
+  if (records.length === 0) {
     return new Response(JSON.stringify({ error: 'Invalid email or password' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -140,9 +183,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // Find matching user record
-  let matchedRecord: (typeof data.records)[0] | null = null;
+  let matchedRecord: UserRecord | null = null;
 
-  for (const record of data.records) {
+  for (const record of records) {
     const storedPassword = record.fields['Password'] as string;
     if (!storedPassword) continue;
 
@@ -160,17 +203,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
         // Auto-migrate: hash the plaintext password and save it back
         const hashed = await hashPassword(password);
-        await fetch(
-          `https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/Users/${record.id}`,
-          {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${env.AIRTABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ fields: { Password: hashed } }),
-          }
-        );
+        await savePasswordHash(env, record, hashed);
         break;
       }
     }

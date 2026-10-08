@@ -49,3 +49,7 @@ tsconfig.app.tsbuildinfo
 tsconfig.node.tsbuildinfo
 *.zip
 **/.wrangler/
+
+# D1 mirror dumps contain real record data (incl. profile credentials) — never commit
+scripts/d1/mirror-*.sql
+scripts/d1/seed-test-user.sql

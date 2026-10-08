@@ -2,3 +2,10 @@ name = "ops-dashboard"
 pages_build_output_dir = "dist"
 compatibility_date = "2025-01-01"
 
+# D1 mirror store for the Airtable-compatible shim.
+# Inert unless the DATA_BACKEND env var is set to "d1" on the deployment.
+[[d1_databases]]
+binding = "DB"
+database_name = "ops-dashboard-db-v2"
+database_id = "1d98ec1e-9ff9-455d-a5ed-286b95283564"
+

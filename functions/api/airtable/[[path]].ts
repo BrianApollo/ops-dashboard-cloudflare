@@ -12,11 +12,16 @@
 
 import { authenticateRequest } from '../../lib/auth';
 import { canAccessTable, stripSensitiveFields } from '../../lib/permissions';
+import { handleShimRequest } from '../../lib/airtable-shim';
+import type { D1Like } from '../../lib/airtable-shim/schema';
 
 interface Env {
   AIRTABLE_API_KEY: string;
   AIRTABLE_BASE_ID: string;
   JWT_SECRET: string;
+  /** "d1" routes data calls to the D1 shim; anything else proxies Airtable. */
+  DATA_BACKEND?: string;
+  DB?: D1Like;
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
@@ -47,8 +52,35 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     );
   }
 
-  // 4. Build the Airtable API URL
   const url = new URL(request.url);
+
+  // 4a. D1 shim backend — same dialect, same permission + stripping behavior.
+  if (env.DATA_BACKEND === 'd1') {
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: 'DATA_BACKEND=d1 but no DB binding' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const shimResponse = await handleShimRequest(env.DB, request, pathSegments, url.searchParams);
+    if (request.method === 'GET' && shimResponse.ok) {
+      try {
+        const data = JSON.parse(await shimResponse.clone().text());
+        if (data.records && Array.isArray(data.records)) {
+          data.records = stripSensitiveFields(data.records, user);
+          return new Response(JSON.stringify(data), {
+            status: shimResponse.status,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      } catch {
+        // Not a records list — pass through (matches the Airtable path)
+      }
+    }
+    return shimResponse;
+  }
+
+  // 4b. Build the Airtable API URL
   const airtableUrl = `https://api.airtable.com/v0/${env.AIRTABLE_BASE_ID}/${airtablePath}${url.search}`;
 
   // 5. Forward the request with server-side API key
