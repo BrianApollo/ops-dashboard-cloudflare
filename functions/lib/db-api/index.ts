@@ -152,22 +152,38 @@ async function getList(
 ): Promise<Response> {
   const data = await store.getTable(table.name);
 
-  // Decorate everything first — formulas and sorts may reference derived fields.
-  let rows = await Promise.all(
-    data.rows.map(async (rec) => ({ rec, fields: await decorateRecord(store, table, rec) }))
-  );
-
-  // filterByFormula (linked fields coerced to display names)
   const formulaSrc = search.get('filterByFormula');
-  if (formulaSrc) {
-    const ast: Node = parseFormula(formulaSrc);
-    const get = await buildFieldGetter(store, table, collectFieldNames(ast));
-    rows = rows.filter(({ fields }) => formulaMatches(ast, (name) => get(fields, name)));
-  }
+  const conds = dialect.whereParams ? parseWhereParams(search) : [];
 
-  // DB-dialect where params (AND of all conditions)
-  if (dialect.whereParams) {
-    const conds = parseWhereParams(search);
+  let rows: { rec: StoredRecord; fields: Record<string, unknown> }[];
+
+  if (!formulaSrc && conds.length) {
+    // DB dialect: filter on RAW fields first (where-params only reference
+    // stored fields), then derive computed fields for the survivors only.
+    const get = await buildFieldGetter(store, table, new Set(conds.map((c) => c.field)));
+    const survivors = data.rows.filter((rec) =>
+      conds.every((c) => {
+        const text = toComparableText(get(rec.fields, c.field)).toLowerCase();
+        if (c.kind === 'notEmpty') return text !== '';
+        return c.values.some((v) => v.toLowerCase() === text);
+      })
+    );
+    rows = await Promise.all(
+      survivors.map(async (rec) => ({ rec, fields: await decorateRecord(store, table, rec) }))
+    );
+  } else {
+    // Legacy formula path (and unfiltered lists): decorate everything —
+    // formulas may reference derived fields; decoration is memoized per
+    // cache generation so this is cheap on warm instances.
+    rows = await Promise.all(
+      data.rows.map(async (rec) => ({ rec, fields: await decorateRecord(store, table, rec) }))
+    );
+
+    if (formulaSrc) {
+      const ast: Node = parseFormula(formulaSrc);
+      const get = await buildFieldGetter(store, table, collectFieldNames(ast));
+      rows = rows.filter(({ fields }) => formulaMatches(ast, (name) => get(fields, name)));
+    }
     if (conds.length) {
       const get = await buildFieldGetter(store, table, new Set(conds.map((c) => c.field)));
       rows = rows.filter(({ fields }) =>
@@ -269,10 +285,12 @@ async function create(store: RequestStore, table: ShimTable, body: WriteBody, di
     const created: StoredRecord[] = [];
     for (const r of body.records) created.push(await createOne(store, table, r.fields, writes));
     await runBatch(store.db, writes);
+  store.markWritten();
     return json({ records: await Promise.all(created.map((r) => toApiRecord(store, table, r))) });
   }
   const rec = await createOne(store, table, body.fields || {}, writes);
   await runBatch(store.db, writes);
+  store.markWritten();
   return json(await toApiRecord(store, table, rec));
 }
 
@@ -298,6 +316,7 @@ async function patch(store: RequestStore, table: ShimTable, recordId: string | u
   if (recordId) {
     const rec = await patchOne(store, table, recordId, body.fields || {}, writes);
     await runBatch(store.db, writes);
+  store.markWritten();
     return json(await toApiRecord(store, table, rec));
   }
   const records = body.records || [];
@@ -310,6 +329,7 @@ async function patch(store: RequestStore, table: ShimTable, recordId: string | u
     updated.push(await patchOne(store, table, r.id, r.fields, writes));
   }
   await runBatch(store.db, writes);
+  store.markWritten();
   return json({ records: await Promise.all(updated.map((r) => toApiRecord(store, table, r))) });
 }
 
@@ -329,6 +349,7 @@ async function remove(store: RequestStore, table: ShimTable, recordId: string | 
   if (recordId) {
     await removeOne(store, table, recordId, writes);
     await runBatch(store.db, writes);
+  store.markWritten();
     return json({ deleted: true, id: recordId });
   }
   const ids = search.getAll('records[]');
@@ -338,6 +359,7 @@ async function remove(store: RequestStore, table: ShimTable, recordId: string | 
   }
   for (const id of ids) await removeOne(store, table, id, writes);
   await runBatch(store.db, writes);
+  store.markWritten();
   return json({ records: ids.map((id) => ({ deleted: true, id })) });
 }
 

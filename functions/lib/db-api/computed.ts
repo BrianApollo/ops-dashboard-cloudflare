@@ -44,12 +44,17 @@ const DERIVED: Record<string, Set<string>> = {
   'AI Videos': new Set(['Script Content (from Script)']),
 };
 
-/** Decorate one record's fields with live derived values. Returns a copy. */
+/** Decorate one record's fields with live derived values. Returns a copy,
+ *  memoized per cache generation (see store.ts GLOBAL) — derivation is pure
+ *  within a generation, and every write clears the memos. */
 export async function decorateRecord(
   store: RequestStore,
   table: ShimTable,
   rec: StoredRecord
 ): Promise<Record<string, unknown>> {
+  const tableData = await store.getTable(table.name);
+  const memo = tableData.decoratedById.get(rec.id);
+  if (memo) return memo;
   const out: Record<string, unknown> = { ...rec.fields };
   const derived = DERIVED[table.name];
 
@@ -113,5 +118,6 @@ export async function decorateRecord(
     else delete out['Calculation']; // division by zero → Airtable omits the field
   }
 
+  tableData.decoratedById.set(rec.id, out);
   return out;
 }

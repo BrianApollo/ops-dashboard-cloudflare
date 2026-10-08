@@ -14,38 +14,74 @@ export interface StoredRecord {
 export interface TableData {
   rows: StoredRecord[];
   byId: Map<string, StoredRecord>;
+  /** Per-record decorated-fields memo. Valid for the cache generation only. */
+  decoratedById: Map<string, Record<string, unknown>>;
 }
 
-/** Per-request context: caches whole tables so lookups/links/formulas reuse loads.
- *  Caches the PROMISE, not the result — concurrent callers must share one load,
- *  or a list request decorating thousands of rows stampedes D1 and OOMs. */
+/**
+ * Isolate-wide cache of parsed tables + decoration memos, shared across
+ * requests in a warm Pages Function instance. Invalidated by the write
+ * version: every mutation inserts into mutations_log, so MAX(seq) changes
+ * whenever ANY record changes — one tiny indexed read per request decides
+ * whether the whole cache is still valid. This is what makes repeat tab
+ * loads fast: parse-9MB-and-derive-everything happens once per write
+ * generation, not once per request.
+ */
+const GLOBAL: { version: number; tables: Map<string, Promise<TableData>> } = {
+  version: -1,
+  tables: new Map(),
+};
+
+/** Per-request view over the global cache. */
 export class RequestStore {
-  private cache = new Map<string, Promise<TableData>>();
+  private versionChecked: Promise<void> | null = null;
   constructor(public db: D1Like) {}
 
-  getTable(tableName: string): Promise<TableData> {
-    const hit = this.cache.get(tableName);
-    if (hit) return hit;
-    const promise = (async (): Promise<TableData> => {
-      const res = await this.db
-        .prepare(`SELECT id, fields, created_time, updated_at FROM records WHERE table_name = ?`)
-        .bind(tableName)
-        .all();
-      const rows: StoredRecord[] = res.results.map((r) => ({
-        id: r.id as string,
-        fields: JSON.parse(r.fields as string) as Record<string, unknown>,
-        createdTime: r.created_time as string,
-        updatedAt: r.updated_at as string,
-      }));
-      return { rows, byId: new Map(rows.map((r) => [r.id, r])) };
+  private ensureVersion(): Promise<void> {
+    if (this.versionChecked) return this.versionChecked;
+    this.versionChecked = (async () => {
+      const row = await this.db.prepare(`SELECT COALESCE(MAX(seq), 0) AS v FROM mutations_log`).first();
+      const v = Number(row?.v ?? 0);
+      if (v !== GLOBAL.version) {
+        GLOBAL.version = v;
+        GLOBAL.tables.clear();
+      }
     })();
-    this.cache.set(tableName, promise);
-    promise.catch(() => this.cache.delete(tableName));
-    return promise;
+    return this.versionChecked;
   }
 
-  invalidate(tableName: string): void {
-    this.cache.delete(tableName);
+  getTable(tableName: string): Promise<TableData> {
+    const load = async (): Promise<TableData> => {
+      await this.ensureVersion();
+      const hit = GLOBAL.tables.get(tableName);
+      if (hit) return hit;
+      const promise = (async (): Promise<TableData> => {
+        const res = await this.db
+          .prepare(`SELECT id, fields, created_time, updated_at FROM records WHERE table_name = ?`)
+          .bind(tableName)
+          .all();
+        const rows: StoredRecord[] = res.results.map((r) => ({
+          id: r.id as string,
+          fields: JSON.parse(r.fields as string) as Record<string, unknown>,
+          createdTime: r.created_time as string,
+          updatedAt: r.updated_at as string,
+        }));
+        return { rows, byId: new Map(rows.map((r) => [r.id, r])), decoratedById: new Map() };
+      })();
+      GLOBAL.tables.set(tableName, promise);
+      promise.catch(() => GLOBAL.tables.delete(tableName));
+      return promise;
+    };
+    return load();
+  }
+
+  /** After any write in this request: decoration memos are stale (counts,
+   *  lookups), and the next request must reload from D1. */
+  markWritten(): void {
+    GLOBAL.version = -1; // force reload on next request
+    for (const t of GLOBAL.tables.values()) {
+      t.then((data) => data.decoratedById.clear()).catch(() => {});
+    }
   }
 
   private metaCache = new Map<string, Promise<string | null>>();

@@ -11,6 +11,10 @@
  *   node scripts/mirror-airtable-to-d1.mjs             # generate scripts/d1/mirror-*.sql only
  *   node scripts/mirror-airtable-to-d1.mjs --apply     # generate + apply to REMOTE D1
  *   node scripts/mirror-airtable-to-d1.mjs --apply-local  # generate + apply to LOCAL D1 (wrangler dev state)
+ *   node scripts/mirror-airtable-to-d1.mjs --apply --tables "Profiles,Business Managers"
+ *       # PARTIAL mirror: refresh only the named tables, leave everything else
+ *       # in D1 untouched (use when something was accidentally written to
+ *       # Airtable during the parallel phase and needs copying over)
  *   (flags can be combined)
  *
  * Reads config from .env: AIRTABLE_API_KEY, AIRTABLE_BASE_ID,
@@ -107,12 +111,20 @@ async function copyAttachment(att, key) {
 // ─────────────────────────────────────────────────────────────
 const APPLY_REMOTE = process.argv.includes('--apply');
 const APPLY_LOCAL = process.argv.includes('--apply-local');
+const tablesArgIdx = process.argv.indexOf('--tables');
+const ONLY_TABLES = tablesArgIdx >= 0 ? process.argv[tablesArgIdx + 1].split(',').map((s) => s.trim()) : null;
 
 (async () => {
   // 1. Schema
   console.log('Fetching base schema…');
   const meta = await atFetch(META);
-  const tables = meta.tables;
+  let tables = meta.tables;
+  if (ONLY_TABLES) {
+    const unknown = ONLY_TABLES.filter((n) => !tables.some((t) => t.name === n));
+    if (unknown.length) { console.error(`Unknown tables: ${unknown.join(', ')}`); process.exit(1); }
+    tables = tables.filter((t) => ONLY_TABLES.includes(t.name));
+    console.log(`PARTIAL mirror: ${tables.map((t) => t.name).join(', ')}`);
+  }
   const fieldById = {};
   const tableById = {};
   for (const t of tables) { tableById[t.id] = t; for (const f of t.fields) fieldById[f.id] = { table: t, field: f }; }
@@ -145,7 +157,11 @@ const APPLY_LOCAL = process.argv.includes('--apply-local');
 
   // 2. Records (+ attachment rewriting)
   const statements = [];
-  statements.push('DELETE FROM records;');
+  if (ONLY_TABLES) {
+    for (const t of tables) statements.push(`DELETE FROM records WHERE table_name = ${q(t.name)};`);
+  } else {
+    statements.push('DELETE FROM records;');
+  }
   const counts = {};
   let attCopied = 0, attSkipped = 0;
 
@@ -187,9 +203,14 @@ const APPLY_LOCAL = process.argv.includes('--apply-local');
     console.log(`  ${records.length} records`);
   }
 
-  statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('schema',${q(JSON.stringify(shimSchema))});`);
-  statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('last_mirror',${q(new Date().toISOString())});`);
-  statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('counts',${q(JSON.stringify(counts))});`);
+  if (!ONLY_TABLES) {
+    statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('schema',${q(JSON.stringify(shimSchema))});`);
+    statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('last_mirror',${q(new Date().toISOString())});`);
+    statements.push(`INSERT OR REPLACE INTO meta (key,value) VALUES ('counts',${q(JSON.stringify(counts))});`);
+  }
+  // Bump the write-version so warm API instances drop their in-memory cache
+  // (the API invalidates on MAX(mutations_log.seq) — mirrors must move it too).
+  statements.push(`INSERT INTO mutations_log (ts,table_name,op,record_id,payload) VALUES (${q(new Date().toISOString())},'_mirror','mirror','_mirror',NULL);`);
 
   // 3. Write chunked SQL files (~900KB per chunk to stay well under statement/upload limits)
   fs.mkdirSync(OUT_DIR, { recursive: true });
